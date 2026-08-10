@@ -101,7 +101,12 @@ export function snapToStep(minutes: number, step: number): TimeOfDay {
   return timeOfDay(Math.min(Math.max(snapped, 0), MINUTES_PER_DAY - 1))
 }
 
-export function interval(start: TimeOfDay, durationMinutes: number): TimeInterval {
+/**
+ * Validates a span length on its own, for callers that hold a duration before they hold a
+ * start time. A planned occurrence has a length from the moment it is created, but only
+ * gains a start once it is dropped onto the timeline.
+ */
+export function assertDuration(durationMinutes: number): number {
   if (
     !Number.isInteger(durationMinutes) ||
     durationMinutes <= 0 ||
@@ -110,7 +115,11 @@ export function interval(start: TimeOfDay, durationMinutes: number): TimeInterva
     throw new InvalidTimeIntervalError(durationMinutes)
   }
 
-  return { start, durationMinutes }
+  return durationMinutes
+}
+
+export function interval(start: TimeOfDay, durationMinutes: number): TimeInterval {
+  return { start, durationMinutes: assertDuration(durationMinutes) }
 }
 
 /** The wall clock time the interval ends at, folded back onto the clock when it runs past midnight. */
