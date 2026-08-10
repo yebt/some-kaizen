@@ -12,6 +12,27 @@ describe('newIdentifier', () => {
 
     expect(new Set(generated).size).toBe(1000)
   })
+
+  it('marks the value as a version 4 UUID with the RFC variant bits', () => {
+    expect(newIdentifier()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    )
+  })
+
+  it('works in an insecure context, where crypto.randomUUID does not exist', () => {
+    // Opening the app over a plain LAN address to test on a handset is not a secure
+    // context, so randomUUID is undefined there. Relying on it broke every screen that
+    // creates a record; this pins the fix.
+    const original = Reflect.get(crypto, 'randomUUID')
+
+    Reflect.deleteProperty(crypto, 'randomUUID')
+
+    try {
+      expect(() => identifier(newIdentifier())).not.toThrow()
+    } finally {
+      if (original) Reflect.set(crypto, 'randomUUID', original)
+    }
+  })
 })
 
 describe('identifier', () => {
