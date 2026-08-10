@@ -7,12 +7,15 @@
     "typed-vuex.d.ts"
   ],
   "exclude": [
-    "src/**/__tests__/*"
+    "src/**/__tests__/*",
+    "src/**/*.spec.ts"
   ],
   "compilerOptions": {
     // Extra safety for array and object lookups, but may have false positives.
     "noUncheckedIndexedAccess": true,
     "moduleResolution": "bundler",
+    // Required by the vue-router Volar plugin to resolve typed routes from src/pages.
+    "rootDir": ".",
     // Path mapping for cleaner imports.
     "paths": {
       "@/*": [
