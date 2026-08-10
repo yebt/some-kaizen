@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref } from 'vue'
 
 import {
   addDays,
@@ -8,22 +8,33 @@ import {
   endOfWeek,
   startOfWeek,
   toDate,
+  todayIn,
 } from '@shared/domain/calendar-date'
 import { formatTime } from '@shared/domain/time-of-day'
-import { buildPreviewDataset } from '@shared/dev/preview-dataset'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import DateStrip from '@shared/ui/DateStrip.vue'
 import ProgressRing from '@shared/ui/ProgressRing.vue'
 import { isMeasured, isNegative } from '@modules/habits/domain/habit'
 import { latestEntryFor, pendingNegativeChecks } from '@modules/habits/domain/habit-entry'
+import { useHabitEntries, useHabits } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
+import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import { spanOf } from '@modules/planning/domain/planned-instance'
+import { usePlannedInstances } from '@modules/planning/application/planning-queries'
 
-// Scaffolding until the IndexedDB adapter lands; the shape already matches the real stores.
-const dataset = shallowRef(buildPreviewDataset())
+const { data: habitsData, isLoading: habitsLoading } = useHabits()
+const { data: entriesData } = useHabitEntries()
+const { data: instancesData } = usePlannedInstances()
+const { data: blocksData } = useBlockTime()
 
-const selectedDay = ref<CalendarDate>(dataset.value.today)
-const weekAnchor = ref<CalendarDate>(dataset.value.today)
+const habits = computed(() => habitsData.value ?? [])
+const entries = computed(() => entriesData.value ?? [])
+const instances = computed(() => instancesData.value ?? [])
+const blocks = computed(() => blocksData.value ?? [])
+
+const today = todayIn()
+const selectedDay = ref<CalendarDate>(today)
+const weekAnchor = ref<CalendarDate>(today)
 
 const weekDays = computed(() =>
   eachDayBetween(startOfWeek(weekAnchor.value), endOfWeek(weekAnchor.value)),
@@ -41,13 +52,15 @@ const dayLabel = computed(() =>
   ),
 )
 
-const habitsById = computed(() => new Map(dataset.value.habits.map((habit) => [habit.id, habit])))
+const habitsById = computed(() => new Map(habits.value.map((habit) => [habit.id, habit])))
 
-const markedDays = computed(() => dataset.value.instances.map((instance) => instance.date))
+const markedDays = computed(() => instances.value.map((instance) => instance.date))
+
+const isEmpty = computed(() => !habitsLoading.value && habits.value.length === 0)
 
 /** Block time and scheduled habits merged into one ordered ribbon, as the day is lived. */
 const schedule = computed(() => {
-  const blocks = blocksOnDate(dataset.value.blocks, selectedDay.value).map((occurrence) => ({
+  const fixed = blocksOnDate(blocks.value, selectedDay.value).map((occurrence) => ({
     kind: 'block' as const,
     key: `${occurrence.block.id}-${occurrence.segment.from}`,
     name: occurrence.block.name,
@@ -56,7 +69,7 @@ const schedule = computed(() => {
     continues: occurrence.continuesFromPreviousDay || occurrence.continuesIntoNextDay,
   }))
 
-  const scheduled = dataset.value.instances
+  const scheduled = instances.value
     .filter((instance) => instance.date === selectedDay.value && instance.startsAt !== undefined)
     .map((instance) => {
       const span = spanOf(instance)
@@ -71,18 +84,16 @@ const schedule = computed(() => {
       }
     })
 
-  return [...blocks, ...scheduled].sort((left, right) => left.from - right.from)
+  return [...fixed, ...scheduled].sort((left, right) => left.from - right.from)
 })
 
 /** Occurrences placed on the day but never pinned to a time: they simply happen today. */
 const anytime = computed(() =>
-  dataset.value.instances
+  instances.value
     .filter((instance) => instance.date === selectedDay.value && instance.startsAt === undefined)
     .map((instance) => {
       const habit = habitsById.value.get(instance.habitId)
-      const entry = habit
-        ? latestEntryFor(dataset.value.entries, habit.id, selectedDay.value)
-        : undefined
+      const entry = habit ? latestEntryFor(entries.value, habit.id, selectedDay.value) : undefined
       const measured = habit && isMeasured(habit) ? habit : undefined
       const value = entry && entry.kind === 'positive' ? (entry.value ?? 0) : 0
 
@@ -93,15 +104,15 @@ const anytime = computed(() =>
         goal: measured?.measure.goal,
         value,
         progress: measured ? value / measured.measure.goal : 0,
-        outcome: entry?.kind === 'positive' ? entry.outcome : undefined,
+        done: entry?.kind === 'positive' && entry.outcome === 'done',
       }
     }),
 )
 
 /** Yesterday's unanswered negative habits, which is the first thing to greet you. */
 const pendingChecks = computed(() =>
-  dataset.value.habits.filter(isNegative).flatMap((habit) =>
-    pendingNegativeChecks(habit, dataset.value.entries, dataset.value.today)
+  habits.value.filter(isNegative).flatMap((habit) =>
+    pendingNegativeChecks(habit, entries.value, today)
       .slice(-1)
       .map((day) => ({ key: `${habit.id}-${day}`, name: habit.name, day })),
   ),
@@ -135,110 +146,123 @@ function shiftWeek(offset: number) {
       @next="shiftWeek(1)"
     />
 
-    <section v-if="pendingChecks.length" class="mt-6" aria-labelledby="pending-heading">
-      <h2
-        id="pending-heading"
-        class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
-      >
-        Yesterday
-      </h2>
-      <ul class="space-y-2">
-        <li
-          v-for="check in pendingChecks"
-          :key="check.key"
-          class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
-        >
-          <span
-            class="grid size-9 shrink-0 place-items-center rounded-full bg-relapse-soft text-relapse"
-          >
-            <AppIcon name="ban" :size="18" />
-          </span>
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-ink">{{ check.name }}</p>
-            <p class="text-xs text-ink-muted">Did you avoid it?</p>
-          </div>
-          <div class="flex gap-1.5">
-            <button
-              type="button"
-              class="rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-inverse transition-transform active:scale-95"
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:text-ink"
-            >
-              No
-            </button>
-          </div>
-        </li>
-      </ul>
-    </section>
+    <p
+      v-if="isEmpty"
+      class="mt-6 rounded-card border border-dashed border-line p-8 text-center text-sm text-ink-muted"
+    >
+      No habits yet. Add one with the button below, or load the demo data from Settings to see how a
+      full day looks.
+    </p>
 
-    <section class="mt-6" aria-labelledby="schedule-heading">
-      <h2
-        id="schedule-heading"
-        class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
-      >
-        Schedule
-      </h2>
-      <ol class="space-y-2">
-        <li v-for="item in schedule" :key="item.key" class="flex gap-3">
-          <span class="tabular w-12 shrink-0 pt-3 text-right text-xs font-medium text-ink-subtle">
-            {{ formatTime(item.from) }}
-          </span>
-          <div
-            class="flex-1 rounded-card border p-3.5"
-            :class="
-              item.kind === 'block'
-                ? 'border-transparent bg-accent text-accent-ink'
-                : 'border-line bg-surface text-ink shadow-card'
-            "
-          >
-            <p class="text-sm font-medium">{{ item.name }}</p>
-            <p class="text-xs opacity-70">
-              {{ formatTime(item.from) }} – {{ formatTime(item.to) }}
-              <span v-if="item.continues">· continues</span>
-            </p>
-          </div>
-        </li>
-      </ol>
-      <p
-        v-if="!schedule.length"
-        class="rounded-card border border-dashed border-line p-6 text-center text-sm text-ink-muted"
-      >
-        Nothing scheduled. Drag a habit onto the day to give it a time.
-      </p>
-    </section>
-
-    <section v-if="anytime.length" class="mt-6" aria-labelledby="anytime-heading">
-      <h2
-        id="anytime-heading"
-        class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
-      >
-        Anytime today
-      </h2>
-      <ul class="space-y-2">
-        <li
-          v-for="item in anytime"
-          :key="item.key"
-          class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
+    <template v-else>
+      <section v-if="pendingChecks.length" class="mt-6" aria-labelledby="pending-heading">
+        <h2
+          id="pending-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
         >
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-ink">{{ item.name }}</p>
-            <p v-if="item.unit" class="tabular text-xs text-ink-muted">
-              {{ item.value }} / {{ item.goal }} {{ item.unit }}
-            </p>
-          </div>
-          <ProgressRing v-if="item.unit" :value="item.progress" />
-          <span
-            v-else
-            class="grid size-9 place-items-center rounded-full border border-line text-ink-subtle"
+          Yesterday
+        </h2>
+        <ul class="space-y-2">
+          <li
+            v-for="check in pendingChecks"
+            :key="check.key"
+            class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
           >
-            <AppIcon name="check" :size="18" />
-          </span>
-        </li>
-      </ul>
-    </section>
+            <span
+              class="grid size-9 shrink-0 place-items-center rounded-full bg-relapse-soft text-relapse"
+            >
+              <AppIcon name="ban" :size="18" />
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-ink">{{ check.name }}</p>
+              <p class="text-xs text-ink-muted">Did you avoid it?</p>
+            </div>
+            <div class="flex gap-1.5">
+              <button
+                type="button"
+                class="rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-inverse transition-transform active:scale-95"
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:text-ink"
+              >
+                No
+              </button>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="mt-6" aria-labelledby="schedule-heading">
+        <h2
+          id="schedule-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        >
+          Schedule
+        </h2>
+        <ol v-if="schedule.length" class="space-y-2">
+          <li v-for="item in schedule" :key="item.key" class="flex gap-3">
+            <span class="tabular w-12 shrink-0 pt-3 text-right text-xs font-medium text-ink-subtle">
+              {{ formatTime(item.from) }}
+            </span>
+            <div
+              class="flex-1 rounded-card border p-3.5"
+              :class="
+                item.kind === 'block'
+                  ? 'border-transparent bg-accent text-accent-ink'
+                  : 'border-line bg-surface text-ink shadow-card'
+              "
+            >
+              <p class="text-sm font-medium">{{ item.name }}</p>
+              <p class="text-xs opacity-70">
+                {{ formatTime(item.from) }} – {{ formatTime(item.to) }}
+                <span v-if="item.continues">· continues</span>
+              </p>
+            </div>
+          </li>
+        </ol>
+        <p
+          v-else
+          class="rounded-card border border-dashed border-line p-6 text-center text-sm text-ink-muted"
+        >
+          Nothing scheduled. Drag a habit onto the day to give it a time.
+        </p>
+      </section>
+
+      <section v-if="anytime.length" class="mt-6" aria-labelledby="anytime-heading">
+        <h2
+          id="anytime-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        >
+          Anytime today
+        </h2>
+        <ul class="space-y-2">
+          <li
+            v-for="item in anytime"
+            :key="item.key"
+            class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-ink">{{ item.name }}</p>
+              <p v-if="item.unit" class="tabular text-xs text-ink-muted">
+                {{ item.value }} / {{ item.goal }} {{ item.unit }}
+              </p>
+            </div>
+            <ProgressRing v-if="item.unit" :value="item.progress" />
+            <span
+              v-else
+              class="grid size-9 place-items-center rounded-full border transition-colors"
+              :class="
+                item.done ? 'border-done bg-done-soft text-done' : 'border-line text-ink-subtle'
+              "
+            >
+              <AppIcon name="check" :size="18" />
+            </span>
+          </li>
+        </ul>
+      </section>
+    </template>
   </div>
 </template>
