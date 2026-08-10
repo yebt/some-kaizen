@@ -1,0 +1,106 @@
+import { fromRequest, type StoredRecord, type StoreName } from './database'
+
+/**
+ * A typed view over one object store.
+ *
+ * Domain objects are stored exactly as the domain defines them, with the storage concerns —
+ * timestamps, tombstones — held in the wrapper around them rather than mixed in. That is
+ * what keeps the domain free of persistence noise and lets a future sync adapter reuse the
+ * same entities untouched.
+ */
+export interface Collection<T> {
+  all(): Promise<T[]>
+  get(id: string): Promise<T | undefined>
+  put(id: string, value: T): Promise<void>
+  putMany(records: ReadonlyArray<{ id: string; value: T }>): Promise<void>
+  /** Soft deletes, leaving a tombstone so a future sync cannot resurrect the record. */
+  remove(id: string): Promise<void>
+  /** Hard wipes the store, including tombstones. Used when an import replaces everything. */
+  clear(): Promise<void>
+}
+
+export function createCollection<T>(
+  database: IDBDatabase,
+  storeName: StoreName,
+  now: () => number = Date.now,
+): Collection<T> {
+  function transaction(mode: IDBTransactionMode) {
+    return database.transaction(storeName, mode).objectStore(storeName)
+  }
+
+  /** Waits for the whole transaction, not just the request, so writes are durable on return. */
+  function committed(store: IDBObjectStore): Promise<void> {
+    return new Promise((resolve, reject) => {
+      store.transaction.oncomplete = () => resolve()
+      store.transaction.onerror = () => reject(store.transaction.error)
+      store.transaction.onabort = () => reject(store.transaction.error)
+    })
+  }
+
+  return {
+    async all() {
+      const records = await fromRequest<StoredRecord<T>[]>(
+        transaction('readonly').getAll() as IDBRequest<StoredRecord<T>[]>,
+      )
+
+      return records
+        .filter((record) => record.deletedAt === undefined)
+        .map((record) => record.value)
+    },
+
+    async get(id) {
+      const record = await fromRequest<StoredRecord<T> | undefined>(
+        transaction('readonly').get(id) as IDBRequest<StoredRecord<T> | undefined>,
+      )
+
+      if (!record || record.deletedAt !== undefined) return undefined
+
+      return record.value
+    },
+
+    async put(id, value) {
+      const store = transaction('readwrite')
+
+      store.put({ id, value, updatedAt: now() } satisfies StoredRecord<T>)
+
+      return committed(store)
+    },
+
+    async putMany(records) {
+      if (records.length === 0) return
+
+      const store = transaction('readwrite')
+      const timestamp = now()
+
+      for (const record of records) {
+        store.put({ id: record.id, value: record.value, updatedAt: timestamp })
+      }
+
+      return committed(store)
+    },
+
+    async remove(id) {
+      const readStore = transaction('readonly')
+      const existing = await fromRequest<StoredRecord<T> | undefined>(
+        readStore.get(id) as IDBRequest<StoredRecord<T> | undefined>,
+      )
+
+      if (!existing) return
+
+      const timestamp = now()
+      const store = transaction('readwrite')
+
+      store.put({ ...existing, updatedAt: timestamp, deletedAt: timestamp })
+
+      return committed(store)
+    },
+
+    async clear() {
+      const store = transaction('readwrite')
+
+      store.clear()
+
+      return committed(store)
+    },
+  }
+}
