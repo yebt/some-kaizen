@@ -203,12 +203,20 @@ function shiftWeek(offset: number) {
       </section>
 
       <section class="mt-6" aria-labelledby="schedule-heading">
-        <h2
-          id="schedule-heading"
-          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
-        >
-          Schedule
-        </h2>
+        <div class="mb-2 flex items-baseline justify-between">
+          <h2
+            id="schedule-heading"
+            class="text-xs font-semibold tracking-wide text-ink-muted uppercase"
+          >
+            Schedule
+          </h2>
+          <RouterLink
+            :to="`/day/${selectedDay}`"
+            class="text-xs font-medium text-ink-muted underline underline-offset-2 hover:text-ink"
+          >
+            Open timeline
+          </RouterLink>
+        </div>
         <ol v-if="schedule.length" class="space-y-2">
           <li v-for="item in schedule" :key="item.key" class="flex gap-3">
             <span class="tabular w-12 shrink-0 pt-3 text-right text-xs font-medium text-ink-subtle">

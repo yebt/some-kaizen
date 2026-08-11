@@ -22,8 +22,21 @@ export interface PointerLike {
   readonly clientY: number
 }
 
+/** Where on screen the finger let go. */
+export interface DropPoint {
+  readonly x: number
+  readonly y: number
+}
+
 export interface DragAndDropOptions<T> {
-  onDrop: (payload: T, zone: string) => void | Promise<void>
+  /**
+   * Called with what was dropped, the zone it landed in, and where exactly.
+   *
+   * The position matters because not every zone is uniform: dropping on a weekday only
+   * needs the day, but dropping on a timeline needs the minute, and only the caller knows
+   * how to read its own geometry.
+   */
+  onDrop: (payload: T, zone: string, at: DropPoint) => void | Promise<void>
   /**
    * Resolves the drop zone under a screen position.
    *
@@ -123,10 +136,11 @@ export function useDragAndDrop<T>(options: DragAndDropOptions<T>) {
     const dropped = payload.value
     const zone = activeZone.value
     const wasDragging = isDragging.value
+    const at: DropPoint = { x: event.clientX, y: event.clientY }
 
     reset()
 
-    if (wasDragging && dropped !== null && zone !== null) await options.onDrop(dropped, zone)
+    if (wasDragging && dropped !== null && zone !== null) await options.onDrop(dropped, zone, at)
   }
 
   return {

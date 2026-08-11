@@ -13,12 +13,12 @@ function zoneAt(x: number): string | null {
   return x > 100 ? 'tuesday' : 'monday'
 }
 
-let drops: Array<{ payload: string; zone: string }>
+let drops: Array<{ payload: string; zone: string; at: { x: number; y: number } }>
 
 function setup() {
   return useDragAndDrop<string>({
-    onDrop: (payload, zone) => {
-      drops.push({ payload, zone })
+    onDrop: (payload, zone, at) => {
+      drops.push({ payload, zone, at })
     },
     resolveZone: (x) => zoneAt(x),
   })
@@ -147,7 +147,17 @@ describe('dropping', () => {
     drag.move(pointer(150, 10))
     await drag.release(pointer(150, 10))
 
-    expect(drops).toEqual([{ payload: 'run', zone: 'tuesday' }])
+    expect(drops).toEqual([{ payload: 'run', zone: 'tuesday', at: { x: 150, y: 10 } }])
+  })
+
+  it('reports where the finger let go, which a timeline needs to read a minute from', async () => {
+    const drag = setup()
+
+    drag.press('run', pointer(10, 10))
+    vi.advanceTimersByTime(LONG_PRESS_MS)
+    await drag.release(pointer(42, 640))
+
+    expect(drops[0]?.at).toEqual({ x: 42, y: 640 })
   })
 
   it('drops nothing when released over no zone', async () => {

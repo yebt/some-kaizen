@@ -38,6 +38,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/day/[date]': RouteRecordInfo<
+      '/day/[date]',
+      '/day/:date',
+      { date: ParamValue<true> },
+      { date: ParamValue<false> },
+      | never
+    >,
     '/habits': RouteRecordInfo<
       '/habits',
       '/habits',
@@ -79,6 +86,14 @@ declare module 'vue-router/auto-routes' {
         | never
       pathParamNames:
         | never
+    }
+    'src/pages/day/[date].vue': {
+      routes:
+        | '/day/[date]'
+      views:
+        | never
+      pathParamNames:
+        | 'date'
     }
     'src/pages/habits.vue': {
       routes:
