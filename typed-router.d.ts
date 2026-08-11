@@ -45,9 +45,16 @@ declare module 'vue-router/auto-routes' {
       { date: ParamValue<false> },
       | never
     >,
-    '/habits': RouteRecordInfo<
+    '/habits/': RouteRecordInfo<
+      '/habits/',
       '/habits',
-      '/habits',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/habits/new': RouteRecordInfo<
+      '/habits/new',
+      '/habits/new',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -95,9 +102,17 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | 'date'
     }
-    'src/pages/habits.vue': {
+    'src/pages/habits/index.vue': {
       routes:
-        | '/habits'
+        | '/habits/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/habits/new.vue': {
+      routes:
+        | '/habits/new'
       views:
         | never
       pathParamNames:

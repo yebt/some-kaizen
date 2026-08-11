@@ -8,8 +8,6 @@ const TABS: ReadonlyArray<{ to: string; icon: IconName; label: string }> = [
   { to: '/plan', icon: 'chart', label: 'Plan' },
   { to: '/settings', icon: 'gear', label: 'Settings' },
 ]
-
-defineEmits<{ create: [] }>()
 </script>
 
 <template>
@@ -31,14 +29,13 @@ defineEmits<{ create: [] }>()
         <AppIcon :name="tab.icon" />
       </RouterLink>
 
-      <button
-        type="button"
+      <RouterLink
+        to="/habits/new"
         class="grid size-11 place-items-center rounded-full bg-ink text-ink-inverse transition-transform active:scale-92"
         aria-label="Add habit"
-        @click="$emit('create')"
       >
         <AppIcon name="plus" />
-      </button>
+      </RouterLink>
 
       <RouterLink
         v-for="tab in TABS.slice(2)"
