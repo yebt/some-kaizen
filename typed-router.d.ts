@@ -38,6 +38,20 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/block-time/': RouteRecordInfo<
+      '/block-time/',
+      '/block-time',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/block-time/new': RouteRecordInfo<
+      '/block-time/new',
+      '/block-time/new',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/day/[date]': RouteRecordInfo<
       '/day/[date]',
       '/day/:date',
@@ -89,6 +103,22 @@ declare module 'vue-router/auto-routes' {
     'src/pages/index.vue': {
       routes:
         | '/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/block-time/index.vue': {
+      routes:
+        | '/block-time/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/block-time/new.vue': {
+      routes:
+        | '/block-time/new'
       views:
         | never
       pathParamNames:

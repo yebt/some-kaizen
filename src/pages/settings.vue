@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import { buildPreviewDataset } from '@shared/dev/preview-dataset'
+import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { useHabits } from '@modules/habits/application/habit-queries'
@@ -52,6 +53,29 @@ async function clearEverything() {
         {{ habitCount }} {{ habitCount === 1 ? 'habit' : 'habits' }} stored on this device
       </p>
     </header>
+
+    <section class="mb-5 space-y-2" aria-labelledby="day-heading">
+      <h2
+        id="day-heading"
+        class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+      >
+        Your day
+      </h2>
+
+      <RouterLink
+        to="/block-time"
+        class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-ink">Block time</p>
+          <p class="mt-1 text-xs text-ink-muted">
+            Sleep, work and anything else that is not up for negotiation. Blocks cannot overlap each
+            other, so the room left in a day stays honest.
+          </p>
+        </div>
+        <AppIcon name="chevron-right" :size="18" />
+      </RouterLink>
+    </section>
 
     <section class="space-y-2" aria-labelledby="data-heading">
       <h2

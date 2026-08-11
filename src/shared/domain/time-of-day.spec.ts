@@ -11,6 +11,7 @@ import {
   parseTime,
   segmentsOf,
   snapToStep,
+  spanBetween,
   timeOfDay,
   wrapsMidnight,
 } from './time-of-day'
@@ -111,6 +112,36 @@ describe('interval', () => {
 
   it('allows a duration of exactly one day', () => {
     expect(interval(timeOfDay(0), 1440)).toEqual({ start: 0, durationMinutes: 1440 })
+  })
+})
+
+describe('spanBetween', () => {
+  it('measures a span that stays inside the day', () => {
+    expect(spanBetween(timeOfDay(540), timeOfDay(1020))).toEqual({
+      start: 540,
+      durationMinutes: 480,
+    })
+  })
+
+  it('reads an earlier end as the following morning, which is what sleep means', () => {
+    expect(spanBetween(timeOfDay(1380), timeOfDay(420))).toEqual({
+      start: 1380,
+      durationMinutes: 480,
+    })
+  })
+
+  it('treats equal times as a full day rather than an empty one', () => {
+    expect(spanBetween(timeOfDay(540), timeOfDay(540)).durationMinutes).toBe(1440)
+  })
+
+  it('handles a span ending exactly at midnight', () => {
+    expect(spanBetween(timeOfDay(1380), timeOfDay(0)).durationMinutes).toBe(60)
+  })
+
+  it('produces a span its own end agrees with', () => {
+    const span = spanBetween(timeOfDay(1380), timeOfDay(420))
+
+    expect(endOf(span)).toBe(420)
   })
 })
 

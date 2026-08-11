@@ -122,6 +122,20 @@ export function interval(start: TimeOfDay, durationMinutes: number): TimeInterva
   return { start, durationMinutes: assertDuration(durationMinutes) }
 }
 
+/**
+ * Builds a span from the two clock times a person actually types.
+ *
+ * An end at or before the start is read as the following morning, because that is what
+ * someone means by "23:00 to 07:00". Refusing it as a backwards range would make the most
+ * common block of all, sleep, impossible to enter. Equal times mean a full day rather than
+ * an empty one, since a zero length block would occupy nothing.
+ */
+export function spanBetween(start: TimeOfDay, end: TimeOfDay): TimeInterval {
+  const elapsed = end - start
+
+  return interval(start, elapsed > 0 ? elapsed : elapsed + MINUTES_PER_DAY)
+}
+
 /** The wall clock time the interval ends at, folded back onto the clock when it runs past midnight. */
 export function endOf(span: TimeInterval): TimeOfDay {
   return ((span.start + span.durationMinutes) % MINUTES_PER_DAY) as TimeOfDay
