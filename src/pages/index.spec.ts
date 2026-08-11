@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
+import { todayIn } from '@shared/domain/calendar-date'
+import { latestEntryFor } from '@modules/habits/domain/habit-entry'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 import { buildPreviewDataset } from '@shared/dev/preview-dataset'
@@ -26,6 +28,21 @@ beforeEach(async () => {
   databaseCounter += 1
   persistence = await createPersistence(`today-spec-${databaseCounter}`)
 })
+
+/**
+ * Lets the whole round trip finish: mutation, invalidation, refetch and re-render.
+ *
+ * flushPromises drains microtasks only, and IndexedDB resolves through timers, so a
+ * refetch triggered by a mutation is still in flight when it returns.
+ */
+async function settle() {
+  for (let round = 0; round < 3; round += 1) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  await flushPromises()
+}
 
 async function renderToday() {
   const wrapper = mount(TodayPage, {
@@ -81,6 +98,148 @@ describe('with a populated day', () => {
       .filter((value) => /^\d{2}:\d{2}$/.test(value))
 
     expect(times).toEqual([...times].sort())
+  })
+})
+
+describe('recording what happened', () => {
+  let dataset: ReturnType<typeof buildPreviewDataset>
+
+  beforeEach(async () => {
+    dataset = buildPreviewDataset()
+    await replaceDataset(persistence, dataset)
+  })
+
+  /** Looks a demo habit up by name, so a test reads by intent rather than by index. */
+  function idOf(name: string) {
+    const habit = dataset.habits.find((candidate) => candidate.name === name)
+
+    if (!habit) throw new Error(`The demo dataset has no habit named ${name}.`)
+
+    return habit.id
+  }
+
+  const meditateId = () => idOf('Meditate')
+  const waterId = () => idOf('Drink water')
+
+  /**
+   * The negative verdict written most recently.
+   *
+   * Chosen by recordedAt rather than by list position, because storage returns rows keyed
+   * by identifier and the demo data already contains an older verdict.
+   */
+  async function newestNegative() {
+    const negatives = (await persistence.entries.all()).filter((entry) => entry.kind === 'negative')
+
+    return negatives.reduce<(typeof negatives)[number] | undefined>(
+      (newest, entry) => (!newest || entry.recordedAt >= newest.recordedAt ? entry : newest),
+      undefined,
+    )
+  }
+
+  it('records a clean day for a negative habit', async () => {
+    const wrapper = await renderToday()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text() === 'Yes')
+      ?.trigger('click')
+    await settle()
+
+    expect((await newestNegative())?.outcome).toBe('avoided')
+  })
+
+  it('records a relapse when the day was not avoided', async () => {
+    const wrapper = await renderToday()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text() === 'No')
+      ?.trigger('click')
+    await settle()
+
+    expect((await newestNegative())?.outcome).toBe('relapsed')
+  })
+
+  it('judges the finished day rather than today', async () => {
+    const wrapper = await renderToday()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text() === 'Yes')
+      ?.trigger('click')
+    await settle()
+
+    expect((await newestNegative())?.date).not.toBe(todayIn())
+  })
+
+  it('marks a binary habit as done', async () => {
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label="Mark Meditate"]').trigger('click')
+    await settle()
+
+    const entry = latestEntryFor(await persistence.entries.all(), meditateId(), todayIn())
+
+    expect(entry?.kind === 'positive' ? entry.outcome : undefined).toBe('done')
+  })
+
+  it('replaces the verdict when you change your mind, rather than piling answers up', async () => {
+    // Appending would leave a dozen rows behind a dozen taps, and two answers written in
+    // the same millisecond would leave "which one counts" decided by storage order.
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label="Mark Meditate"]').trigger('click')
+    await settle()
+    await wrapper.find('[aria-label="Mark Meditate"]').trigger('click')
+    await settle()
+
+    const stored = await persistence.entries.all()
+    const mine = stored.filter(
+      (entry) => entry.habitId === meditateId() && entry.date === todayIn(),
+    )
+
+    expect(mine).toHaveLength(1)
+    expect(mine[0]).toMatchObject({ outcome: 'missed' })
+  })
+
+  it('shows the verdict back on the card it belongs to', async () => {
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label="Mark Meditate"]').trigger('click')
+    await settle()
+
+    expect(wrapper.find('[aria-label="Mark Meditate"]').attributes('aria-pressed')).toBe('true')
+  })
+
+  it('records an amount for a measured habit', async () => {
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label="Log Drink water"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('dialog input[type="number"]').setValue(2)
+    await wrapper.find('dialog form').trigger('submit')
+    await settle()
+
+    const entry = latestEntryFor(await persistence.entries.all(), waterId(), todayIn())
+
+    expect(entry?.kind === 'positive' ? entry.value : undefined).toBe(2)
+  })
+
+  it('grades a partial amount as partial rather than as a miss', async () => {
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label="Log Drink water"]').trigger('click')
+    await flushPromises()
+
+    // The demo goal is 2 litres with a minimum of 1.
+    await wrapper.find('dialog input[type="number"]').setValue(1.5)
+    await wrapper.find('dialog form').trigger('submit')
+    await settle()
+
+    const entry = latestEntryFor(await persistence.entries.all(), waterId(), todayIn())
+
+    expect(entry?.kind === 'positive' ? entry.outcome : undefined).toBe('partial')
   })
 })
 

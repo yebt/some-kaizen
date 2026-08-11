@@ -16,6 +16,16 @@ import {
   type PositiveOutcome,
 } from './habit'
 
+/**
+ * When an entry was written, as an instant.
+ *
+ * A day can be answered more than once, and the newest answer is the one that counts. That
+ * ordering has to be carried by the record itself: storage returns rows keyed by identifier,
+ * which for a UUID is effectively random, so "the last one in the list" is not "the last one
+ * written". Relying on list order made corrections win or lose by chance.
+ */
+export type RecordedAt = number
+
 /** What actually happened on a day, as opposed to what was planned for it. */
 export interface PositiveEntry {
   readonly kind: 'positive'
@@ -25,6 +35,15 @@ export interface PositiveEntry {
   readonly outcome: PositiveOutcome
   /** The raw quantity for a measured habit, kept so statistics can show amounts. */
   readonly value?: number
+  /**
+   * The occurrence this answers, when it answers one.
+   *
+   * A habit can recur several times in a single day, and each of those occurrences is
+   * completed separately. Keying an entry to the day alone would make three gym sessions on
+   * Saturday indistinguishable from one, so a habit asking for three could never be met.
+   */
+  readonly instanceId?: Identifier
+  readonly recordedAt: RecordedAt
 }
 
 /**
@@ -41,6 +60,7 @@ export interface NegativeEntry {
   readonly date: CalendarDate
   readonly outcome: NegativeOutcome
   readonly recordedOn: CalendarDate
+  readonly recordedAt: RecordedAt
 }
 
 export type HabitEntry = PositiveEntry | NegativeEntry
@@ -52,15 +72,30 @@ export class EntryTooEarlyError extends Error {
   }
 }
 
+/** The optional details of a recording, grouped so the signatures stop growing positionally. */
+export interface RecordOptions {
+  readonly instanceId?: Identifier
+  readonly recordedAt?: RecordedAt
+}
+
 export function recordCompleted(
   id: Identifier,
   habit: CompletedHabit,
   date: CalendarDate,
   done: boolean,
+  options: RecordOptions = {},
 ): PositiveEntry {
   assertNotBeforeCreation(habit.createdOn, date)
 
-  return { kind: 'positive', id, habitId: habit.id, date, outcome: done ? 'done' : 'missed' }
+  return {
+    kind: 'positive',
+    id,
+    habitId: habit.id,
+    date,
+    outcome: done ? 'done' : 'missed',
+    instanceId: options.instanceId,
+    recordedAt: options.recordedAt ?? Date.now(),
+  }
 }
 
 export function recordMeasured(
@@ -68,6 +103,7 @@ export function recordMeasured(
   habit: MeasuredHabit,
   date: CalendarDate,
   value: number,
+  options: RecordOptions = {},
 ): PositiveEntry {
   assertNotBeforeCreation(habit.createdOn, date)
 
@@ -78,6 +114,8 @@ export function recordMeasured(
     date,
     outcome: outcomeFor(habit.measure, value),
     value,
+    instanceId: options.instanceId,
+    recordedAt: options.recordedAt ?? Date.now(),
   }
 }
 
@@ -94,6 +132,7 @@ export function recordNegative(
   date: CalendarDate,
   outcome: NegativeOutcome,
   recordedOn: CalendarDate,
+  options: RecordOptions = {},
 ): NegativeEntry {
   assertNotBeforeCreation(habit.createdOn, date)
 
@@ -103,7 +142,52 @@ export function recordNegative(
     )
   }
 
-  return { kind: 'negative', id, habitId: habit.id, date, outcome, recordedOn }
+  return {
+    kind: 'negative',
+    id,
+    habitId: habit.id,
+    date,
+    outcome,
+    recordedOn,
+    recordedAt: options.recordedAt ?? Date.now(),
+  }
+}
+
+/**
+ * Groups entries by what they answer, keeping only the newest verdict for each.
+ *
+ * An entry tied to an occurrence answers that occurrence; one without is a plain answer for
+ * the day. This is the single place that decides "which record still counts", so statistics
+ * and screens cannot disagree about whether a correction took effect.
+ */
+export function currentEntries(entries: readonly HabitEntry[]): HabitEntry[] {
+  const latest = new Map<string, HabitEntry>()
+
+  for (const entry of entries) {
+    const subject = entry.kind === 'positive' && entry.instanceId ? entry.instanceId : entry.date
+    const key = `${entry.habitId}:${subject}`
+    const existing = latest.get(key)
+
+    if (!existing || entry.recordedAt >= existing.recordedAt) latest.set(key, entry)
+  }
+
+  return [...latest.values()]
+}
+
+/** The verdict that currently stands for one occurrence. */
+export function latestEntryForInstance(
+  entries: readonly HabitEntry[],
+  instanceId: Identifier,
+): PositiveEntry | undefined {
+  let latest: PositiveEntry | undefined
+
+  for (const entry of entries) {
+    if (entry.kind !== 'positive' || entry.instanceId !== instanceId) continue
+
+    if (!latest || entry.recordedAt >= latest.recordedAt) latest = entry
+  }
+
+  return latest
 }
 
 /**
@@ -146,21 +230,26 @@ export function entriesByDate(entries: readonly HabitEntry[]): Map<CalendarDate,
 /**
  * The most recent entry describing a habit on a day.
  *
- * Scanned from the end, because correcting a day appends a new entry rather than mutating
- * the old one, and the newest answer is the one that counts.
+ * Chosen by `recordedAt` rather than by position, because correcting a day appends a new
+ * entry and storage hands back rows keyed by identifier, which for a UUID is effectively
+ * random order. Reading the last element of the list made a correction win or lose by
+ * chance. Ties fall back to the later position, which keeps two entries written in the same
+ * millisecond deterministic.
  */
 export function latestEntryFor(
   entries: readonly HabitEntry[],
   habitId: Identifier,
   date: CalendarDate,
 ): HabitEntry | undefined {
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index]
+  let latest: HabitEntry | undefined
 
-    if (entry && entry.habitId === habitId && entry.date === date) return entry
+  for (const entry of entries) {
+    if (entry.habitId !== habitId || entry.date !== date) continue
+
+    if (!latest || entry.recordedAt >= latest.recordedAt) latest = entry
   }
 
-  return undefined
+  return latest
 }
 
 function assertNotBeforeCreation(createdOn: CalendarDate, date: CalendarDate): void {

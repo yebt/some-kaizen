@@ -10,14 +10,34 @@ import {
   toDate,
   todayIn,
 } from '@shared/domain/calendar-date'
+import { type Identifier, newIdentifier } from '@shared/domain/identifier'
 import { formatTime } from '@shared/domain/time-of-day'
+import AppDialog from '@shared/ui/AppDialog.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import DateStrip from '@shared/ui/DateStrip.vue'
 import ProgressRing from '@shared/ui/ProgressRing.vue'
-import { isMeasured, isNegative } from '@modules/habits/domain/habit'
-import { latestEntryFor, pendingNegativeChecks } from '@modules/habits/domain/habit-entry'
-import { useHabitEntries, useHabits } from '@modules/habits/application/habit-queries'
+import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import {
+  isMeasured,
+  isNegative,
+  isPositive,
+  type MeasuredHabit,
+  type NegativeHabit,
+  type PositiveHabit,
+} from '@modules/habits/domain/habit'
+import {
+  latestEntryForInstance,
+  pendingNegativeChecks,
+  recordCompleted,
+  recordMeasured,
+  recordNegative,
+} from '@modules/habits/domain/habit-entry'
+import {
+  useHabitEntries,
+  useHabits,
+  useRecordEntry,
+} from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import { spanOf } from '@modules/planning/domain/planned-instance'
@@ -27,6 +47,8 @@ const { data: habitsData, isLoading: habitsLoading } = useHabits()
 const { data: entriesData } = useHabitEntries()
 const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
+const recordEntry = useRecordEntry()
+const feedback = useFeedback()
 
 const habits = computed(() => habitsData.value ?? [])
 const entries = computed(() => entriesData.value ?? [])
@@ -54,14 +76,43 @@ const dayLabel = computed(() =>
 )
 
 const habitsById = computed(() => new Map(habits.value.map((habit) => [habit.id, habit])))
-
 const markedDays = computed(() => instances.value.map((instance) => instance.date))
 
-/** Only the very first read shows a spinner; a refetch keeps the day on screen. */
 const isFirstLoad = computed(() => habitsLoading.value && habitsData.value === undefined)
 const isEmpty = computed(() => !habitsLoading.value && habits.value.length === 0)
 
-/** Block time and scheduled habits merged into one ordered ribbon, as the day is lived. */
+/**
+ * Everything planned for the selected day, already joined to its habit and its latest
+ * verdict, so both sections below read the same shape and record through the same handlers.
+ */
+const occurrences = computed(() =>
+  instances.value
+    .filter((instance) => instance.date === selectedDay.value)
+    .flatMap((instance) => {
+      const habit = habitsById.value.get(instance.habitId)
+
+      if (!habit || !isPositive(habit)) return []
+
+      const entry = latestEntryForInstance(entries.value, instance.id)
+      const outcome = entry?.outcome
+      const value = entry?.value ?? 0
+      const span = spanOf(instance)
+
+      return [
+        {
+          instance,
+          habit,
+          entryId: entry?.id,
+          outcome,
+          value,
+          progress: isMeasured(habit) ? value / habit.measure.goal : outcome === 'done' ? 1 : 0,
+          span,
+        },
+      ]
+    }),
+)
+
+/** Block time and timed occurrences merged into one ribbon, as the day is lived. */
 const schedule = computed(() => {
   const fixed = blocksOnDate(blocks.value, selectedDay.value).map((occurrence) => ({
     kind: 'block' as const,
@@ -70,60 +121,124 @@ const schedule = computed(() => {
     from: occurrence.segment.from,
     to: occurrence.segment.to,
     continues: occurrence.continuesFromPreviousDay || occurrence.continuesIntoNextDay,
+    occurrence: undefined,
   }))
 
-  const scheduled = instances.value
-    .filter((instance) => instance.date === selectedDay.value && instance.startsAt !== undefined)
-    .map((instance) => {
-      const span = spanOf(instance)
+  const timed = occurrences.value
+    .filter((entry) => entry.span !== undefined)
+    .map((entry) => ({
+      kind: 'habit' as const,
+      key: entry.instance.id,
+      name: entry.habit.name,
+      from: entry.span?.start ?? 0,
+      to: (entry.span?.start ?? 0) + entry.instance.durationMinutes,
+      continues: false,
+      occurrence: entry,
+    }))
 
-      return {
-        kind: 'habit' as const,
-        key: instance.id,
-        name: habitsById.value.get(instance.habitId)?.name ?? 'Habit',
-        from: span?.start ?? 0,
-        to: (span?.start ?? 0) + instance.durationMinutes,
-        continues: false,
-      }
-    })
-
-  return [...fixed, ...scheduled].sort((left, right) => left.from - right.from)
+  return [...fixed, ...timed].sort((left, right) => left.from - right.from)
 })
 
-/** Occurrences placed on the day but never pinned to a time: they simply happen today. */
-const anytime = computed(() =>
-  instances.value
-    .filter((instance) => instance.date === selectedDay.value && instance.startsAt === undefined)
-    .map((instance) => {
-      const habit = habitsById.value.get(instance.habitId)
-      const entry = habit ? latestEntryFor(entries.value, habit.id, selectedDay.value) : undefined
-      const measured = habit && isMeasured(habit) ? habit : undefined
-      const value = entry && entry.kind === 'positive' ? (entry.value ?? 0) : 0
-
-      return {
-        key: instance.id,
-        name: habit?.name ?? 'Habit',
-        unit: measured?.measure.unit,
-        goal: measured?.measure.goal,
-        value,
-        progress: measured ? value / measured.measure.goal : 0,
-        done: entry?.kind === 'positive' && entry.outcome === 'done',
-      }
-    }),
-)
+const untimed = computed(() => occurrences.value.filter((entry) => entry.span === undefined))
 
 /** Yesterday's unanswered negative habits, which is the first thing to greet you. */
 const pendingChecks = computed(() =>
   habits.value.filter(isNegative).flatMap((habit) =>
     pendingNegativeChecks(habit, entries.value, today)
       .slice(-1)
-      .map((day) => ({ key: `${habit.id}-${day}`, name: habit.name, day })),
+      .map((day) => ({ key: `${habit.id}-${day}`, habit, day })),
   ),
 )
+
+/** The measured habit currently being logged, if any. */
+const logging = ref<{
+  habit: MeasuredHabit
+  instanceId: Identifier
+  entryId: Identifier | undefined
+  value: number
+} | null>(null)
+
+async function answerNegative(habit: NegativeHabit, day: CalendarDate, avoided: boolean) {
+  await recordEntry.mutateAsync(
+    recordNegative(newIdentifier(), habit, day, avoided ? 'avoided' : 'relapsed', today),
+  )
+
+  feedback.notify(
+    avoided ? `${habit.name}: a clean day` : `${habit.name}: relapse recorded`,
+    avoided ? 'success' : 'danger',
+  )
+}
+
+/**
+ * Sets the verdict for one occurrence.
+ *
+ * The existing entry's identity is reused so a correction replaces the answer rather than
+ * appending beside it. Appending was tried first and is wrong twice over: toggling a
+ * checkbox a dozen times would leave a dozen rows, and two answers written in the same
+ * millisecond leave "which one counts" decided by storage order, which for a UUID key is
+ * effectively random.
+ */
+async function toggleCompleted(
+  habit: PositiveHabit,
+  instanceId: Identifier,
+  wasDone: boolean,
+  entryId: Identifier | undefined,
+) {
+  if (isMeasured(habit)) return
+
+  await recordEntry.mutateAsync(
+    recordCompleted(entryId ?? newIdentifier(), habit, selectedDay.value, !wasDone, {
+      instanceId,
+    }),
+  )
+}
+
+function startLogging(
+  habit: PositiveHabit,
+  instanceId: Identifier,
+  current: number,
+  entryId: Identifier | undefined,
+) {
+  if (!isMeasured(habit)) return
+
+  logging.value = { habit, instanceId, entryId, value: current }
+}
+
+async function saveAmount() {
+  const pending = logging.value
+
+  if (!pending) return
+
+  logging.value = null
+
+  try {
+    const entry = recordMeasured(
+      pending.entryId ?? newIdentifier(),
+      pending.habit,
+      selectedDay.value,
+      Number(pending.value),
+      { instanceId: pending.instanceId },
+    )
+
+    await recordEntry.mutateAsync(entry)
+    feedback.notify(
+      `${pending.habit.name}: ${entry.value} ${pending.habit.measure.unit}`,
+      entry.outcome === 'missed' ? 'neutral' : 'success',
+    )
+  } catch (error) {
+    feedback.notify(error instanceof Error ? error.message : 'That amount is not valid', 'danger')
+  }
+}
 
 function shiftWeek(offset: number) {
   weekAnchor.value = addDays(weekAnchor.value, offset * 7)
 }
+
+const OUTCOME_CLASS = {
+  done: 'border-done bg-done-soft text-done',
+  partial: 'border-partial bg-partial-soft text-partial',
+  missed: 'border-line text-ink-subtle',
+} as const
 </script>
 
 <template>
@@ -181,19 +296,21 @@ function shiftWeek(offset: number) {
               <AppIcon name="ban" :size="18" />
             </span>
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-ink">{{ check.name }}</p>
+              <p class="truncate text-sm font-medium text-ink">{{ check.habit.name }}</p>
               <p class="text-xs text-ink-muted">Did you avoid it?</p>
             </div>
             <div class="flex gap-1.5">
               <button
                 type="button"
-                class="rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-inverse transition-transform active:scale-95"
+                class="rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-inverse active:scale-95"
+                @click="answerNegative(check.habit, check.day, true)"
               >
                 Yes
               </button>
               <button
                 type="button"
-                class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:text-ink"
+                class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-relapse"
+                @click="answerNegative(check.habit, check.day, false)"
               >
                 No
               </button>
@@ -217,24 +334,53 @@ function shiftWeek(offset: number) {
             Open timeline
           </RouterLink>
         </div>
+
         <ol v-if="schedule.length" class="space-y-2">
           <li v-for="item in schedule" :key="item.key" class="flex gap-3">
             <span class="tabular w-12 shrink-0 pt-3 text-right text-xs font-medium text-ink-subtle">
               {{ formatTime(item.from) }}
             </span>
             <div
-              class="flex-1 rounded-card border p-3.5"
+              class="flex flex-1 items-center gap-3 rounded-card border p-3.5"
               :class="
                 item.kind === 'block'
                   ? 'border-transparent bg-accent text-accent-ink'
                   : 'border-line bg-surface text-ink shadow-card'
               "
             >
-              <p class="text-sm font-medium">{{ item.name }}</p>
-              <p class="text-xs opacity-70">
-                {{ formatTime(item.from) }} – {{ formatTime(item.to) }}
-                <span v-if="item.continues">· continues</span>
-              </p>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium">{{ item.name }}</p>
+                <p class="tabular text-xs opacity-70">
+                  {{ formatTime(item.from) }} – {{ formatTime(item.to) }}
+                  <span v-if="item.continues">· continues</span>
+                </p>
+              </div>
+
+              <button
+                v-if="item.occurrence"
+                type="button"
+                class="grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
+                :class="OUTCOME_CLASS[item.occurrence.outcome ?? 'missed']"
+                :aria-label="`Mark ${item.name}`"
+                :aria-pressed="item.occurrence.outcome === 'done'"
+                @click="
+                  item.occurrence.habit.tracking === 'measured'
+                    ? startLogging(
+                        item.occurrence.habit,
+                        item.occurrence.instance.id,
+                        item.occurrence.value,
+                        item.occurrence.entryId,
+                      )
+                    : toggleCompleted(
+                        item.occurrence.habit,
+                        item.occurrence.instance.id,
+                        item.occurrence.outcome === 'done',
+                        item.occurrence.entryId,
+                      )
+                "
+              >
+                <AppIcon name="check" :size="18" />
+              </button>
             </div>
           </li>
         </ol>
@@ -242,11 +388,11 @@ function shiftWeek(offset: number) {
           v-else
           class="rounded-card border border-dashed border-line p-6 text-center text-sm text-ink-muted"
         >
-          Nothing scheduled. Drag a habit onto the day to give it a time.
+          Nothing scheduled. Place a habit on this day from Plan, then give it a time.
         </p>
       </section>
 
-      <section v-if="anytime.length" class="mt-6" aria-labelledby="anytime-heading">
+      <section v-if="untimed.length" class="mt-6" aria-labelledby="anytime-heading">
         <h2
           id="anytime-heading"
           class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
@@ -255,29 +401,83 @@ function shiftWeek(offset: number) {
         </h2>
         <ul class="space-y-2">
           <li
-            v-for="item in anytime"
-            :key="item.key"
+            v-for="entry in untimed"
+            :key="entry.instance.id"
             class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
           >
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-ink">{{ item.name }}</p>
-              <p v-if="item.unit" class="tabular text-xs text-ink-muted">
-                {{ item.value }} / {{ item.goal }} {{ item.unit }}
+              <p class="truncate text-sm font-medium text-ink">{{ entry.habit.name }}</p>
+              <p v-if="entry.habit.tracking === 'measured'" class="tabular text-xs text-ink-muted">
+                {{ entry.value }} / {{ entry.habit.measure.goal }} {{ entry.habit.measure.unit }}
               </p>
             </div>
-            <ProgressRing v-if="item.unit" :value="item.progress" />
-            <span
+
+            <button
+              v-if="entry.habit.tracking === 'measured'"
+              type="button"
+              :aria-label="`Log ${entry.habit.name}`"
+              @click="startLogging(entry.habit, entry.instance.id, entry.value, entry.entryId)"
+            >
+              <ProgressRing :value="entry.progress" />
+            </button>
+            <button
               v-else
+              type="button"
               class="grid size-9 place-items-center rounded-full border transition-colors"
-              :class="
-                item.done ? 'border-done bg-done-soft text-done' : 'border-line text-ink-subtle'
+              :class="OUTCOME_CLASS[entry.outcome ?? 'missed']"
+              :aria-label="`Mark ${entry.habit.name}`"
+              :aria-pressed="entry.outcome === 'done'"
+              @click="
+                toggleCompleted(
+                  entry.habit,
+                  entry.instance.id,
+                  entry.outcome === 'done',
+                  entry.entryId,
+                )
               "
             >
               <AppIcon name="check" :size="18" />
-            </span>
+            </button>
           </li>
         </ul>
       </section>
     </template>
+
+    <AppDialog :open="logging !== null" label="Record an amount" @dismiss="logging = null">
+      <h2 class="text-base font-semibold text-ink">{{ logging?.habit.name }}</h2>
+      <p class="mt-1 text-xs text-ink-muted">
+        Goal {{ logging?.habit.measure.goal }} {{ logging?.habit.measure.unit }} · at least
+        {{ logging?.habit.measure.minimum }} still counts as a partial day.
+      </p>
+
+      <form class="mt-4" @submit.prevent="saveAmount">
+        <input
+          v-if="logging"
+          v-model.number="logging.value"
+          type="number"
+          min="0"
+          step="any"
+          autofocus
+          :aria-label="`Amount in ${logging.habit.measure.unit}`"
+          class="tabular w-full rounded-cell border border-line bg-surface px-3.5 py-3 text-lg text-ink"
+        />
+
+        <div class="mt-4 flex gap-2">
+          <button
+            type="button"
+            class="flex-1 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted"
+            @click="logging = null"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="flex-1 rounded-full bg-ink px-4 py-2.5 text-sm font-medium text-ink-inverse active:scale-95"
+          >
+            Save
+          </button>
+        </div>
+      </form>
+    </AppDialog>
   </div>
 </template>

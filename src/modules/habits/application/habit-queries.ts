@@ -29,7 +29,7 @@ export function useSaveHabit() {
 
   return useMutation({
     mutation: (habit: Habit) => persistence.habits.save(habit),
-    onSettled: () => cache.invalidateQueries({ key: HABITS_KEY }),
+    onSettled: () => cache.invalidateQueries({ key: HABITS_KEY }, true),
   })
 }
 
@@ -39,7 +39,7 @@ export function useArchiveHabit() {
 
   return useMutation({
     mutation: (habit: Habit) => persistence.habits.save(habit),
-    onSettled: () => cache.invalidateQueries({ key: HABITS_KEY }),
+    onSettled: () => cache.invalidateQueries({ key: HABITS_KEY }, true),
   })
 }
 
@@ -58,7 +58,7 @@ export function useDeleteHabit() {
     mutation: (id: Identifier) => deleteHabitCascade(persistence, id),
     onSettled: async () => {
       for (const key of [HABITS_KEY, ENTRIES_KEY, INSTANCES_KEY]) {
-        await cache.invalidateQueries({ key })
+        await cache.invalidateQueries({ key }, true)
       }
     },
   })
@@ -77,6 +77,6 @@ export function useRecordEntry() {
 
   return useMutation({
     mutation: (entry: HabitEntry) => persistence.entries.save(entry),
-    onSettled: () => cache.invalidateQueries({ key: ENTRIES_KEY }),
+    onSettled: () => cache.invalidateQueries({ key: ENTRIES_KEY }, true),
   })
 }

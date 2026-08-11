@@ -11,9 +11,11 @@ import {
   measure,
 } from './habit'
 import {
+  currentEntries,
   entriesByDate,
   EntryTooEarlyError,
   latestEntryFor,
+  latestEntryForInstance,
   pendingNegativeChecks,
   recordCompleted,
   recordMeasured,
@@ -207,6 +209,105 @@ describe('entriesByDate', () => {
     ]
 
     expect(entriesByDate(entries).get(calendarDate('2026-03-04'))).toHaveLength(2)
+  })
+})
+
+describe('latestEntryFor ordering', () => {
+  it('picks the newest verdict even when the list arrives in another order', () => {
+    // Storage hands back rows keyed by identifier, which for a UUID is effectively random,
+    // so the newest entry is not the last element.
+    const day = calendarDate('2026-03-04')
+    const older = recordCompleted(newIdentifier(), meditate, day, true, { recordedAt: 100 })
+    const newer = recordCompleted(newIdentifier(), meditate, day, false, { recordedAt: 200 })
+
+    expect(latestEntryFor([newer, older], meditate.id, day)).toBe(newer)
+    expect(latestEntryFor([older, newer], meditate.id, day)).toBe(newer)
+  })
+})
+
+describe('latestEntryForInstance', () => {
+  const day = calendarDate('2026-03-04')
+  const morning = newIdentifier()
+  const evening = newIdentifier()
+
+  it('keeps two occurrences of the same habit on one day apart', () => {
+    // A habit asking for three sessions a day could never be met if one day held one answer.
+    const first = recordCompleted(newIdentifier(), meditate, day, true, { instanceId: morning })
+    const second = recordCompleted(newIdentifier(), meditate, day, false, { instanceId: evening })
+
+    expect(latestEntryForInstance([first, second], morning)?.outcome).toBe('done')
+    expect(latestEntryForInstance([first, second], evening)?.outcome).toBe('missed')
+  })
+
+  it('takes the newest verdict for that occurrence', () => {
+    const older = recordCompleted(newIdentifier(), meditate, day, true, {
+      instanceId: morning,
+      recordedAt: 100,
+    })
+    const newer = recordCompleted(newIdentifier(), meditate, day, false, {
+      instanceId: morning,
+      recordedAt: 200,
+    })
+
+    expect(latestEntryForInstance([newer, older], morning)).toBe(newer)
+  })
+
+  it('is undefined for an occurrence nobody answered', () => {
+    expect(latestEntryForInstance([], morning)).toBeUndefined()
+  })
+
+  it('ignores an entry that answers the day rather than an occurrence', () => {
+    const dayLevel = recordCompleted(newIdentifier(), meditate, day, true)
+
+    expect(latestEntryForInstance([dayLevel], morning)).toBeUndefined()
+  })
+})
+
+describe('currentEntries', () => {
+  const day = calendarDate('2026-03-04')
+
+  it('keeps only the verdict that still stands for a day', () => {
+    const older = recordCompleted(newIdentifier(), meditate, day, true, { recordedAt: 100 })
+    const newer = recordCompleted(newIdentifier(), meditate, day, false, { recordedAt: 200 })
+
+    expect(currentEntries([newer, older])).toEqual([newer])
+  })
+
+  it('keeps one verdict per occurrence rather than per day', () => {
+    const morning = newIdentifier()
+    const evening = newIdentifier()
+    const first = recordCompleted(newIdentifier(), meditate, day, true, { instanceId: morning })
+    const second = recordCompleted(newIdentifier(), meditate, day, true, { instanceId: evening })
+
+    expect(currentEntries([first, second])).toHaveLength(2)
+  })
+
+  it('does not merge two habits answered on the same day', () => {
+    const mine = recordCompleted(newIdentifier(), meditate, day, true)
+    const other = recordMeasured(newIdentifier(), water, day, 1)
+
+    expect(currentEntries([mine, other])).toHaveLength(2)
+  })
+
+  it('keeps only the newest verdict for a negative habit day', () => {
+    const older = recordNegative(
+      newIdentifier(),
+      smoking,
+      day,
+      'avoided',
+      calendarDate('2026-03-05'),
+      { recordedAt: 100 },
+    )
+    const newer = recordNegative(
+      newIdentifier(),
+      smoking,
+      day,
+      'relapsed',
+      calendarDate('2026-03-05'),
+      { recordedAt: 200 },
+    )
+
+    expect(currentEntries([newer, older])).toEqual([newer])
   })
 })
 

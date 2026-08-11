@@ -18,7 +18,7 @@ export function useSaveInstance() {
 
   return useMutation({
     mutation: (instance: PlannedInstance) => persistence.instances.save(instance),
-    onSettled: () => cache.invalidateQueries({ key: INSTANCES_KEY }),
+    onSettled: () => cache.invalidateQueries({ key: INSTANCES_KEY }, true),
   })
 }
 
@@ -28,6 +28,6 @@ export function useRemoveInstance() {
 
   return useMutation({
     mutation: (id: Identifier) => persistence.instances.remove(id),
-    onSettled: () => cache.invalidateQueries({ key: INSTANCES_KEY }),
+    onSettled: () => cache.invalidateQueries({ key: INSTANCES_KEY }, true),
   })
 }

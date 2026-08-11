@@ -31,7 +31,7 @@ export function useSaveBlockTime() {
 
       return persistence.blocks.save(block)
     },
-    onSettled: () => cache.invalidateQueries({ key: BLOCKS_KEY }),
+    onSettled: () => cache.invalidateQueries({ key: BLOCKS_KEY }, true),
   })
 }
 
@@ -41,6 +41,6 @@ export function useRemoveBlockTime() {
 
   return useMutation({
     mutation: (id: Identifier) => persistence.blocks.remove(id),
-    onSettled: () => cache.invalidateQueries({ key: BLOCKS_KEY }),
+    onSettled: () => cache.invalidateQueries({ key: BLOCKS_KEY }, true),
   })
 }

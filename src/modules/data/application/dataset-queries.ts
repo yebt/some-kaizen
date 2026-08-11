@@ -28,7 +28,7 @@ export function useReplaceDataset() {
     mutation: (dataset: Dataset) => replaceDataset(persistence, dataset),
     onSettled: async () => {
       for (const key of [HABITS_KEY, ENTRIES_KEY, INSTANCES_KEY, BLOCKS_KEY]) {
-        await cache.invalidateQueries({ key })
+        await cache.invalidateQueries({ key }, true)
       }
     },
   })

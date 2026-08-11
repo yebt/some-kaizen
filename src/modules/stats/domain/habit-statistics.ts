@@ -5,7 +5,7 @@ import {
   type NegativeOutcome,
   type PositiveHabit,
 } from '@modules/habits/domain/habit'
-import type { HabitEntry } from '@modules/habits/domain/habit-entry'
+import { currentEntries, type HabitEntry } from '@modules/habits/domain/habit-entry'
 import { periodKeyFor } from '@modules/planning/domain/period'
 
 /** How one period of a positive habit turned out. */
@@ -71,7 +71,9 @@ export function periodOutcomes(
     if (!tallies.has(key)) tallies.set(key, { done: 0, partial: 0, missed: 0 })
   }
 
-  for (const entry of entries) {
+  // Only the verdict that currently stands is tallied. Toggling a day done and then undone
+  // must not count as both a completion and a miss.
+  for (const entry of currentEntries(entries)) {
     if (entry.habitId !== habit.id || entry.kind !== 'positive') continue
     if (!activeDaySet.has(entry.date)) continue
 
@@ -229,14 +231,14 @@ export function negativeStatistics(
   }
 }
 
-/** The latest verdict per day, so a corrected answer supersedes the original. */
+/** The verdict that currently stands for each day, so a correction supersedes the original. */
 function verdictsByDay(
   habit: NegativeHabit,
   entries: readonly HabitEntry[],
 ): Map<CalendarDate, NegativeOutcome> {
   const verdicts = new Map<CalendarDate, NegativeOutcome>()
 
-  for (const entry of entries) {
+  for (const entry of currentEntries(entries)) {
     if (entry.habitId !== habit.id || entry.kind !== 'negative') continue
 
     verdicts.set(entry.date, entry.outcome)
