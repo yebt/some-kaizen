@@ -8,9 +8,10 @@
   "exclude": [],
 
   "compilerOptions": {
-    // Vitest runs in a different environment than the application code.
-    // Adjust lib and types accordingly.
-    "lib": [],
+    // Specs import the components they cover, so those files are type checked as part of
+    // this project too. Clearing `lib` would strip the standard library from them and make
+    // ordinary methods look unavailable, so it matches the app rather than being emptied.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node", "jsdom"],
 
     // `vue-tsc --build` produces a .tsbuildinfo file for incremental type-checking.
