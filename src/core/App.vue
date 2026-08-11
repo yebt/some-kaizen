@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FeedbackHost from '@shared/ui/feedback/FeedbackHost.vue'
 import TabBar from '@shared/ui/TabBar.vue'
 </script>
 
@@ -10,5 +11,8 @@ import TabBar from '@shared/ui/TabBar.vue'
     </main>
 
     <TabBar />
+
+    <!-- Mounted once at the root so a dialog is never clipped by a scrolling ancestor. -->
+    <FeedbackHost />
   </div>
 </template>

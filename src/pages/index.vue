@@ -12,6 +12,7 @@ import {
 } from '@shared/domain/calendar-date'
 import { formatTime } from '@shared/domain/time-of-day'
 import AppIcon from '@shared/ui/AppIcon.vue'
+import AppSpinner from '@shared/ui/AppSpinner.vue'
 import DateStrip from '@shared/ui/DateStrip.vue'
 import ProgressRing from '@shared/ui/ProgressRing.vue'
 import { isMeasured, isNegative } from '@modules/habits/domain/habit'
@@ -56,6 +57,8 @@ const habitsById = computed(() => new Map(habits.value.map((habit) => [habit.id,
 
 const markedDays = computed(() => instances.value.map((instance) => instance.date))
 
+/** Only the very first read shows a spinner; a refetch keeps the day on screen. */
+const isFirstLoad = computed(() => habitsLoading.value && habitsData.value === undefined)
 const isEmpty = computed(() => !habitsLoading.value && habits.value.length === 0)
 
 /** Block time and scheduled habits merged into one ordered ribbon, as the day is lived. */
@@ -146,8 +149,12 @@ function shiftWeek(offset: number) {
       @next="shiftWeek(1)"
     />
 
+    <div v-if="isFirstLoad" class="mt-6 flex justify-center py-12 text-ink-subtle">
+      <AppSpinner :size="24" label="Loading your day" />
+    </div>
+
     <p
-      v-if="isEmpty"
+      v-else-if="isEmpty"
       class="mt-6 rounded-card border border-dashed border-line p-8 text-center text-sm text-ink-muted"
     >
       No habits yet. Add one with the button below, or load the demo data from Settings to see how a
