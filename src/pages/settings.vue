@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { buildPreviewDataset } from '@shared/dev/preview-dataset'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { usePersistence } from '@core/persistence-context'
 import { useHabits } from '@modules/habits/application/habit-queries'
-import { useReplaceDataset } from '@modules/data/application/dataset-queries'
+import { readDataset, useReplaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
+import { parseBackup, serializeDataset } from '@modules/data/domain/data-transfer'
+import { backupFileName } from '@modules/data/domain/file-exchange'
+import { createBrowserFileExchange } from '@modules/data/infrastructure/browser-file-exchange'
 
 const { data: habitsData } = useHabits()
+const persistence = usePersistence()
 const replaceDataset = useReplaceDataset()
 const feedback = useFeedback()
+const files = createBrowserFileExchange()
+const isExporting = ref(false)
 
 const habitCount = computed(() => habitsData.value?.length ?? 0)
 const isWorking = computed(() => replaceDataset.isLoading.value)
@@ -27,6 +34,55 @@ async function loadDemoData() {
 
   await replaceDataset.mutateAsync(buildPreviewDataset())
   feedback.notify('Demo data loaded', 'success')
+}
+
+async function exportData() {
+  isExporting.value = true
+
+  try {
+    const exportedAt = new Date()
+
+    await files.save(
+      backupFileName(exportedAt),
+      serializeDataset(await readDataset(persistence), exportedAt),
+    )
+    feedback.notify('Backup saved', 'success')
+  } finally {
+    isExporting.value = false
+  }
+}
+
+async function importData() {
+  const text = await files.pick()
+
+  if (!text) return
+
+  let incoming
+
+  try {
+    // Parsed before anything is asked or written, so a corrupt file is refused whole
+    // rather than leaving half an import behind.
+    incoming = parseBackup(text)
+  } catch (error) {
+    feedback.notify(
+      error instanceof Error ? error.message : 'That file could not be read.',
+      'danger',
+    )
+
+    return
+  }
+
+  const accepted = await feedback.confirm({
+    title: 'Restore this backup?',
+    message: `It contains ${incoming.habits.length} habits and ${incoming.entries.length} recorded days, and it replaces everything currently on this device.`,
+    confirmLabel: 'Restore',
+    tone: 'danger',
+  })
+
+  if (!accepted) return
+
+  await replaceDataset.mutateAsync(incoming)
+  feedback.notify('Backup restored', 'success')
 }
 
 async function clearEverything() {
@@ -84,6 +140,34 @@ async function clearEverything() {
       >
         Data
       </h2>
+
+      <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+        <p class="text-sm font-medium text-ink">Back up and restore</p>
+        <p class="mt-1 text-xs text-ink-muted">
+          Everything lives on this device only. Exporting writes a single file you can keep
+          somewhere safe; restoring reads one back and replaces what is here.
+        </p>
+        <div class="mt-3 flex gap-2">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-medium text-ink-inverse transition-transform active:scale-95 disabled:opacity-50"
+            :disabled="isExporting || isWorking"
+            @click="exportData"
+          >
+            <AppSpinner v-if="isExporting" :size="12" label="Exporting" />
+            Export
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-medium text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
+            :disabled="isWorking"
+            @click="importData"
+          >
+            <AppSpinner v-if="isWorking" :size="12" label="Restoring" />
+            Import
+          </button>
+        </div>
+      </div>
 
       <div class="rounded-card border border-line bg-surface p-4 shadow-card">
         <p class="text-sm font-medium text-ink">Load demo data</p>
