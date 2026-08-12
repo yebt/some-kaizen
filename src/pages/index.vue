@@ -45,7 +45,7 @@ import {
 } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
-import { type DayDuty, dutiesFor } from '@modules/planning/domain/day-agenda'
+import { type DayDuty, dutiesFor, impliedOccurrenceId } from '@modules/planning/domain/day-agenda'
 import {
   planInstance,
   type PlannedInstance,
@@ -127,7 +127,7 @@ const duties = computed(() =>
     const measured = isMeasured(duty.habit) ? duty.habit : undefined
 
     return {
-      key: duty.instance?.id ?? `${duty.habit.id}-${index}`,
+      key: duty.instance?.id ?? `${duty.habit.id}-slot-${duty.slot ?? index}`,
       duty,
       habit: duty.habit,
       measured,
@@ -211,7 +211,9 @@ async function occurrenceFor(duty: DayDuty): Promise<PlannedInstance> {
   if (duty.instance) return duty.instance
 
   const created = planInstance({
-    id: newIdentifier(),
+    // Derived from the slot rather than random: this is the same real event whichever
+    // device notices it first, so two of them must not create two records for it.
+    id: impliedOccurrenceId(duty.habit.id, selectedDay.value, duty.slot ?? 0),
     habitId: duty.habit.id,
     date: selectedDay.value,
     period: duty.habit.frequency.period,

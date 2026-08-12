@@ -9,7 +9,7 @@ import {
   type FrequencyPeriod,
 } from '@modules/habits/domain/habit'
 
-import { dutiesFor } from './day-agenda'
+import { dutiesFor, impliedOccurrenceId } from './day-agenda'
 import { planInstance } from './planned-instance'
 
 const CREATED_ON = calendarDate('2020-01-01')
@@ -120,5 +120,66 @@ describe('what never appears', () => {
     })
 
     expect(dutiesFor([], [orphan], TODAY)).toEqual([])
+  })
+})
+
+describe('the identity of an unplaced duty', () => {
+  it('gives each unplaced duty a slot to derive its identity from', () => {
+    const habit = habitOf('daily', 2)
+
+    expect(dutiesFor([habit], [], TODAY).map((duty) => duty.slot)).toEqual([0, 1])
+  })
+
+  it('derives the same identifier on two devices that never spoke', () => {
+    // This is the whole point: one real event, one record, however many devices notice it.
+    const habit = habitOf('daily')
+
+    expect(impliedOccurrenceId(habit.id, TODAY, 0)).toBe(impliedOccurrenceId(habit.id, TODAY, 0))
+  })
+
+  it('skips a slot whose occurrence already exists rather than reusing it', () => {
+    // Completing one duty must not renumber the others out from under themselves.
+    const habit = habitOf('daily', 2)
+    const taken = planInstance({
+      id: impliedOccurrenceId(habit.id, TODAY, 0),
+      habitId: habit.id,
+      date: TODAY,
+      period: 'daily',
+    })
+
+    const duties = dutiesFor([habit], [taken], TODAY)
+    const unplaced = duties.filter((duty) => duty.instance === undefined)
+
+    expect(duties).toHaveLength(2)
+    expect(unplaced.map((duty) => duty.slot)).toEqual([1])
+  })
+
+  it('keeps handing out fresh slots as earlier ones fill up', () => {
+    const habit = habitOf('daily', 3)
+    const filled = [0, 1].map((slot) =>
+      planInstance({
+        id: impliedOccurrenceId(habit.id, TODAY, slot),
+        habitId: habit.id,
+        date: TODAY,
+        period: 'daily',
+      }),
+    )
+
+    const unplaced = dutiesFor([habit], filled, TODAY).filter((duty) => duty.instance === undefined)
+
+    expect(unplaced.map((duty) => duty.slot)).toEqual([2])
+  })
+
+  it('leaves a deliberately placed occurrence alone, since that one is genuinely its own', () => {
+    // Three gym sessions someone actually planned are three things and must stay three.
+    const habit = habitOf('daily', 1)
+    const planned = planInstance({
+      id: newIdentifier(),
+      habitId: habit.id,
+      date: TODAY,
+      period: 'daily',
+    })
+
+    expect(dutiesFor([habit], [planned], TODAY)).toHaveLength(1)
   })
 })

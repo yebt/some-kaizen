@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { identifier, InvalidIdentifierError, newIdentifier } from './identifier'
+import { derivedIdentifier, identifier, InvalidIdentifierError, newIdentifier } from './identifier'
 
 describe('newIdentifier', () => {
   it('produces a value its own parser accepts', () => {
@@ -56,5 +56,47 @@ describe('identifier', () => {
     '3f2504e0-4f89-41d3-9a0c-0305e82c3301-extra',
   ])('rejects the malformed value %s', (value) => {
     expect(() => identifier(value)).toThrow(InvalidIdentifierError)
+  })
+})
+
+describe('derivedIdentifier', () => {
+  it('produces a value its own parser accepts', () => {
+    expect(() =>
+      identifier(derivedIdentifier('occurrence', 'habit', '2026-03-11', '0')),
+    ).not.toThrow()
+  })
+
+  it('gives the same parts the same identifier, which is the entire point', () => {
+    // Two devices that have never spoken must land on the same record for the same event.
+    expect(derivedIdentifier('occurrence', 'habit', '2026-03-11', '0')).toBe(
+      derivedIdentifier('occurrence', 'habit', '2026-03-11', '0'),
+    )
+  })
+
+  it('separates different slots on the same day', () => {
+    expect(derivedIdentifier('occurrence', 'habit', '2026-03-11', '0')).not.toBe(
+      derivedIdentifier('occurrence', 'habit', '2026-03-11', '1'),
+    )
+  })
+
+  it('separates different days', () => {
+    expect(derivedIdentifier('occurrence', 'habit', '2026-03-11', '0')).not.toBe(
+      derivedIdentifier('occurrence', 'habit', '2026-03-12', '0'),
+    )
+  })
+
+  it('separates different habits', () => {
+    expect(derivedIdentifier('occurrence', 'a', '2026-03-11', '0')).not.toBe(
+      derivedIdentifier('occurrence', 'b', '2026-03-11', '0'),
+    )
+  })
+
+  it('cannot be confused by parts running together', () => {
+    // Without a separator ('ab', 'c') and ('a', 'bc') would collide.
+    expect(derivedIdentifier('ab', 'c')).not.toBe(derivedIdentifier('a', 'bc'))
+  })
+
+  it('differs from a random identifier for the same conceptual thing', () => {
+    expect(derivedIdentifier('occurrence', 'habit', '2026-03-11', '0')).not.toBe(newIdentifier())
   })
 })
