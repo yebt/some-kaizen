@@ -14,7 +14,12 @@ import {
   recordNegative,
 } from '@modules/habits/domain/habit-entry'
 
-import { negativeStatistics, periodOutcomes, positiveStatistics } from './habit-statistics'
+import {
+  dailyMarks,
+  negativeStatistics,
+  periodOutcomes,
+  positiveStatistics,
+} from './habit-statistics'
 
 const CREATED_ON = calendarDate('2026-03-02') // a Monday
 
@@ -424,5 +429,93 @@ describe('negativeStatistics', () => {
 
     expect(stats.judgedDays).toBe(2)
     expect(stats.cleanRate).toBe(0.5)
+  })
+})
+
+describe('dailyMarks', () => {
+  const from = calendarDate('2026-03-02')
+  const to = calendarDate('2026-03-06')
+
+  it('marks every active day, so a calendar has a cell for each', () => {
+    const habit = daily()
+
+    expect([...dailyMarks(habit, [], from, to).keys()]).toEqual([
+      '2026-03-02',
+      '2026-03-03',
+      '2026-03-04',
+      '2026-03-05',
+      '2026-03-06',
+    ])
+  })
+
+  it('separates a day never answered from a day answered badly', () => {
+    // Painting them alike turns "I forgot to open the app" into a wall of failure.
+    const habit = daily()
+    const marks = dailyMarks(habit, missed(habit, '2026-03-02'), from, to)
+
+    expect(marks.get(calendarDate('2026-03-02'))).toBe('missed')
+    expect(marks.get(calendarDate('2026-03-03'))).toBe('none')
+  })
+
+  it('records a completed day', () => {
+    const habit = daily()
+    const marks = dailyMarks(habit, done(habit, '2026-03-04'), from, to)
+
+    expect(marks.get(calendarDate('2026-03-04'))).toBe('done')
+  })
+
+  it('summarises a day by its best outcome', () => {
+    // Three gym slots where one was completed is a day with something in it, not two
+    // failures.
+    const habit = daily()
+    const entries = [
+      ...missed(habit, '2026-03-04'),
+      ...done(habit, '2026-03-04'),
+      ...missed(habit, '2026-03-04'),
+    ].map((entry, index) => ({ ...entry, instanceId: newIdentifier(), recordedAt: index }))
+
+    expect(dailyMarks(habit, entries, from, to).get(calendarDate('2026-03-04'))).toBe('done')
+  })
+
+  it('leaves out days before the habit existed', () => {
+    const habit = daily()
+
+    expect(
+      dailyMarks(habit, [], calendarDate('2026-02-25'), to).has(calendarDate('2026-02-25')),
+    ).toBe(false)
+  })
+
+  it('leaves out days after it was archived', () => {
+    const habit = { ...daily(), archivedOn: calendarDate('2026-03-03') }
+
+    expect(dailyMarks(habit, [], from, to).has(calendarDate('2026-03-05'))).toBe(false)
+  })
+
+  it('marks a negative habit with its verdict', () => {
+    const habit = createNegativeHabit({
+      id: newIdentifier(),
+      name: 'Smoking',
+      createdOn: CREATED_ON,
+    })
+    const entries = [
+      recordNegative(
+        newIdentifier(),
+        habit,
+        calendarDate('2026-03-03'),
+        'relapsed',
+        calendarDate('2026-03-04'),
+      ),
+    ]
+
+    expect(dailyMarks(habit, entries, from, to).get(calendarDate('2026-03-03'))).toBe('relapsed')
+  })
+
+  it('ignores another habit’s entries', () => {
+    const habit = daily()
+    const other = daily()
+
+    expect(
+      dailyMarks(habit, done(other, '2026-03-04'), from, to).get(calendarDate('2026-03-04')),
+    ).toBe('none')
   })
 })

@@ -1,5 +1,6 @@
 import { addDays, type CalendarDate, eachDayBetween, isBefore } from '@shared/domain/calendar-date'
 import {
+  type Habit,
   isActiveOn,
   type NegativeHabit,
   type NegativeOutcome,
@@ -41,6 +42,58 @@ export interface NegativeStatistics {
   readonly lastRelapse?: CalendarDate
   /** Clean days over judged days, from 0 to 1. */
   readonly cleanRate: number
+}
+
+/**
+ * How one day ended up, as a single mark.
+ *
+ * `none` is deliberately distinct from `missed`: a day you never answered is not the same
+ * as a day you answered badly, and a calendar that paints them alike turns "I forgot to
+ * open the app" into a wall of failure.
+ */
+export type DayMark = 'none' | 'done' | 'partial' | 'missed' | 'avoided' | 'relapsed'
+
+const POSITIVE_RANK: Record<string, number> = { missed: 1, partial: 2, done: 3 }
+
+/**
+ * A mark per day, for a calendar or a heatmap to read straight off.
+ *
+ * A day can hold several occurrences of the same habit, and the day is summarised by its
+ * best outcome. Three gym slots where one was completed reads as a day with something in
+ * it rather than as two failures.
+ */
+export function dailyMarks(
+  habit: Habit,
+  entries: readonly HabitEntry[],
+  from: CalendarDate,
+  to: CalendarDate,
+): Map<CalendarDate, DayMark> {
+  const marks = new Map<CalendarDate, DayMark>()
+
+  for (const day of eachDayBetween(from, to)) {
+    if (isActiveOn(habit, day)) marks.set(day, 'none')
+  }
+
+  for (const entry of currentEntries(entries)) {
+    if (entry.habitId !== habit.id) continue
+
+    const existing = marks.get(entry.date)
+
+    if (existing === undefined) continue
+
+    if (entry.kind === 'negative') {
+      marks.set(entry.date, entry.outcome)
+
+      continue
+    }
+
+    // Best outcome wins, so one completed slot is not buried by two empty ones.
+    const isBetter = (POSITIVE_RANK[entry.outcome] ?? 0) > (POSITIVE_RANK[existing] ?? 0)
+
+    if (isBetter) marks.set(entry.date, entry.outcome)
+  }
+
+  return marks
 }
 
 /**

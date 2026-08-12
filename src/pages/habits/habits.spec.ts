@@ -22,7 +22,7 @@ import {
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 
-import EditHabitPage from './[id].vue'
+import EditHabitPage from './[id]/edit.vue'
 import HabitsPage from './index.vue'
 import NewHabitPage from './new.vue'
 
@@ -218,11 +218,11 @@ describe('editing a habit', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/habits', component: HabitsPage },
-        { path: '/habits/:id', component: EditHabitPage },
+        { path: '/habits/:id/edit', component: EditHabitPage },
       ],
     })
 
-    await instance.push(`/habits/${habitId}`)
+    await instance.push(`/habits/${habitId}/edit`)
     await instance.isReady()
 
     const wrapper = mount(EditHabitPage, {

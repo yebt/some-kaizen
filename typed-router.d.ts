@@ -73,9 +73,16 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/habits/[id]': RouteRecordInfo<
-      '/habits/[id]',
+    '/habits/[id]/': RouteRecordInfo<
+      '/habits/[id]/',
       '/habits/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
+      | never
+    >,
+    '/habits/[id]/edit': RouteRecordInfo<
+      '/habits/[id]/edit',
+      '/habits/:id/edit',
       { id: ParamValue<true> },
       { id: ParamValue<false> },
       | never
@@ -97,6 +104,13 @@ declare module 'vue-router/auto-routes' {
     '/settings': RouteRecordInfo<
       '/settings',
       '/settings',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/stats': RouteRecordInfo<
+      '/stats',
+      '/stats',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -162,13 +176,21 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
-    'src/pages/habits/[id].vue': {
+    'src/pages/habits/[id]/index.vue': {
       routes:
-        | '/habits/[id]'
+        | '/habits/[id]/'
       views:
         | never
       pathParamNames:
-        | 'id'
+        | never
+    }
+    'src/pages/habits/[id]/edit.vue': {
+      routes:
+        | '/habits/[id]/edit'
+      views:
+        | never
+      pathParamNames:
+        | never
     }
     'src/pages/habits/new.vue': {
       routes:
@@ -189,6 +211,14 @@ declare module 'vue-router/auto-routes' {
     'src/pages/settings.vue': {
       routes:
         | '/settings'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/stats.vue': {
+      routes:
+        | '/stats'
       views:
         | never
       pathParamNames:

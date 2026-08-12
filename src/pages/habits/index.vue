@@ -82,6 +82,14 @@ const rows = computed(() =>
 const menuFor = ref<Habit | null>(null)
 
 /**
+ * A completed hold is followed by an ordinary click when the finger lifts.
+ *
+ * Left alone that click would navigate into the habit behind the menu that just opened, so
+ * the next one is swallowed in the capture phase.
+ */
+const swallowNextClick = ref(false)
+
+/**
  * Holding a row opens the same menu the button does.
  *
  * The hold is a shortcut, never the only way in: an affordance nobody can see is one most
@@ -91,8 +99,17 @@ const menuFor = ref<Habit | null>(null)
 const hold = usePressHold({
   onHold: (id) => {
     menuFor.value = habits.value.find((habit) => habit.id === id) ?? null
+    swallowNextClick.value = menuFor.value !== null
   },
 })
+
+function onRowClick(event: MouseEvent) {
+  if (!swallowNextClick.value) return
+
+  swallowNextClick.value = false
+  event.preventDefault()
+  event.stopPropagation()
+}
 
 const menuActions = computed<SheetAction[]>(() => {
   const habit = menuFor.value
@@ -127,7 +144,7 @@ async function runAction(key: string) {
   if (!habit) return
 
   if (key === 'edit') {
-    await router.push(`/habits/${habit.id}`)
+    await router.push(`/habits/${habit.id}/edit`)
 
     return
   }
@@ -174,13 +191,22 @@ function isPressed(id: Identifier) {
   <div class="safe-top">
     <header class="flex items-center justify-between pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Habits</h1>
-      <RouterLink
-        to="/habits/new"
-        class="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-xs font-medium text-ink-inverse"
-      >
-        <AppIcon name="plus" :size="14" />
-        New
-      </RouterLink>
+      <div class="flex items-center gap-2">
+        <RouterLink
+          to="/stats"
+          class="grid size-9 place-items-center rounded-full border border-line text-ink-muted"
+          aria-label="Statistics"
+        >
+          <AppIcon name="chart" :size="16" />
+        </RouterLink>
+        <RouterLink
+          to="/habits/new"
+          class="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-xs font-medium text-ink-inverse"
+        >
+          <AppIcon name="plus" :size="14" />
+          New
+        </RouterLink>
+      </div>
     </header>
 
     <!--
@@ -218,6 +244,7 @@ function isPressed(id: Identifier) {
         :key="row.habit.id"
         class="rounded-card border border-line bg-surface p-4 shadow-card transition-transform duration-150"
         :class="[row.isArchived && 'opacity-60', isPressed(row.habit.id) && 'scale-[0.97]']"
+        @click.capture="onRowClick"
         @pointerdown="hold.press(row.habit.id, $event)"
         @pointermove="hold.move($event)"
         @pointerup="hold.release($event)"
@@ -230,7 +257,7 @@ function isPressed(id: Identifier) {
             :style="surfaceStyle(row.habit)"
             aria-hidden="true"
           />
-          <div class="min-w-0 flex-1">
+          <RouterLink :to="`/habits/${row.habit.id}`" class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-ink">
               {{ row.habit.name }}
               <span v-if="row.isArchived" class="text-xs font-normal text-ink-subtle">
@@ -238,7 +265,10 @@ function isPressed(id: Identifier) {
               </span>
             </p>
             <p class="mt-0.5 text-xs text-ink-muted">{{ row.description }}</p>
-          </div>
+            <p class="mt-1 text-[0.625rem] text-ink-subtle">
+              Tap for statistics · hold for actions
+            </p>
+          </RouterLink>
           <div class="flex shrink-0 items-center gap-2">
             <div class="text-right">
               <p class="tabular text-lg leading-none font-semibold text-ink">

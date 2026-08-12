@@ -27,7 +27,7 @@ const habit = computed(() =>
 async function save(edited: Habit) {
   await saveHabit.mutateAsync(edited)
   feedback.notify(`${edited.name} saved`, 'success')
-  await router.push('/habits')
+  await router.push(`/habits/${edited.id}`)
 }
 </script>
 
