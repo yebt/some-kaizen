@@ -17,7 +17,7 @@ import { usePreferences } from '@core/preferences-store'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
-import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
+import AppDialog from '@shared/ui/AppDialog.vue'
 import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { type DropPoint, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
@@ -33,6 +33,7 @@ import {
   type PlannedInstance,
   remindBefore,
   REMINDER_LEAD_TIMES,
+  resize,
   scheduleAt,
   spanOf,
   unschedule,
@@ -133,6 +134,7 @@ const timed = computed(() =>
 const bands = computed(() =>
   blocksOnDate(blocks.value, day.value).map((occurrence) => ({
     key: `${occurrence.block.id}-${occurrence.segment.from}`,
+    blockId: occurrence.block.id,
     name: occurrence.block.name,
     top: occurrence.segment.from * PIXELS_PER_MINUTE,
     height: (occurrence.segment.to - occurrence.segment.from) * PIXELS_PER_MINUTE,
@@ -200,6 +202,7 @@ function minutesAt(y: number): TimeOfDay | null {
 async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   hoverTime.value = null
   swallowNextClick.value = true
+  editing.value = null
 
   if (zone === TRAY_ZONE) {
     const existing = payload.duty.instance
@@ -223,8 +226,15 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   feedback.notify(`${payload.habit.name} at ${preferences.formatClock(minutes)}`, 'success')
 }
 
-/** The occurrence whose reminder is being chosen, if any. */
-const reminderFor = ref<Identifier | null>(null)
+/** The occurrence being adjusted, if any. */
+const editing = ref<Identifier | null>(null)
+
+/** Lengths worth offering. Anything finer is a drag on the ruler rather than a menu. */
+const DURATIONS: readonly number[] = [15, 30, 45, 60, 90, 120]
+
+const editingInstance = computed(() =>
+  instances.value.find((instance) => instance.id === editing.value),
+)
 
 /**
  * A drag ends with a click when the finger lifts.
@@ -234,15 +244,7 @@ const reminderFor = ref<Identifier | null>(null)
  */
 const swallowNextClick = ref(false)
 
-const reminderActions = computed<SheetAction[]>(() => [
-  ...REMINDER_LEAD_TIMES.map((minutes) => ({
-    key: String(minutes),
-    label: minutes === 0 ? 'At the time' : `${minutes} minutes before`,
-  })),
-  { key: 'none', label: 'No reminder', tone: 'danger' as const },
-])
-
-function openReminder(instanceId: Identifier | undefined, event: MouseEvent) {
+function openOccurrence(instanceId: Identifier | undefined, event: MouseEvent) {
   if (swallowNextClick.value) {
     swallowNextClick.value = false
     event.preventDefault()
@@ -250,15 +252,20 @@ function openReminder(instanceId: Identifier | undefined, event: MouseEvent) {
     return
   }
 
-  if (instanceId) reminderFor.value = instanceId
+  if (instanceId) editing.value = instanceId
+}
+
+async function chooseDuration(minutes: number) {
+  const existing = editingInstance.value
+
+  if (!existing) return
+
+  await saveInstance.mutateAsync(resize(existing, minutes))
+  feedback.notify(`${minutes} minutes`, 'success')
 }
 
 async function chooseReminder(key: string) {
-  const instanceId = reminderFor.value
-
-  reminderFor.value = null
-
-  const existing = instances.value.find((instance) => instance.id === instanceId)
+  const existing = editingInstance.value
 
   if (!existing) return
 
@@ -414,16 +421,21 @@ function trackHover(event: PointerEvent) {
             :style="{ top: `${hour * 60 * PIXELS_PER_MINUTE}px` }"
           />
 
-          <div
+          <!--
+            A block's length is its hours, and those belong to the block itself rather than
+            to this one day, so tapping a band goes to the block instead of editing it here.
+          -->
+          <RouterLink
             v-for="band in bands"
             :key="band.key"
+            :to="`/block-time/${band.blockId}`"
             class="absolute inset-x-0 bg-accent/70 px-2 py-1"
             :style="{ top: `${band.top}px`, height: `${band.height}px`, ...band.style }"
           >
             <p class="text-[0.625rem] font-medium">
               {{ band.name }}<span v-if="band.continues"> ·</span>
             </p>
-          </div>
+          </RouterLink>
 
           <!-- The line the card will land on, shown before the finger commits. -->
           <div
@@ -451,8 +463,8 @@ function trackHover(event: PointerEvent) {
               class="h-full overflow-hidden rounded-cell border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
               :style="surfaceStyle(entry.habit)"
               role="button"
-              :aria-label="`Reminder for ${entry.habit.name}`"
-              @click="openReminder(entry.duty.instance?.id, $event)"
+              :aria-label="`Adjust ${entry.habit.name}`"
+              @click="openOccurrence(entry.duty.instance?.id, $event)"
             >
               <p class="flex items-center gap-1 truncate text-xs font-medium">
                 <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />
@@ -465,13 +477,78 @@ function trackHover(event: PointerEvent) {
       </div>
     </template>
 
-    <ActionSheet
-      :open="reminderFor !== null"
-      title="Remind me"
-      :actions="reminderActions"
-      @select="chooseReminder"
-      @dismiss="reminderFor = null"
-    />
+    <AppDialog :open="editing !== null" label="Adjust this occurrence" @dismiss="editing = null">
+      <h2 class="text-base font-semibold text-ink">
+        {{ timed.find((entry) => entry.duty.instance?.id === editing)?.habit.name ?? 'Occurrence' }}
+      </h2>
+
+      <p class="mb-2 text-xs text-ink-muted">
+        Drag the card to move it; the length and the reminder live here.
+      </p>
+
+      <p class="mt-4 mb-1.5 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+        How long
+      </p>
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          v-for="minutes in DURATIONS"
+          :key="minutes"
+          type="button"
+          class="tabular rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+          :class="
+            editingInstance?.durationMinutes === minutes
+              ? 'border-ink bg-ink text-ink-inverse'
+              : 'border-line text-ink-muted'
+          "
+          :aria-pressed="editingInstance?.durationMinutes === minutes"
+          @click="chooseDuration(minutes)"
+        >
+          {{ minutes }} min
+        </button>
+      </div>
+
+      <p class="mt-4 mb-1.5 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+        Remind me
+      </p>
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          v-for="minutes in REMINDER_LEAD_TIMES"
+          :key="minutes"
+          type="button"
+          class="tabular rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+          :class="
+            editingInstance?.reminderMinutesBefore === minutes
+              ? 'border-ink bg-ink text-ink-inverse'
+              : 'border-line text-ink-muted'
+          "
+          :aria-pressed="editingInstance?.reminderMinutesBefore === minutes"
+          @click="chooseReminder(String(minutes))"
+        >
+          {{ minutes === 0 ? 'At the time' : `${minutes} before` }}
+        </button>
+        <button
+          type="button"
+          class="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+          :class="
+            editingInstance?.reminderMinutesBefore === undefined
+              ? 'border-ink bg-ink text-ink-inverse'
+              : 'border-line text-ink-muted'
+          "
+          :aria-pressed="editingInstance?.reminderMinutesBefore === undefined"
+          @click="chooseReminder('none')"
+        >
+          None
+        </button>
+      </div>
+
+      <button
+        type="button"
+        class="mt-5 w-full rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted"
+        @click="editing = null"
+      >
+        Done
+      </button>
+    </AppDialog>
 
     <DragGhost
       v-if="drag.isDragging.value"

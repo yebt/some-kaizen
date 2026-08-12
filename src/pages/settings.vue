@@ -137,6 +137,45 @@ async function applyImport() {
   feedback.notify('Import merged', 'success')
 }
 
+/**
+ * Overwrites everything with a file, as distinct from folding one in.
+ *
+ * Merging is the right default and replacing is the right escape hatch: sometimes the file
+ * is the truth and whatever this device has drifted into is not. It lives with the other
+ * destructive actions rather than beside Import, because the two read almost identically in
+ * a menu and only one of them can lose a year of records.
+ */
+async function replaceFromBackup() {
+  const text = await files.pick()
+
+  if (!text) return
+
+  let incoming
+
+  try {
+    incoming = parseBackup(text)
+  } catch (error) {
+    feedback.notify(
+      error instanceof Error ? error.message : 'That file could not be read.',
+      'danger',
+    )
+
+    return
+  }
+
+  const accepted = await feedback.confirm({
+    title: 'Replace everything with this file?',
+    message: `It contains ${incoming.habits.length} habits and ${incoming.entries.length} recorded days. Everything currently on this device is deleted, including anything the file does not contain.`,
+    confirmLabel: 'Replace everything',
+    tone: 'danger',
+  })
+
+  if (!accepted) return
+
+  await replaceDataset.mutateAsync(incoming)
+  feedback.notify('Everything replaced from the backup', 'danger')
+}
+
 async function loadDemoData() {
   const accepted = await feedback.confirm({
     title: 'Load demo data?',
@@ -237,7 +276,8 @@ async function clearEverything() {
       <div class="rounded-card border border-line bg-surface p-4 shadow-card">
         <p class="text-xs text-ink-muted">
           Everything lives on this device only. Exporting writes a single file you can keep
-          somewhere safe; restoring reads one back.
+          somewhere safe; importing folds one back in, adding what is missing without removing
+          anything.
         </p>
         <div class="mt-3 flex gap-2">
           <button
@@ -288,6 +328,23 @@ async function clearEverything() {
       </button>
 
       <div v-else class="space-y-2">
+        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+          <p class="text-sm font-medium text-ink">Replace with a backup</p>
+          <p class="mt-1 text-xs text-ink-muted">
+            Makes a file the whole truth: everything here is deleted first, including anything the
+            file does not contain. Import merges instead, and is what you usually want.
+          </p>
+          <button
+            type="button"
+            class="mt-3 inline-flex items-center gap-2 rounded-full border border-relapse px-4 py-2 text-xs font-medium text-relapse disabled:opacity-50"
+            :disabled="isWorking"
+            @click="replaceFromBackup"
+          >
+            <AppSpinner v-if="isWorking" :size="12" label="Working" />
+            Replace from a file
+          </button>
+        </div>
+
         <div class="rounded-card border border-line bg-surface p-4 shadow-card">
           <p class="text-sm font-medium text-ink">Load demo data</p>
           <p class="mt-1 text-xs text-ink-muted">

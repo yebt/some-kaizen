@@ -267,7 +267,7 @@ describe('a bad date in the url', () => {
   })
 })
 
-describe('reminders', () => {
+describe('adjusting an occurrence', () => {
   async function settle() {
     for (let round = 0; round < 3; round += 1) {
       await flushPromises()
@@ -287,81 +287,81 @@ describe('reminders', () => {
     return { habit, instance }
   }
 
-  it('offers lead times when a scheduled card is tapped', async () => {
+  async function openSheet() {
     const { habit, instance } = scheduledMeditation()
 
     await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
 
     const wrapper = await renderDay()
 
-    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
+    await wrapper.find('[aria-label="Adjust Meditate"]').trigger('click')
     await flushPromises()
 
-    const text = wrapper.find('dialog').text()
+    return wrapper
+  }
 
-    expect(text).toContain('At the time')
-    expect(text).toContain('15 minutes before')
-  })
-
-  it('stores the chosen lead time', async () => {
-    const { habit, instance } = scheduledMeditation()
-
-    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
-
-    const wrapper = await renderDay()
-
-    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
-    await flushPromises()
+  async function press(wrapper: Awaited<ReturnType<typeof renderDay>>, label: string) {
     await wrapper
       .findAll('dialog button')
-      .find((node) => node.text() === '15 minutes before')
+      .find((node) => node.text() === label)
       ?.trigger('click')
     await settle()
+  }
+
+  it('offers both the length and the reminder, which are the two things about it', async () => {
+    const text = (await openSheet()).find('dialog').text()
+
+    expect(text).toContain('How long')
+    expect(text).toContain('Remind me')
+  })
+
+  it('changes how long the occurrence lasts', async () => {
+    const wrapper = await openSheet()
+
+    await press(wrapper, '90 min')
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(90)
+  })
+
+  it('keeps the time it was given while changing the length', async () => {
+    const wrapper = await openSheet()
+
+    await press(wrapper, '45 min')
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(7 * 60)
+  })
+
+  it('stores a chosen reminder', async () => {
+    const wrapper = await openSheet()
+
+    await press(wrapper, '15 before')
 
     expect((await persistence.instances.all())[0]?.reminderMinutesBefore).toBe(15)
   })
 
-  it('asks for permission only once a reminder is actually set', async () => {
-    // Asking on launch, before anyone has shown interest in being notified, is how an app
-    // earns a permanent no.
-    const { habit, instance } = scheduledMeditation()
-
-    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
-
-    const wrapper = await renderDay()
-
-    expect(platform.asked.permission).toBe(0)
-
-    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
-    await flushPromises()
-    await wrapper
-      .findAll('dialog button')
-      .find((node) => node.text() === 'At the time')
-      ?.trigger('click')
-    await settle()
-
-    expect(platform.asked.permission).toBe(1)
-  })
-
   it('removes a reminder again', async () => {
-    const { habit, instance } = scheduledMeditation()
+    const wrapper = await openSheet()
 
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [habit],
-      instances: [{ ...instance, reminderMinutesBefore: 15 }],
-    })
-
-    const wrapper = await renderDay()
-
-    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
-    await flushPromises()
-    await wrapper
-      .findAll('dialog button')
-      .find((node) => node.text() === 'No reminder')
-      ?.trigger('click')
-    await settle()
+    await press(wrapper, '15 before')
+    await press(wrapper, 'None')
 
     expect((await persistence.instances.all())[0]?.reminderMinutesBefore).toBeUndefined()
+  })
+
+  it('leads to the block itself rather than editing its hours here', async () => {
+    // A block's length is its hours, and those belong to the block rather than to one day.
+    const block = createBlockTime({
+      id: newIdentifier(),
+      name: 'Work',
+      span: interval(timeOfDay(9 * 60), 8 * 60),
+      weekdays: [1, 2, 3, 4, 5],
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [block] })
+
+    const wrapper = await renderDay()
+
+    expect(wrapper.find(`a[href="/block-time/${block.id}"]`).exists()).toBe(true)
   })
 })
