@@ -7,6 +7,7 @@ import { PiniaColada } from '@pinia/colada'
 import App from '@core/App.vue'
 import router from '@core/router'
 import { installBackButton } from '@core/back-button'
+import { hideSplash } from '@core/splash'
 import { createPersistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { createPlatformServices, PLATFORM_KEY } from '@core/platform-context'
@@ -37,11 +38,15 @@ try {
   // After mounting, so a back gesture can never arrive before there is anything to go back
   // from. A failure here costs the gesture, not the app.
   void installBackButton(router).catch((error: unknown) => console.error(error))
+  void hideSplash()
 } catch (error) {
   // Storage can genuinely be unavailable: private browsing, a corrupted database, or a
   // second tab pinning an older schema version. Mounting anyway would leave every screen
   // throwing on setup, so say plainly what happened instead of showing a blank page.
   console.error(error)
+
+  // Before writing the message, or it would be explained to a screen nobody can see.
+  void hideSplash()
 
   const root = document.querySelector('#app')
 

@@ -64,6 +64,19 @@ bun run android:apk       # build the web app, sync, and assemble a debug APK
 bun run android:install   # adb install the result
 ```
 
+The launcher icon and the splash screens are native resources, not the favicon: `cap sync`
+copies the web build and never touches them, which is why a fresh Capacitor project ships
+its own icon until someone replaces it. The sources live in `assets/`, and the whole set of
+densities is regenerated from them with
+
+```sh
+bunx capacitor-assets generate --android
+```
+
+The splash is hidden by the app once storage is open and the first screen has rendered,
+with a three second auto-hide behind it as a dead man's switch. A timed splash would either
+lie about being ready or waste the time it was given.
+
 The app asks for notification permission the first time a reminder is actually set, never on
 launch, and asks for no storage permission at all: exporting writes into the app's own cache
 directory and hands the file to the system share sheet, while importing uses a file input,

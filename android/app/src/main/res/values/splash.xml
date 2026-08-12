@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's own canvas, so the first frame is already the colour of the app. -->
+    <color name="splash_background">#f2f0ec</color>
+</resources>
