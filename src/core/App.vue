@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import FeedbackHost from '@shared/ui/feedback/FeedbackHost.vue'
 import TabBar from '@shared/ui/TabBar.vue'
+import { useReminderSync } from '@modules/reminders/application/use-reminder-sync'
+
+// Mounted once at the root, so every write anywhere ends up reflected on the phone.
+useReminderSync()
 </script>
 
 <template>

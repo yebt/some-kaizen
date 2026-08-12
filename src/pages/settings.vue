@@ -12,13 +12,13 @@ import { readDataset, useReplaceDataset } from '@modules/data/application/datase
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 import { parseBackup, serializeDataset } from '@modules/data/domain/data-transfer'
 import { backupFileName } from '@modules/data/domain/file-exchange'
-import { createBrowserFileExchange } from '@modules/data/infrastructure/browser-file-exchange'
+import { usePlatform } from '@core/platform-context'
 
 const { data: habitsData } = useHabits()
 const persistence = usePersistence()
 const replaceDataset = useReplaceDataset()
 const feedback = useFeedback()
-const files = createBrowserFileExchange()
+const files = usePlatform().files
 const preferences = usePreferences()
 const isExporting = ref(false)
 

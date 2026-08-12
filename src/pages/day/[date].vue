@@ -12,6 +12,7 @@ import {
 } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
 import { snapToStep, type TimeOfDay } from '@shared/domain/time-of-day'
+import { usePlatform } from '@core/platform-context'
 import { usePreferences } from '@core/preferences-store'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
@@ -69,6 +70,7 @@ const { data: blocksData } = useBlockTime()
 const saveInstance = useSaveInstance()
 const feedback = useFeedback()
 const preferences = usePreferences()
+const platform = usePlatform()
 
 const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
 const habitsById = computed(() => new Map(habits.value.map((habit) => [habit.id, habit])))
@@ -236,6 +238,23 @@ async function chooseReminder(key: string) {
   const minutes = Number(key)
 
   await saveInstance.mutateAsync(remindBefore(existing, minutes))
+
+  // Asked the first time a reminder is actually set. Being asked "can this app notify you?"
+  // before showing any interest in being notified is how an app earns a permanent no.
+  const permission = await platform.reminders.ensurePermission()
+
+  if (permission === 'unsupported') {
+    feedback.notify('Saved. Reminders only ring in the installed app.')
+
+    return
+  }
+
+  if (permission === 'denied') {
+    feedback.notify('Saved, but notifications are turned off for this app.', 'danger')
+
+    return
+  }
+
   feedback.notify(
     minutes === 0 ? 'Reminder set for the start' : `Reminder set ${minutes} minutes before`,
     'success',

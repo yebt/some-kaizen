@@ -8,6 +8,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
+import { PLATFORM_KEY, type PlatformServices } from '@core/platform-context'
 import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
@@ -31,7 +32,34 @@ beforeEach(async () => {
   persistence = await createPersistence(`day-spec-${databaseCounter}`)
 })
 
+/**
+ * A platform that can do nothing, which is what a browser tab genuinely is.
+ *
+ * Recording what it was asked lets a test prove the screen asks for permission at the
+ * moment a reminder is set rather than on launch.
+ */
+function stubPlatform(): PlatformServices & { asked: { permission: number } } {
+  const asked = { permission: 0 }
+
+  return {
+    asked,
+    files: { save: async () => undefined, pick: async () => null },
+    reminders: {
+      ensurePermission: async () => {
+        asked.permission += 1
+
+        return 'unsupported'
+      },
+      sync: async () => undefined,
+    },
+  }
+}
+
+let platform: ReturnType<typeof stubPlatform>
+
 async function renderDay(date: string = DAY) {
+  platform = stubPlatform()
+
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/day/:date', component: DayPage }],
@@ -43,7 +71,10 @@ async function renderDay(date: string = DAY) {
   const wrapper = mount(DayPage, {
     global: {
       plugins: [createPinia(), PiniaColada, router],
-      provide: { [PERSISTENCE_KEY as symbol]: persistence },
+      provide: {
+        [PERSISTENCE_KEY as symbol]: persistence,
+        [PLATFORM_KEY as symbol]: platform,
+      },
     },
   })
 
@@ -252,6 +283,28 @@ describe('reminders', () => {
     await settle()
 
     expect((await persistence.instances.all())[0]?.reminderMinutesBefore).toBe(15)
+  })
+
+  it('asks for permission only once a reminder is actually set', async () => {
+    // Asking on launch, before anyone has shown interest in being notified, is how an app
+    // earns a permanent no.
+    const { habit, instance } = scheduledMeditation()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const wrapper = await renderDay()
+
+    expect(platform.asked.permission).toBe(0)
+
+    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('dialog button')
+      .find((node) => node.text() === 'At the time')
+      ?.trigger('click')
+    await settle()
+
+    expect(platform.asked.permission).toBe(1)
   })
 
   it('removes a reminder again', async () => {

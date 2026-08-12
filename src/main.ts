@@ -8,6 +8,7 @@ import App from '@core/App.vue'
 import router from '@core/router'
 import { createPersistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
+import { createPlatformServices, PLATFORM_KEY } from '@core/platform-context'
 import { applyTheme, loadPreferences } from '@core/preferences-store'
 
 // Applied before anything mounts, so the app never flashes the wrong colours on launch.
@@ -28,6 +29,7 @@ app.use(PiniaColada, {
 })
 
 try {
+  app.provide(PLATFORM_KEY, createPlatformServices())
   app.provide(PERSISTENCE_KEY, await createPersistence())
   app.mount('#app')
 } catch (error) {
