@@ -27,6 +27,7 @@ async function create(block: BlockTime) {
 
 <template>
   <div class="safe-top">
+    <BackLink to="/block-time" label="Block time" />
     <header class="pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">New block</h1>
       <p class="text-sm text-ink-muted">Fixed commitments the rest of your day is built around.</p>

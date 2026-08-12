@@ -19,6 +19,7 @@ async function create(habit: Habit) {
 
 <template>
   <div class="safe-top">
+    <BackLink to="/habits" label="Habits" />
     <header class="pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">New habit</h1>
     </header>

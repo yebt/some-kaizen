@@ -3,6 +3,7 @@ import { computed, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import BackLink from '@shared/ui/BackLink.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import type { BlockTime } from '@modules/block-time/domain/block-time'
 import { useBlockTime, useSaveBlockTime } from '@modules/block-time/application/block-time-queries'
@@ -38,6 +39,7 @@ async function save(edited: BlockTime) {
 
 <template>
   <div class="safe-top">
+    <BackLink to="/block-time" label="Block time" />
     <header class="pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Edit block</h1>
     </header>

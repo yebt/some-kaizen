@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
   addDays,
@@ -18,8 +19,12 @@ import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import DateStrip from '@shared/ui/DateStrip.vue'
 import ProgressRing from '@shared/ui/ProgressRing.vue'
+import SegmentedControl, { type Segment } from '@shared/ui/SegmentedControl.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { useSwipeAction } from '@shared/ui/press/use-swipe-action'
 import {
+  type Achievement,
+  achievementFor,
   isMeasured,
   isNegative,
   type MeasuredHabit,
@@ -52,6 +57,7 @@ import {
 } from '@modules/planning/application/planning-queries'
 import { negativeStatistics } from '@modules/stats/domain/habit-statistics'
 
+const router = useRouter()
 const { data: habitsData, isLoading: habitsLoading } = useHabits()
 const { data: entriesData } = useHabitEntries()
 const { data: instancesData } = usePlannedInstances()
@@ -69,15 +75,10 @@ const blocks = computed(() => blocksData.value ?? [])
 const today = todayIn()
 const selectedDay = ref<CalendarDate>(today)
 const weekAnchor = ref<CalendarDate>(today)
+const pane = ref<'due' | 'schedule'>('due')
 
 const weekDays = computed(() =>
   eachDayBetween(startOfWeek(weekAnchor.value), endOfWeek(weekAnchor.value)),
-)
-
-const monthLabel = computed(() =>
-  new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(
-    toDate(selectedDay.value),
-  ),
 )
 
 const dayLabel = computed(() =>
@@ -91,12 +92,30 @@ const markedDays = computed(() => instances.value.map((instance) => instance.dat
 const isFirstLoad = computed(() => habitsLoading.value && habitsData.value === undefined)
 const isEmpty = computed(() => !habitsLoading.value && habits.value.length === 0)
 
+const ACHIEVEMENT_LABEL: Record<Achievement, string> = {
+  none: 'nothing yet',
+  below: 'under the minimum',
+  minimum: 'minimum reached',
+  above: 'past the minimum',
+  goal: 'goal reached',
+  over: 'past the goal',
+}
+
+/** Colour follows meaning, so the same green never means two different things. */
+const ACHIEVEMENT_CLASS: Record<Achievement, string> = {
+  none: 'text-ink-subtle',
+  below: 'text-missed',
+  minimum: 'text-partial',
+  above: 'text-partial',
+  goal: 'text-done',
+  over: 'text-done',
+}
+
 /**
  * What the day owes, joined to the verdict that currently stands for each.
  *
  * A duty may have no occurrence yet: a daily habit is due today whether or not anyone
- * dragged a card onto today. Marking one creates the occurrence on the spot, so the plan
- * catches up with what actually happened instead of demanding to be filled in first.
+ * dragged a card onto today. Marking one creates the occurrence on the spot.
  */
 const duties = computed(() =>
   dutiesFor(habits.value, instances.value, selectedDay.value).map((duty, index) => {
@@ -105,19 +124,25 @@ const duties = computed(() =>
       : undefined
     const value = entry?.value ?? 0
     const span = duty.instance ? spanOf(duty.instance) : undefined
+    const measured = isMeasured(duty.habit) ? duty.habit : undefined
 
     return {
       key: duty.instance?.id ?? `${duty.habit.id}-${index}`,
       duty,
       habit: duty.habit,
+      measured,
       entryId: entry?.id,
       outcome: entry?.outcome,
       value,
-      progress: isMeasured(duty.habit) ? value / duty.habit.measure.goal : 0,
+      progress: measured ? value / measured.measure.goal : entry?.outcome === 'done' ? 1 : 0,
+      achievement: measured ? achievementFor(measured.measure, value) : undefined,
       span,
+      time: span ? preferences.formatClock(span.start) : undefined,
     }
   }),
 )
+
+const doneCount = computed(() => duties.value.filter((row) => row.outcome === 'done').length)
 
 /** Block time and timed duties merged into one ribbon, as the day is lived. */
 const schedule = computed(() => {
@@ -129,7 +154,6 @@ const schedule = computed(() => {
     to: occurrence.segment.to,
     continues: occurrence.continuesFromPreviousDay || occurrence.continuesIntoNextDay,
     style: surfaceStyle(occurrence.block),
-    row: undefined,
   }))
 
   const timed = duties.value
@@ -142,13 +166,10 @@ const schedule = computed(() => {
       to: (row.span?.start ?? 0) + (row.duty.instance?.durationMinutes ?? 0),
       continues: false,
       style: surfaceStyle(row.habit),
-      row,
     }))
 
   return [...fixed, ...timed].sort((left, right) => left.from - right.from)
 })
-
-const untimed = computed(() => duties.value.filter((row) => row.span === undefined))
 
 const quitting = computed(() =>
   habits.value.filter(isNegative).map((habit) => {
@@ -166,6 +187,11 @@ const pendingChecks = computed(() =>
       .map((day) => ({ key: `${habit.id}-${day}`, habit, day })),
   ),
 )
+
+const segments = computed<Segment[]>(() => [
+  { value: 'due', label: 'Due', badge: duties.value.length },
+  { value: 'schedule', label: 'Schedule', badge: schedule.value.length },
+])
 
 /** The measured habit currently being logged, if any. */
 const logging = ref<{
@@ -207,16 +233,11 @@ async function answerNegative(habit: NegativeHabit, day: CalendarDate, avoided: 
   )
 }
 
-/**
- * Sets the verdict for one duty.
- *
- * The existing entry's identity is reused so a correction replaces the answer rather than
- * appending beside it.
- */
-async function toggleCompleted(
+/** Sets the verdict for one duty, reusing the entry so a correction replaces the answer. */
+async function setCompleted(
   habit: PositiveHabit,
   duty: DayDuty,
-  wasDone: boolean,
+  done: boolean,
   entryId: Identifier | undefined,
 ) {
   if (isMeasured(habit)) return
@@ -224,7 +245,7 @@ async function toggleCompleted(
   const instance = await occurrenceFor(duty)
 
   await recordEntry.mutateAsync(
-    recordCompleted(entryId ?? newIdentifier(), habit, selectedDay.value, !wasDone, {
+    recordCompleted(entryId ?? newIdentifier(), habit, selectedDay.value, done, {
       instanceId: instance.id,
     }),
   )
@@ -268,8 +289,40 @@ async function saveAmount() {
   }
 }
 
+/**
+ * Swiping right completes, swiping left takes it back.
+ *
+ * A measured habit has no single "done" amount to assume, so a swipe opens its sheet rather
+ * than inventing a number on the user's behalf.
+ */
+const swipe = useSwipeAction({
+  onSwipe: async (key, direction) => {
+    const row = duties.value.find((candidate) => candidate.key === key)
+
+    if (!row) return
+
+    if (row.measured) {
+      startLogging(row.habit, row.duty, row.value, row.entryId)
+
+      return
+    }
+
+    await setCompleted(row.habit, row.duty, direction === 'right', row.entryId)
+  },
+})
+
+function swipeStyle(key: string) {
+  if (swipe.activeKey.value !== key || swipe.offset.value === 0) return {}
+
+  return { transform: `translateX(${swipe.offset.value}px)` }
+}
+
 function shiftWeek(offset: number) {
   weekAnchor.value = addDays(weekAnchor.value, offset * 7)
+}
+
+function openHabit(habitId: Identifier) {
+  void router.push(`/habits/${habitId}`)
 }
 
 const OUTCOME_CLASS = {
@@ -281,16 +334,15 @@ const OUTCOME_CLASS = {
 
 <template>
   <div class="safe-top">
-    <header class="flex items-baseline justify-between pt-2 pb-4">
+    <header class="flex items-baseline justify-between pt-2 pb-3">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight text-ink">Today</h1>
         <p class="text-sm text-ink-muted">{{ dayLabel }}</p>
       </div>
-      <span
-        class="rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted"
-      >
-        {{ monthLabel }}
-      </span>
+      <p v-if="duties.length" class="tabular text-xs text-ink-muted">
+        <span class="text-base font-semibold text-ink">{{ doneCount }}</span>
+        / {{ duties.length }} done
+      </p>
     </header>
 
     <DateStrip
@@ -315,7 +367,7 @@ const OUTCOME_CLASS = {
     </p>
 
     <template v-else>
-      <section v-if="pendingChecks.length" class="mt-6" aria-labelledby="pending-heading">
+      <section v-if="pendingChecks.length" class="mt-4" aria-labelledby="pending-heading">
         <h2
           id="pending-heading"
           class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
@@ -326,12 +378,12 @@ const OUTCOME_CLASS = {
           <li
             v-for="check in pendingChecks"
             :key="check.key"
-            class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
+            class="flex items-center gap-3 rounded-card border border-line bg-surface p-3 shadow-card"
           >
             <span
-              class="grid size-9 shrink-0 place-items-center rounded-full bg-relapse-soft text-relapse"
+              class="grid size-8 shrink-0 place-items-center rounded-full bg-relapse-soft text-relapse"
             >
-              <AppIcon name="ban" :size="18" />
+              <AppIcon name="ban" :size="16" />
             </span>
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium text-ink">{{ check.habit.name }}</p>
@@ -357,81 +409,168 @@ const OUTCOME_CLASS = {
         </ul>
       </section>
 
-      <section v-if="untimed.length" class="mt-6" aria-labelledby="due-heading">
-        <h2
-          id="due-heading"
-          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+      <div class="mt-4">
+        <SegmentedControl v-model="pane" :segments="segments" label="Day view" />
+      </div>
+
+      <section v-show="pane === 'due'" class="mt-3" aria-label="Due today">
+        <TransitionGroup
+          tag="ul"
+          class="space-y-1.5"
+          enter-active-class="transition duration-200 ease-out"
+          enter-from-class="-translate-x-3 opacity-0"
+          leave-active-class="absolute transition duration-150 ease-in"
+          leave-to-class="translate-x-3 opacity-0"
+          move-class="transition-transform duration-200"
         >
-          Due today
-        </h2>
-        <ul class="space-y-2">
-          <li
-            v-for="row in untimed"
-            :key="row.key"
-            class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
-          >
-            <span
-              v-if="row.habit.colour"
-              class="size-8 shrink-0 rounded-full"
-              :style="surfaceStyle(row.habit)"
+          <li v-for="row in duties" :key="row.key" class="relative overflow-hidden rounded-card">
+            <!-- Revealed as the row slides, so the gesture says what it will do. -->
+            <div
+              class="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-medium"
               aria-hidden="true"
-            />
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-ink">{{ row.habit.name }}</p>
-              <p v-if="row.habit.tracking === 'measured'" class="tabular text-xs text-ink-muted">
-                {{ row.value }} / {{ row.habit.measure.goal }} {{ row.habit.measure.unit }}
-              </p>
-              <p v-else class="text-xs text-ink-muted">
-                {{ row.outcome === 'done' ? 'Done' : 'Not yet' }}
-              </p>
+            >
+              <span class="flex items-center gap-1.5 text-done">
+                <AppIcon name="check" :size="16" />
+                Done
+              </span>
+              <span class="text-ink-subtle">Not yet</span>
             </div>
 
-            <button
-              v-if="row.habit.tracking === 'measured'"
-              type="button"
-              :aria-label="`Log ${row.habit.name}`"
-              @click="startLogging(row.habit, row.duty, row.value, row.entryId)"
+            <div
+              class="flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
+              :class="[
+                swipe.activeKey.value === row.key ? 'duration-0' : 'duration-200',
+                row.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',
+              ]"
+              :style="swipeStyle(row.key)"
+              @pointerdown="swipe.press(row.key, $event)"
+              @pointermove="swipe.move($event)"
+              @pointerup="swipe.release($event)"
+              @pointercancel="swipe.cancel()"
             >
-              <ProgressRing :value="row.progress" />
-            </button>
-            <button
-              v-else
-              type="button"
-              class="grid size-9 place-items-center rounded-full border transition-colors"
-              :class="OUTCOME_CLASS[row.outcome ?? 'missed']"
-              :aria-label="`Mark ${row.habit.name}`"
-              :aria-pressed="row.outcome === 'done'"
-              @click="toggleCompleted(row.habit, row.duty, row.outcome === 'done', row.entryId)"
-            >
-              <AppIcon name="check" :size="18" />
-            </button>
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                :aria-label="`Open ${row.habit.name}`"
+                @click="openHabit(row.habit.id)"
+              >
+                <span
+                  v-if="row.habit.colour"
+                  class="size-7 shrink-0 rounded-full"
+                  :style="surfaceStyle(row.habit)"
+                  aria-hidden="true"
+                />
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium text-ink">
+                    {{ row.habit.name }}
+                  </span>
+                  <span class="tabular block truncate text-xs text-ink-muted">
+                    <template v-if="row.measured && row.achievement">
+                      {{ row.value }} / {{ row.measured.measure.goal }}
+                      {{ row.measured.measure.unit }} ·
+                      <span :class="ACHIEVEMENT_CLASS[row.achievement]">
+                        {{ ACHIEVEMENT_LABEL[row.achievement] }}
+                      </span>
+                    </template>
+                    <template v-else>
+                      {{ row.outcome === 'done' ? 'Done' : 'Not yet' }}
+                      <span v-if="row.time">· {{ row.time }}</span>
+                    </template>
+                  </span>
+                </span>
+              </button>
+
+              <button
+                v-if="row.measured"
+                type="button"
+                class="shrink-0"
+                :aria-label="`Log ${row.habit.name}`"
+                @click="startLogging(row.habit, row.duty, row.value, row.entryId)"
+              >
+                <ProgressRing :value="row.progress" :size="36" />
+              </button>
+              <button
+                v-else
+                type="button"
+                class="grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
+                :class="OUTCOME_CLASS[row.outcome ?? 'missed']"
+                :aria-label="`Mark ${row.habit.name}`"
+                :aria-pressed="row.outcome === 'done'"
+                @click="setCompleted(row.habit, row.duty, row.outcome !== 'done', row.entryId)"
+              >
+                <AppIcon name="check" :size="18" />
+              </button>
+            </div>
           </li>
-        </ul>
+        </TransitionGroup>
+
+        <p
+          v-if="!duties.length"
+          class="rounded-card border border-dashed border-line p-6 text-center text-sm text-ink-muted"
+        >
+          Nothing due today.
+        </p>
+
+        <p class="mt-2 text-center text-[0.625rem] text-ink-subtle">
+          Swipe a row right to complete it, left to take it back.
+        </p>
+
+        <section v-if="quitting.length" class="mt-5" aria-labelledby="quitting-heading">
+          <h2
+            id="quitting-heading"
+            class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+          >
+            Quitting
+          </h2>
+          <ul class="space-y-1.5">
+            <li
+              v-for="row in quitting"
+              :key="row.habit.id"
+              class="flex items-center gap-3 rounded-card border border-line bg-surface p-3 shadow-card"
+            >
+              <span
+                class="grid size-7 shrink-0 place-items-center rounded-full"
+                :style="surfaceStyle(row.habit)"
+                :class="row.habit.colour ? '' : 'bg-surface-sunken text-ink-subtle'"
+              >
+                <AppIcon name="ban" :size="14" />
+              </span>
+              <button
+                type="button"
+                class="min-w-0 flex-1 text-left"
+                :aria-label="`Open ${row.habit.name}`"
+                @click="openHabit(row.habit.id)"
+              >
+                <span class="block truncate text-sm font-medium text-ink">{{
+                  row.habit.name
+                }}</span>
+                <span class="block truncate text-xs text-ink-muted">
+                  Judged tomorrow morning<span v-if="row.lastRelapse">
+                    · last relapse {{ row.lastRelapse }}</span
+                  >
+                </span>
+              </button>
+              <span class="shrink-0 text-right">
+                <span class="tabular block text-base leading-none font-semibold text-ink">
+                  {{ row.streak }}
+                </span>
+                <span class="block text-[0.625rem] text-ink-subtle">clean</span>
+              </span>
+            </li>
+          </ul>
+        </section>
       </section>
 
-      <section class="mt-6" aria-labelledby="schedule-heading">
-        <div class="mb-2 flex items-baseline justify-between">
-          <h2
-            id="schedule-heading"
-            class="text-xs font-semibold tracking-wide text-ink-muted uppercase"
-          >
-            Schedule
-          </h2>
-          <RouterLink
-            :to="`/day/${selectedDay}`"
-            class="text-xs font-medium text-ink-muted underline underline-offset-2 hover:text-ink"
-          >
-            Open timeline
-          </RouterLink>
-        </div>
-
-        <ol v-if="schedule.length" class="space-y-2">
+      <section v-show="pane === 'schedule'" class="mt-3" aria-label="Schedule">
+        <ol v-if="schedule.length" class="space-y-1.5">
           <li v-for="item in schedule" :key="item.key" class="flex gap-3">
-            <span class="tabular w-12 shrink-0 pt-3 text-right text-xs font-medium text-ink-subtle">
+            <span
+              class="tabular w-12 shrink-0 pt-2.5 text-right text-xs font-medium text-ink-subtle"
+            >
               {{ preferences.formatClock(item.from) }}
             </span>
             <div
-              class="flex flex-1 items-center gap-3 rounded-card border p-3.5"
+              class="flex-1 rounded-card border p-3"
               :class="
                 item.kind === 'block'
                   ? 'border-transparent bg-accent text-accent-ink'
@@ -439,35 +578,12 @@ const OUTCOME_CLASS = {
               "
               :style="item.style"
             >
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium">{{ item.name }}</p>
-                <p class="tabular text-xs opacity-70">
-                  {{ preferences.formatClock(item.from) }} –
-                  {{ preferences.formatClock(item.to) }}
-                  <span v-if="item.continues">· continues</span>
-                </p>
-              </div>
-
-              <button
-                v-if="item.row"
-                type="button"
-                class="grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
-                :class="OUTCOME_CLASS[item.row.outcome ?? 'missed']"
-                :aria-label="`Mark ${item.name}`"
-                :aria-pressed="item.row.outcome === 'done'"
-                @click="
-                  item.row.habit.tracking === 'measured'
-                    ? startLogging(item.row.habit, item.row.duty, item.row.value, item.row.entryId)
-                    : toggleCompleted(
-                        item.row.habit,
-                        item.row.duty,
-                        item.row.outcome === 'done',
-                        item.row.entryId,
-                      )
-                "
-              >
-                <AppIcon name="check" :size="18" />
-              </button>
+              <p class="truncate text-sm font-medium">{{ item.name }}</p>
+              <p class="tabular text-xs opacity-70">
+                {{ preferences.formatClock(item.from) }} –
+                {{ preferences.formatClock(item.to) }}
+                <span v-if="item.continues">· continues</span>
+              </p>
             </div>
           </li>
         </ol>
@@ -475,49 +591,16 @@ const OUTCOME_CLASS = {
           v-else
           class="rounded-card border border-dashed border-line p-6 text-center text-sm text-ink-muted"
         >
-          Nothing at a fixed time. Open the timeline to give something an hour.
+          Nothing at a fixed time yet.
         </p>
-      </section>
 
-      <!--
-        Quitting habits are never planned and never performed, so they would otherwise leave
-        no trace on the day they are being tracked. Shown as standing, with yesterday's
-        question living in its own section above.
-      -->
-      <section v-if="quitting.length" class="mt-6" aria-labelledby="quitting-heading">
-        <h2
-          id="quitting-heading"
-          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        <RouterLink
+          :to="`/day/${selectedDay}`"
+          class="mt-3 flex items-center justify-center gap-1.5 rounded-full border border-line px-4 py-2.5 text-xs font-medium text-ink-muted"
         >
-          Quitting
-        </h2>
-        <ul class="space-y-2">
-          <li
-            v-for="row in quitting"
-            :key="row.habit.id"
-            class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
-          >
-            <span
-              class="grid size-8 shrink-0 place-items-center rounded-full"
-              :style="surfaceStyle(row.habit)"
-              :class="row.habit.colour ? '' : 'bg-surface-sunken text-ink-subtle'"
-            >
-              <AppIcon name="ban" :size="16" />
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-ink">{{ row.habit.name }}</p>
-              <p class="text-xs text-ink-muted">
-                Judged tomorrow morning<span v-if="row.lastRelapse">
-                  · last relapse {{ row.lastRelapse }}</span
-                >
-              </p>
-            </div>
-            <div class="shrink-0 text-right">
-              <p class="tabular text-lg leading-none font-semibold text-ink">{{ row.streak }}</p>
-              <p class="text-[0.625rem] text-ink-subtle">clean days</p>
-            </div>
-          </li>
-        </ul>
+          Open the timeline
+          <AppIcon name="chevron-right" :size="14" />
+        </RouterLink>
       </section>
     </template>
 

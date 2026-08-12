@@ -1,10 +1,24 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="en">
   <head>
-    <meta charset="UTF-8">
-    <link rel="icon" href="/favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vite App</title>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Fills the notch area with the app's own canvas instead of a white bar. -->
+    <meta name="theme-color" content="#f2f0ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1f1e1c" media="(prefers-color-scheme: dark)" />
+    <!--
+      viewport-fit=cover is what lets the safe-area insets the layout already uses actually
+      report anything; without it the app is letterboxed away from the notch.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="A mobile-first habit tracker that gives your habits a place in the day, offline and on your own device."
+    />
+    <title>Some Kaisen</title>
   </head>
   <body>
     <div id="app"></div>

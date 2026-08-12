@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { addDays, todayIn } from '@shared/domain/calendar-date'
 import AppIcon from '@shared/ui/AppIcon.vue'
+import BackLink from '@shared/ui/BackLink.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import { type Habit, isNegative, isPositive } from '@modules/habits/domain/habit'
@@ -89,6 +90,7 @@ const headline = computed(() => [
 
 <template>
   <div class="safe-top">
+    <BackLink to="/habits" label="Habits" />
     <header class="pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Statistics</h1>
       <p class="text-sm text-ink-muted">The last six months across everything you track</p>

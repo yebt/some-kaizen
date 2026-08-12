@@ -142,7 +142,16 @@ function isPressed(id: Identifier) {
       room is actually left.
     </p>
 
-    <ul v-else class="space-y-2">
+    <TransitionGroup
+      v-else
+      tag="ul"
+      class="space-y-2"
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="-translate-y-2 scale-98 opacity-0"
+      leave-active-class="absolute inset-x-0 transition duration-150 ease-in"
+      leave-to-class="translate-x-4 opacity-0"
+      move-class="transition-transform duration-200"
+    >
       <li
         v-for="block in blocks"
         :key="block.id"
@@ -173,7 +182,7 @@ function isPressed(id: Identifier) {
           <AppIcon name="more" :size="16" />
         </button>
       </li>
-    </ul>
+    </TransitionGroup>
 
     <ActionSheet
       :open="menuFor !== null"

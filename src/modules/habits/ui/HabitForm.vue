@@ -80,6 +80,19 @@ const error = ref<string | null>(null)
 
 const isPositive = computed(() => kind.value !== 'negative')
 
+/**
+ * An example of the kind actually being created.
+ *
+ * A single placeholder cannot serve all three: offering "Drink water" while someone is
+ * describing what they want to quit reads as the form not following along.
+ */
+const namePlaceholder = computed(() => {
+  if (kind.value === 'negative') return 'Smoking'
+  if (kind.value === 'measured') return 'Drink water'
+
+  return 'Meditate'
+})
+
 function build(): Habit {
   // Identity and creation day survive an edit, so a habit keeps the history recorded
   // against it. Editing rebuilds through the same constructors as creating, which means
@@ -151,7 +164,7 @@ function submit() {
         type="text"
         required
         :maxlength="MAX_HABIT_NAME_LENGTH"
-        placeholder="Drink water"
+        :placeholder="namePlaceholder"
         class="w-full rounded-cell border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
       />
     </div>

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import { addDays, todayIn } from '@shared/domain/calendar-date'
 import AppIcon from '@shared/ui/AppIcon.vue'
+import BackLink from '@shared/ui/BackLink.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import { isMeasured, isNegative, isPositive } from '@modules/habits/domain/habit'
@@ -102,6 +103,7 @@ const lastRelapse = computed(() => {
 
 <template>
   <div class="safe-top">
+    <BackLink to="/habits" label="Habits" />
     <div
       v-if="isLoading && habitsData === undefined"
       class="flex justify-center py-12 text-ink-subtle"
@@ -190,14 +192,6 @@ const lastRelapse = computed(() => {
       <p v-if="lastRelapse" class="mt-3 text-xs text-ink-muted">
         Last relapse recorded on {{ lastRelapse }}.
       </p>
-
-      <RouterLink
-        to="/habits"
-        class="mt-5 flex items-center gap-1.5 text-xs font-medium text-ink-muted"
-      >
-        <AppIcon name="chevron-left" :size="14" />
-        All habits
-      </RouterLink>
     </template>
   </div>
 </template>

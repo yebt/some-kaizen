@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import BackLink from '@shared/ui/BackLink.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import type { Habit } from '@modules/habits/domain/habit'
 import { useHabits, useSaveHabit } from '@modules/habits/application/habit-queries'
@@ -33,6 +34,7 @@ async function save(edited: Habit) {
 
 <template>
   <div class="safe-top">
+    <BackLink to="/habits" label="Habits" />
     <header class="pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Edit habit</h1>
     </header>

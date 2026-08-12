@@ -82,7 +82,7 @@ describe('with a populated day', () => {
   it('lists an occurrence with no time under what is due today', async () => {
     const text = (await renderToday()).text()
 
-    expect(text).toContain('Due today')
+    expect(text).toContain('Due')
     expect(text).toContain('Drink water')
   })
 
@@ -91,7 +91,7 @@ describe('with a populated day', () => {
     const text = (await renderToday()).text()
 
     expect(text).toContain('Quitting')
-    expect(text).toContain('clean days')
+    expect(text).toContain('Judged tomorrow morning')
   })
 
   it('asks about the most recent unanswered negative habit', async () => {
@@ -262,7 +262,7 @@ describe('with nothing stored', () => {
     const text = (await renderToday()).text()
 
     expect(text).toContain('No habits yet')
-    expect(text).not.toContain('Due today')
+    expect(text).not.toContain('Swipe a row right')
   })
 })
 

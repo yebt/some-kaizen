@@ -148,6 +148,32 @@ export function outcomeFor(value: Measure, recorded: number): PositiveOutcome {
   return 'missed'
 }
 
+/**
+ * How far a recorded amount got, in the terms the habit itself defines.
+ *
+ * Finer than the three outcomes because a list has room to say more than pass or fail.
+ * "Just under the minimum" and "nothing at all" both grade as missed, yet one of them is
+ * almost a good day, and a tracker that cannot tell you which is throwing away the only
+ * information that would keep you going.
+ */
+export type Achievement = 'none' | 'below' | 'minimum' | 'above' | 'goal' | 'over'
+
+export function achievementFor(value: Measure, recorded: number): Achievement {
+  if (!Number.isFinite(recorded) || recorded < 0) {
+    throw new InvalidMeasureError('A recorded value must be zero or a positive number.')
+  }
+
+  if (recorded === 0) return 'none'
+  // Checked before the minimum so a habit whose minimum equals its goal reports the goal,
+  // which is the better thing to tell someone who just reached both at once.
+  if (recorded > value.goal) return 'over'
+  if (recorded >= value.goal) return 'goal'
+  if (recorded > value.minimum) return 'above'
+  if (recorded >= value.minimum) return 'minimum'
+
+  return 'below'
+}
+
 export interface CompletedHabitDraft extends Appearance {
   readonly id: Identifier
   readonly name: string

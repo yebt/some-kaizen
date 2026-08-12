@@ -238,7 +238,21 @@ function isPressed(id: Identifier) {
       Nothing here yet. Create your first habit and it will show up on Today.
     </p>
 
-    <ul v-else class="space-y-2">
+    <!--
+      Rows fade and slide rather than appearing and vanishing. A list that changes instantly
+      leaves you scanning to work out which one was added or removed; a hundred and fifty
+      milliseconds of movement answers that without a word.
+    -->
+    <TransitionGroup
+      v-else
+      tag="ul"
+      class="space-y-2"
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="-translate-y-2 scale-98 opacity-0"
+      leave-active-class="absolute inset-x-0 transition duration-150 ease-in"
+      leave-to-class="translate-x-4 opacity-0"
+      move-class="transition-transform duration-200"
+    >
       <li
         v-for="row in rows"
         :key="row.habit.id"
@@ -287,7 +301,7 @@ function isPressed(id: Identifier) {
           </div>
         </div>
       </li>
-    </ul>
+    </TransitionGroup>
 
     <ActionSheet
       :open="menuFor !== null"

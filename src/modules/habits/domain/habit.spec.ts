@@ -16,6 +16,7 @@ import {
   isMeasured,
   isNegative,
   isPositive,
+  achievementFor,
   measure,
   outcomeFor,
   timesPerPeriod,
@@ -277,5 +278,42 @@ describe('type guards', () => {
     expect(isMeasured(measured)).toBe(true)
     expect(isMeasured(completed)).toBe(false)
     expect(isMeasured(negative)).toBe(false)
+  })
+})
+
+describe('achievementFor', () => {
+  const water = measure('litres', 1, 2)
+
+  it('is nothing at zero', () => {
+    expect(achievementFor(water, 0)).toBe('none')
+  })
+
+  it('is below when there is something but not enough to count', () => {
+    // Almost a good day, and grading it the same as nothing throws that away.
+    expect(achievementFor(water, 0.5)).toBe('below')
+  })
+
+  it('is the minimum exactly at the minimum', () => {
+    expect(achievementFor(water, 1)).toBe('minimum')
+  })
+
+  it('is above between the minimum and the goal', () => {
+    expect(achievementFor(water, 1.5)).toBe('above')
+  })
+
+  it('is the goal exactly at the goal', () => {
+    expect(achievementFor(water, 2)).toBe('goal')
+  })
+
+  it('is over past the goal', () => {
+    expect(achievementFor(water, 3)).toBe('over')
+  })
+
+  it('reports the goal when the minimum equals it, which is the better thing to say', () => {
+    expect(achievementFor(measure('pages', 10, 10), 10)).toBe('goal')
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])('rejects the value %s', (recorded) => {
+    expect(() => achievementFor(water, recorded)).toThrow(InvalidMeasureError)
   })
 })
