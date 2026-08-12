@@ -365,3 +365,116 @@ describe('adjusting an occurrence', () => {
     expect(wrapper.find(`a[href="/block-time/${block.id}"]`).exists()).toBe(true)
   })
 })
+
+describe('dragging the grip on a card', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  /**
+   * A card starting at 07:00. Every rectangle in jsdom is at the origin and a minute is a
+   * pixel, so a clientY reads directly as a minute of the day.
+   */
+  async function renderScheduled(durationMinutes = 30) {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({
+        id: newIdentifier(),
+        habitId: habit.id,
+        date: DAY,
+        period: 'daily',
+        durationMinutes,
+      }),
+      timeOfDay(7 * 60),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    return await renderDay()
+  }
+
+  /**
+   * jsdom has no PointerEvent and refuses to have `clientY` assigned onto a MouseEvent after
+   * construction, which is how the test helper would otherwise supply it, so the coordinate
+   * goes in through the constructor.
+   */
+  function pointer(type: string, clientY: number) {
+    return new MouseEvent(type, { clientY, bubbles: true })
+  }
+
+  function grip(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.find('[data-resize-grip]').element
+  }
+
+  async function dragGripTo(wrapper: Awaited<ReturnType<typeof renderDay>>, clientY: number) {
+    const handle = grip(wrapper)
+
+    handle.dispatchEvent(pointer('pointerdown', 7 * 60 + 30))
+    handle.dispatchEvent(pointer('pointermove', clientY))
+    handle.dispatchEvent(pointer('pointerup', clientY))
+    await settle()
+  }
+
+  it('is there to be grabbed, since a length cannot be dragged out of a card body', async () => {
+    expect((await renderScheduled()).find('[data-resize-grip]').exists()).toBe(true)
+  })
+
+  it('makes the occurrence last until where the finger let go', async () => {
+    const wrapper = await renderScheduled()
+
+    await dragGripTo(wrapper, 8 * 60)
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(60)
+  })
+
+  it('leaves the start alone, because a grip on the bottom edge moves one edge', async () => {
+    const wrapper = await renderScheduled()
+
+    await dragGripTo(wrapper, 9 * 60)
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(7 * 60)
+  })
+
+  it('snaps to the same step the rest of the screen uses', async () => {
+    const wrapper = await renderScheduled()
+
+    // 08:07 is not a time this screen can express, so it lands on 08:00.
+    await dragGripTo(wrapper, 8 * 60 + 7)
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(60)
+  })
+
+  it('refuses to shrink a card into nothing', async () => {
+    const wrapper = await renderScheduled()
+
+    // Dragged well above its own start, which has no meaningful length at all.
+    await dragGripTo(wrapper, 5 * 60)
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(15)
+  })
+
+  it('grows the card while the finger is still down, before anything is saved', async () => {
+    const wrapper = await renderScheduled()
+    const handle = grip(wrapper)
+
+    handle.dispatchEvent(pointer('pointerdown', 7 * 60 + 30))
+    handle.dispatchEvent(pointer('pointermove', 9 * 60))
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Adjust Meditate"]').text()).toContain('120 min')
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(30)
+  })
+
+  it('does not open the sheet, so the two gestures never fight', async () => {
+    const wrapper = await renderScheduled()
+
+    await dragGripTo(wrapper, 8 * 60)
+
+    expect(wrapper.find('dialog').attributes('open')).toBeUndefined()
+  })
+})

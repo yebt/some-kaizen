@@ -77,7 +77,6 @@ const preferences = usePreferences()
 const platform = usePlatform()
 
 const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
-const habitsById = computed(() => new Map(habits.value.map((habit) => [habit.id, habit])))
 const instances = computed(() => instancesData.value ?? [])
 const blocks = computed(() => blocksData.value ?? [])
 
@@ -244,6 +243,77 @@ const editingInstance = computed(() =>
  */
 const swallowNextClick = ref(false)
 
+/**
+ * A drag on the card's bottom edge, which is how a length is changed on a phone.
+ *
+ * Hidden from assistive technology on purpose rather than by omission: a grip is a pointer
+ * affordance, and the dialog behind a tap on the card already offers the same lengths as
+ * plain buttons. Announcing a slider with no keyboard behind it would describe a control
+ * that does not exist.
+ *
+ * A tap on the card body would have been simpler and is not reliable here: the same element
+ * already owns a long press for moving the card, so the two gestures race and a tap is
+ * invisible as an affordance besides. A grip you can see, on its own element, competes with
+ * nothing — the parent's press never starts because the gesture is claimed here first.
+ */
+const resizing = ref<{ instanceId: Identifier; start: TimeOfDay; duration: number } | null>(null)
+
+/** The length to draw while a resize is in flight, before anything has been saved. */
+function previewDuration(instanceId: Identifier | undefined): number | undefined {
+  if (!instanceId || resizing.value?.instanceId !== instanceId) return undefined
+
+  return resizing.value.duration
+}
+
+function startResize(instance: PlannedInstance | undefined, event: PointerEvent) {
+  if (!instance || instance.startsAt === undefined) return
+
+  // Claimed here so the card underneath never begins its own press.
+  event.stopPropagation()
+
+  const target = event.currentTarget as Element & {
+    setPointerCapture?: (pointerId: number) => void
+  }
+
+  target.setPointerCapture?.(event.pointerId)
+  resizing.value = {
+    instanceId: instance.id,
+    start: instance.startsAt,
+    duration: instance.durationMinutes,
+  }
+}
+
+function moveResize(event: PointerEvent) {
+  const current = resizing.value
+
+  if (!current) return
+
+  event.stopPropagation()
+
+  const end = minutesAt(event.clientY)
+
+  if (end === null) return
+
+  // At least one snap step long, so a card can never be dragged into nothing.
+  resizing.value = { ...current, duration: Math.max(end - current.start, SNAP_MINUTES) }
+}
+
+async function endResize(event: PointerEvent) {
+  const current = resizing.value
+
+  if (!current) return
+
+  event.stopPropagation()
+  resizing.value = null
+
+  const existing = instances.value.find((instance) => instance.id === current.instanceId)
+
+  if (!existing || existing.durationMinutes === current.duration) return
+
+  await saveInstance.mutateAsync(resize(existing, current.duration))
+  feedback.notify(`${current.duration} minutes`, 'success')
+}
+
 function openOccurrence(instanceId: Identifier | undefined, event: MouseEvent) {
   if (swallowNextClick.value) {
     swallowNextClick.value = false
@@ -386,8 +456,8 @@ function trackHover(event: PointerEvent) {
       </section>
 
       <p class="mt-4 mb-2 text-xs text-ink-subtle">
-        Hold a card, then drop it on the hour you want. Times snap to {{ SNAP_MINUTES }} minutes.
-        Tap a card to set a reminder.
+        Hold a card to move it, drag the grip on its lower edge to change how long it lasts, or tap
+        it for the rest. Everything snaps to {{ SNAP_MINUTES }} minutes.
       </p>
 
       <div class="flex">
@@ -453,24 +523,51 @@ function trackHover(event: PointerEvent) {
             :key="entry.key"
             v-bind="pressState(entry.key)"
             class="absolute inset-x-1"
-            :style="{ top: `${entry.top}px`, height: `${entry.height}px` }"
+            :style="{
+              top: `${entry.top}px`,
+              height: `${(previewDuration(entry.duty.instance?.id) ?? 0) * PIXELS_PER_MINUTE || entry.height}px`,
+            }"
             @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
             @move="trackHover($event)"
             @release="drag.release($event)"
             @cancel="drag.cancel()"
           >
             <div
-              class="h-full overflow-hidden rounded-cell border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
+              class="relative h-full overflow-hidden rounded-cell border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
               :style="surfaceStyle(entry.habit)"
               role="button"
               :aria-label="`Adjust ${entry.habit.name}`"
               @click="openOccurrence(entry.duty.instance?.id, $event)"
             >
+              <!--
+                The grip sits on the card's bottom edge and is deliberately taller than it
+                looks: a five pixel target is unhittable with a thumb, so it reaches upward
+                into the card while only its line is drawn.
+              -->
+              <span
+                v-if="entry.duty.instance"
+                data-resize-grip
+                class="absolute inset-x-0 bottom-0 z-10 flex h-5 cursor-ns-resize touch-none items-end justify-center pb-1"
+                aria-hidden="true"
+                @pointerdown="startResize(entry.duty.instance, $event)"
+                @pointermove="moveResize($event)"
+                @pointerup="endResize($event)"
+                @pointercancel="resizing = null"
+                @click.stop
+              >
+                <span class="h-1 w-8 rounded-full bg-current opacity-40" />
+              </span>
               <p class="flex items-center gap-1 truncate text-xs font-medium">
                 <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />
                 {{ entry.habit.name }}
               </p>
-              <p class="tabular truncate text-[0.625rem] opacity-75">{{ entry.label }}</p>
+              <p class="tabular truncate text-[0.625rem] opacity-75">
+                {{
+                  previewDuration(entry.duty.instance?.id) !== undefined
+                    ? `${previewDuration(entry.duty.instance?.id)} min`
+                    : entry.label
+                }}
+              </p>
             </div>
           </DraggableItem>
         </div>

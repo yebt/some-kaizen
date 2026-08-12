@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, useTemplateRef } from 'vue'
+import { useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
