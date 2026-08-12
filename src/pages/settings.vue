@@ -4,15 +4,16 @@ import { computed, ref } from 'vue'
 import { buildPreviewDataset } from '@shared/dev/preview-dataset'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import SegmentedControl from '@shared/ui/SegmentedControl.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePersistence } from '@core/persistence-context'
+import { usePlatform } from '@core/platform-context'
 import { usePreferences } from '@core/preferences-store'
 import { useHabits } from '@modules/habits/application/habit-queries'
 import { readDataset, useReplaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 import { parseBackup, serializeDataset } from '@modules/data/domain/data-transfer'
 import { backupFileName } from '@modules/data/domain/file-exchange'
-import { usePlatform } from '@core/platform-context'
 
 const { data: habitsData } = useHabits()
 const persistence = usePersistence()
@@ -36,18 +37,25 @@ const CLOCKS = [
 const habitCount = computed(() => habitsData.value?.length ?? 0)
 const isWorking = computed(() => replaceDataset.isLoading.value)
 
-async function loadDemoData() {
-  const accepted = await feedback.confirm({
-    title: 'Load demo data?',
-    message: 'This replaces everything currently stored on this device with a worked example.',
-    confirmLabel: 'Replace',
-  })
+/**
+ * The destructive actions are folded away.
+ *
+ * Not for tidiness. "Load demo data" replaces everything you have, which makes it exactly as
+ * dangerous as "Clear everything" and nothing like the backup buttons it used to sit beside.
+ * Putting both behind a deliberate tap is the difference between a mistake being possible
+ * and being easy.
+ */
+const showDangerous = ref(false)
 
-  if (!accepted) return
+const theme = computed({
+  get: () => preferences.preferences.theme,
+  set: (value) => preferences.setTheme(value as (typeof THEMES)[number]['value']),
+})
 
-  await replaceDataset.mutateAsync(buildPreviewDataset())
-  feedback.notify('Demo data loaded', 'success')
-}
+const clock = computed({
+  get: () => preferences.preferences.clock,
+  set: (value) => preferences.setClock(value as (typeof CLOCKS)[number]['value']),
+})
 
 async function exportData() {
   isExporting.value = true
@@ -73,8 +81,8 @@ async function importData() {
   let incoming
 
   try {
-    // Parsed before anything is asked or written, so a corrupt file is refused whole
-    // rather than leaving half an import behind.
+    // Parsed before anything is asked or written, so a corrupt file is refused whole rather
+    // than leaving half an import behind.
     incoming = parseBackup(text)
   } catch (error) {
     feedback.notify(
@@ -98,6 +106,20 @@ async function importData() {
   feedback.notify('Backup restored', 'success')
 }
 
+async function loadDemoData() {
+  const accepted = await feedback.confirm({
+    title: 'Load demo data?',
+    message: 'This replaces everything currently stored on this device with a worked example.',
+    confirmLabel: 'Replace',
+    tone: 'danger',
+  })
+
+  if (!accepted) return
+
+  await replaceDataset.mutateAsync(buildPreviewDataset())
+  feedback.notify('Demo data loaded', 'success')
+}
+
 async function clearEverything() {
   const accepted = await feedback.confirm({
     title: 'Clear everything?',
@@ -119,7 +141,7 @@ async function clearEverything() {
     <header class="pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Settings</h1>
       <p class="text-sm text-ink-muted">
-        {{ habitCount }} {{ habitCount === 1 ? 'habit' : 'habits' }} stored on this device
+        {{ habitCount }} {{ habitCount === 1 ? 'habit' : 'habits' }} on this device
       </p>
     </header>
 
@@ -131,50 +153,18 @@ async function clearEverything() {
         Appearance
       </h2>
 
-      <div class="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card">
+      <div class="space-y-4 rounded-card border border-line bg-surface p-4 shadow-card">
         <div>
-          <p class="mb-1.5 text-sm font-medium text-ink">Theme</p>
-          <div class="flex gap-1.5">
-            <button
-              v-for="option in THEMES"
-              :key="option.value"
-              type="button"
-              class="flex-1 rounded-full border px-3 py-2 text-xs font-medium transition-colors"
-              :class="
-                preferences.preferences.theme === option.value
-                  ? 'border-ink bg-ink text-ink-inverse'
-                  : 'border-line text-ink-muted'
-              "
-              :aria-pressed="preferences.preferences.theme === option.value"
-              @click="preferences.setTheme(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+          <p class="mb-2 text-sm font-medium text-ink">Theme</p>
+          <SegmentedControl v-model="theme" :segments="THEMES" label="Theme" />
           <p class="mt-1.5 text-xs text-ink-subtle">
             System follows the phone, so an evening switch to dark takes the app with it.
           </p>
         </div>
 
         <div>
-          <p class="mb-1.5 text-sm font-medium text-ink">Clock</p>
-          <div class="flex gap-1.5">
-            <button
-              v-for="option in CLOCKS"
-              :key="option.value"
-              type="button"
-              class="flex-1 rounded-full border px-3 py-2 text-xs font-medium transition-colors"
-              :class="
-                preferences.preferences.clock === option.value
-                  ? 'border-ink bg-ink text-ink-inverse'
-                  : 'border-line text-ink-muted'
-              "
-              :aria-pressed="preferences.preferences.clock === option.value"
-              @click="preferences.setClock(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+          <p class="mb-2 text-sm font-medium text-ink">Clock</p>
+          <SegmentedControl v-model="clock" :segments="CLOCKS" label="Clock" />
           <p class="tabular mt-1.5 text-xs text-ink-subtle">
             Times read like {{ preferences.formatClock(1110) }}.
           </p>
@@ -182,7 +172,7 @@ async function clearEverything() {
       </div>
     </section>
 
-    <section class="mb-5 space-y-2" aria-labelledby="day-heading">
+    <section class="mb-5" aria-labelledby="day-heading">
       <h2
         id="day-heading"
         class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
@@ -205,24 +195,23 @@ async function clearEverything() {
       </RouterLink>
     </section>
 
-    <section class="space-y-2" aria-labelledby="data-heading">
+    <section class="mb-5" aria-labelledby="backup-heading">
       <h2
-        id="data-heading"
+        id="backup-heading"
         class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
       >
-        Data
+        Backup
       </h2>
 
       <div class="rounded-card border border-line bg-surface p-4 shadow-card">
-        <p class="text-sm font-medium text-ink">Back up and restore</p>
-        <p class="mt-1 text-xs text-ink-muted">
+        <p class="text-xs text-ink-muted">
           Everything lives on this device only. Exporting writes a single file you can keep
-          somewhere safe; restoring reads one back and replaces what is here.
+          somewhere safe; restoring reads one back.
         </p>
         <div class="mt-3 flex gap-2">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-medium text-ink-inverse transition-transform active:scale-95 disabled:opacity-50"
+            class="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-ink px-4 py-2.5 text-xs font-medium text-ink-inverse transition-transform active:scale-95 disabled:opacity-50"
             :disabled="isExporting || isWorking"
             @click="exportData"
           >
@@ -231,7 +220,7 @@ async function clearEverything() {
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-medium text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
+            class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-xs font-medium text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
             :disabled="isWorking"
             @click="importData"
           >
@@ -240,38 +229,67 @@ async function clearEverything() {
           </button>
         </div>
       </div>
+    </section>
 
-      <div class="rounded-card border border-line bg-surface p-4 shadow-card">
-        <p class="text-sm font-medium text-ink">Load demo data</p>
-        <p class="mt-1 text-xs text-ink-muted">
-          A worked example: two positive habits, one measured, one to quit, plus sleep and work as
-          block time.
-        </p>
-        <button
-          type="button"
-          class="mt-3 inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-medium text-ink-inverse transition-transform active:scale-95 disabled:opacity-50"
-          :disabled="isWorking"
-          @click="loadDemoData"
-        >
-          <AppSpinner v-if="isWorking" :size="12" label="Saving" />
-          Load demo data
-        </button>
-      </div>
+    <section aria-labelledby="danger-heading">
+      <h2
+        id="danger-heading"
+        class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+      >
+        Replace everything
+      </h2>
 
-      <div class="rounded-card border border-line bg-surface p-4 shadow-card">
-        <p class="text-sm font-medium text-ink">Clear everything</p>
-        <p class="mt-1 text-xs text-ink-muted">
-          Deletes every habit, entry and block from this device. This cannot be undone.
-        </p>
-        <button
-          type="button"
-          class="mt-3 inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-medium text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
-          :disabled="isWorking"
-          @click="clearEverything"
-        >
-          <AppSpinner v-if="isWorking" :size="12" label="Working" />
-          Clear everything
-        </button>
+      <button
+        v-if="!showDangerous"
+        type="button"
+        class="flex w-full items-center gap-3 rounded-card border border-dashed border-line p-4 text-left"
+        @click="showDangerous = true"
+      >
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-medium text-ink-muted">
+            Show the destructive actions
+          </span>
+          <span class="mt-0.5 block text-xs text-ink-subtle">
+            Loading the demo and clearing both wipe what you have.
+          </span>
+        </span>
+        <AppIcon name="chevron-right" :size="18" />
+      </button>
+
+      <div v-else class="space-y-2">
+        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+          <p class="text-sm font-medium text-ink">Load demo data</p>
+          <p class="mt-1 text-xs text-ink-muted">
+            A worked example: two positive habits, one measured, one to quit, plus sleep and work as
+            block time. Replaces everything you have.
+          </p>
+          <button
+            type="button"
+            class="mt-3 inline-flex items-center gap-2 rounded-full border border-relapse px-4 py-2 text-xs font-medium text-relapse disabled:opacity-50"
+            :disabled="isWorking"
+            @click="loadDemoData"
+          >
+            <AppSpinner v-if="isWorking" :size="12" label="Working" />
+            Replace with demo data
+          </button>
+        </div>
+
+        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+          <p class="text-sm font-medium text-ink">Clear everything</p>
+          <p class="mt-1 text-xs text-ink-muted">
+            Deletes every habit, entry and block from this device. This cannot be undone, so export
+            first if there is any doubt.
+          </p>
+          <button
+            type="button"
+            class="mt-3 inline-flex items-center gap-2 rounded-full bg-relapse px-4 py-2 text-xs font-medium text-ink-inverse disabled:opacity-50"
+            :disabled="isWorking"
+            @click="clearEverything"
+          >
+            <AppSpinner v-if="isWorking" :size="12" label="Working" />
+            Clear everything
+          </button>
+        </div>
       </div>
     </section>
   </div>
