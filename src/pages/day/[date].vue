@@ -25,9 +25,12 @@ import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
 import { useHabits } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
+import { type DayDuty, dutiesFor, impliedOccurrenceId } from '@modules/planning/domain/day-agenda'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import {
   hasReminder,
+  planInstance,
+  type PlannedInstance,
   remindBefore,
   REMINDER_LEAD_TIMES,
   scheduleAt,
@@ -85,31 +88,39 @@ const dayLabel = computed(() =>
 
 const hours = Array.from({ length: 24 }, (_, hour) => hour)
 
+/**
+ * What the day owes, not merely what has been placed on it.
+ *
+ * Reading stored occurrences alone left the tray empty for every daily habit that had not
+ * been ticked yet, since those have no occurrence until something is recorded — so the one
+ * thing the timeline exists for, giving a habit an hour, was impossible before doing the
+ * habit.
+ */
 const onThisDay = computed(() =>
-  instances.value
-    .filter((instance) => instance.date === day.value)
-    .flatMap((instance) => {
-      const habit = habitsById.value.get(instance.habitId)
-
-      if (!habit) return []
-
-      return [{ instance, habit }]
-    }),
+  dutiesFor(habits.value, instances.value, day.value).map((duty, index) => ({
+    duty,
+    habit: duty.habit,
+    key: duty.instance?.id ?? `${duty.habit.id}-slot-${duty.slot ?? index}`,
+    span: duty.instance ? spanOf(duty.instance) : undefined,
+  })),
 )
 
-/** Occurrences with no time yet. They are what the tray is for. */
-const untimed = computed(() => onThisDay.value.filter((entry) => !spanOf(entry.instance)))
+/** Duties with no time yet. They are what the tray is for. */
+const untimed = computed(() => onThisDay.value.filter((entry) => entry.span === undefined))
 
 const timed = computed(() =>
   onThisDay.value.flatMap((entry) => {
-    const span = spanOf(entry.instance)
+    const span = entry.span
 
     if (!span) return []
 
     return [
       {
         ...entry,
-        reminder: hasReminder(entry.instance) ? entry.instance.reminderMinutesBefore : undefined,
+        reminder:
+          entry.duty.instance && hasReminder(entry.duty.instance)
+            ? entry.duty.instance.reminderMinutesBefore
+            : undefined,
         top: span.start * PIXELS_PER_MINUTE,
         height: Math.max(span.durationMinutes * PIXELS_PER_MINUTE, 22),
         label: `${preferences.formatClock(span.start)} – ${preferences.formatClock(span.start + span.durationMinutes)}`,
@@ -133,20 +144,42 @@ const bands = computed(() =>
 const timeline = useTemplateRef<HTMLElement>('timeline')
 
 interface DragPayload {
-  readonly instanceId: Identifier
+  readonly duty: DayDuty
   readonly habit: PositiveHabit
+  readonly key: string
+}
+
+/**
+ * Makes sure the duty has an occurrence to hang a time on, creating one if it has none.
+ *
+ * The identifier is derived from the slot rather than random, so two devices scheduling the
+ * same unplanned duty converge on one record instead of two.
+ */
+async function occurrenceFor(duty: DayDuty): Promise<PlannedInstance> {
+  if (duty.instance) return duty.instance
+
+  const created = planInstance({
+    id: impliedOccurrenceId(duty.habit.id, day.value, duty.slot ?? 0),
+    habitId: duty.habit.id,
+    date: day.value,
+    period: duty.habit.frequency.period,
+  })
+
+  await saveInstance.mutateAsync(created)
+
+  return created
 }
 
 const drag = useDragAndDrop<DragPayload>({
   onDrop: handleDrop,
-  keyOf: (payload) => payload.instanceId,
+  keyOf: (payload) => payload.key,
 })
 
 /** True only for the card the finger is actually on, so the day does not animate at once. */
-function pressState(instanceId: Identifier) {
+function pressState(key: string) {
   return {
-    pending: drag.isPending.value && drag.pressedKey.value === instanceId,
-    dragging: drag.isDragging.value && drag.pressedKey.value === instanceId,
+    pending: drag.isPending.value && drag.pressedKey.value === key,
+    dragging: drag.isDragging.value && drag.pressedKey.value === key,
   }
 }
 
@@ -165,15 +198,14 @@ function minutesAt(y: number): TimeOfDay | null {
 }
 
 async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
-  const existing = instances.value.find((instance) => instance.id === payload.instanceId)
-
   hoverTime.value = null
   swallowNextClick.value = true
 
-  if (!existing) return
-
   if (zone === TRAY_ZONE) {
-    if (!spanOf(existing)) return
+    const existing = payload.duty.instance
+
+    // A duty that was never placed is already "sometime today"; there is nothing to loosen.
+    if (!existing || !spanOf(existing)) return
 
     await saveInstance.mutateAsync(unschedule(existing))
     feedback.notify(`${payload.habit.name} has no fixed time now`)
@@ -185,7 +217,9 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
 
   if (minutes === null) return
 
-  await saveInstance.mutateAsync(scheduleAt(existing, minutes))
+  const instance = await occurrenceFor(payload.duty)
+
+  await saveInstance.mutateAsync(scheduleAt(instance, minutes))
   feedback.notify(`${payload.habit.name} at ${preferences.formatClock(minutes)}`, 'success')
 }
 
@@ -208,7 +242,7 @@ const reminderActions = computed<SheetAction[]>(() => [
   { key: 'none', label: 'No reminder', tone: 'danger' as const },
 ])
 
-function openReminder(instanceId: Identifier, event: MouseEvent) {
+function openReminder(instanceId: Identifier | undefined, event: MouseEvent) {
   if (swallowNextClick.value) {
     swallowNextClick.value = false
     event.preventDefault()
@@ -216,7 +250,7 @@ function openReminder(instanceId: Identifier, event: MouseEvent) {
     return
   }
 
-  reminderFor.value = instanceId
+  if (instanceId) reminderFor.value = instanceId
 }
 
 async function chooseReminder(key: string) {
@@ -322,10 +356,10 @@ function trackHover(event: PointerEvent) {
         </h2>
 
         <ul v-if="untimed.length" class="flex flex-wrap gap-2">
-          <li v-for="entry in untimed" :key="entry.instance.id">
+          <li v-for="entry in untimed" :key="entry.key">
             <DraggableItem
-              v-bind="pressState(entry.instance.id)"
-              @press="drag.press({ instanceId: entry.instance.id, habit: entry.habit }, $event)"
+              v-bind="pressState(entry.key)"
+              @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
               @move="trackHover($event)"
               @release="drag.release($event)"
               @cancel="drag.cancel()"
@@ -404,11 +438,11 @@ function trackHover(event: PointerEvent) {
 
           <DraggableItem
             v-for="entry in timed"
-            :key="entry.instance.id"
-            v-bind="pressState(entry.instance.id)"
+            :key="entry.key"
+            v-bind="pressState(entry.key)"
             class="absolute inset-x-1"
             :style="{ top: `${entry.top}px`, height: `${entry.height}px` }"
-            @press="drag.press({ instanceId: entry.instance.id, habit: entry.habit }, $event)"
+            @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
             @move="trackHover($event)"
             @release="drag.release($event)"
             @cancel="drag.cancel()"
@@ -418,7 +452,7 @@ function trackHover(event: PointerEvent) {
               :style="surfaceStyle(entry.habit)"
               role="button"
               :aria-label="`Reminder for ${entry.habit.name}`"
-              @click="openReminder(entry.instance.id, $event)"
+              @click="openReminder(entry.duty.instance?.id, $event)"
             >
               <p class="flex items-center gap-1 truncate text-xs font-medium">
                 <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />

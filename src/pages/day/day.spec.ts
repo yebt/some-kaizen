@@ -12,7 +12,12 @@ import { PLATFORM_KEY, type PlatformServices } from '@core/platform-context'
 import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
-import { createCompletedHabit, frequency } from '@modules/habits/domain/habit'
+import {
+  createCompletedHabit,
+  createMeasuredHabit,
+  frequency,
+  measure,
+} from '@modules/habits/domain/habit'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { planInstance, scheduleAt } from '@modules/planning/domain/planned-instance'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
@@ -205,12 +210,19 @@ describe('the tray', () => {
   })
 
   it('ignores occurrences belonging to another day', async () => {
-    const habit = meditate()
+    // Weekly rather than daily, because a daily habit is due today on its own and would
+    // rightly appear in the tray whatever its other days look like.
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Run',
+      frequency: frequency('weekly', 2),
+      createdOn: CREATED_ON,
+    })
     const instance = planInstance({
       id: newIdentifier(),
       habitId: habit.id,
       date: calendarDate('2026-03-10'),
-      period: 'daily',
+      period: 'weekly',
     })
 
     await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
@@ -218,6 +230,30 @@ describe('the tray', () => {
     expect((await renderDay()).find('[data-drop-zone="tray"]').text()).toContain(
       'Everything has a time',
     )
+  })
+
+  it('offers a daily habit that was never placed, so it can be given an hour', async () => {
+    // The tray used to read stored occurrences only, which meant the one thing the timeline
+    // exists for was impossible until the habit had already been done.
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    expect((await renderDay()).find('[data-drop-zone="tray"]').text()).toContain('Meditate')
+  })
+
+  it('offers a measured habit that was never placed', async () => {
+    const water = createMeasuredHabit({
+      id: newIdentifier(),
+      name: 'Drink water',
+      frequency: frequency('daily', 1),
+      measure: measure('litres', 1, 2),
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [water] })
+
+    expect((await renderDay()).find('[data-drop-zone="tray"]').text()).toContain('Drink water')
   })
 })
 
