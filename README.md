@@ -20,7 +20,9 @@ a list. Fully offline, stored on the device, packaged for Android with Capacitor
   other; habits may overlap them freely, because reading during a commute is a real plan.
 - **Statistics** per habit and overall, including a six-month heatmap.
 - **Reminders** on scheduled occurrences, delivered by the system on Android.
-- **Backup** to a single JSON file and back again.
+- **Backup** to a single JSON file. Importing one *merges* rather than replaces: a backup is
+  usually the other half of your data, so it brings what is missing, keeps what is here when
+  the two disagree, and shows every collision before writing anything.
 
 ## Running it
 

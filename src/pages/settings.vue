@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 
 import { buildPreviewDataset } from '@shared/dev/preview-dataset'
+import AppDialog from '@shared/ui/AppDialog.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import SegmentedControl from '@shared/ui/SegmentedControl.vue'
@@ -14,6 +15,7 @@ import { readDataset, useReplaceDataset } from '@modules/data/application/datase
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 import { parseBackup, serializeDataset } from '@modules/data/domain/data-transfer'
 import { backupFileName } from '@modules/data/domain/file-exchange'
+import { mergeDataset, type MergeReport } from '@modules/data/domain/merge'
 
 const { data: habitsData } = useHabits()
 const persistence = usePersistence()
@@ -46,6 +48,32 @@ const isWorking = computed(() => replaceDataset.isLoading.value)
  * and being easy.
  */
 const showDangerous = ref(false)
+
+/**
+ * The result of folding a chosen file into what is here, held until it is accepted.
+ *
+ * Shallow on purpose. A deep ref wraps every record in a reactive proxy, and IndexedDB
+ * stores values by structured clone, which refuses a proxy outright — so the merged dataset
+ * would parse, preview correctly, and then fail the moment it was written.
+ */
+const pending = shallowRef<MergeReport | null>(null)
+
+const pendingSummary = computed(() => {
+  const report = pending.value
+
+  if (!report) return []
+
+  return [
+    { label: 'habits', value: report.added.habits },
+    { label: 'recorded days', value: report.added.entries },
+    { label: 'occurrences', value: report.added.instances },
+    { label: 'blocks', value: report.added.blocks },
+  ].filter((entry) => entry.value > 0)
+})
+
+const pendingIsEmpty = computed(
+  () => pendingSummary.value.length === 0 && (pending.value?.superseded ?? 0) === 0,
+)
 
 const theme = computed({
   get: () => preferences.preferences.theme,
@@ -93,17 +121,20 @@ async function importData() {
     return
   }
 
-  const accepted = await feedback.confirm({
-    title: 'Restore this backup?',
-    message: `It contains ${incoming.habits.length} habits and ${incoming.entries.length} recorded days, and it replaces everything currently on this device.`,
-    confirmLabel: 'Restore',
-    tone: 'danger',
-  })
+  // Merged rather than applied, and shown before anything is written. A backup is usually
+  // the other half of your data rather than a correction of it.
+  pending.value = mergeDataset(await readDataset(persistence), incoming)
+}
 
-  if (!accepted) return
+async function applyImport() {
+  const report = pending.value
 
-  await replaceDataset.mutateAsync(incoming)
-  feedback.notify('Backup restored', 'success')
+  pending.value = null
+
+  if (!report) return
+
+  await replaceDataset.mutateAsync(report.dataset)
+  feedback.notify('Import merged', 'success')
 }
 
 async function loadDemoData() {
@@ -292,5 +323,62 @@ async function clearEverything() {
         </div>
       </div>
     </section>
+
+    <AppDialog :open="pending !== null" label="Import summary" @dismiss="pending = null">
+      <h2 class="text-base font-semibold text-ink">Merge this file?</h2>
+
+      <p v-if="pendingIsEmpty" class="mt-2 text-sm text-ink-muted">
+        Everything in it is already here. Nothing would change.
+      </p>
+      <div v-else class="mt-2 space-y-1">
+        <p v-for="entry in pendingSummary" :key="entry.label" class="tabular text-sm text-ink">
+          <span class="font-semibold">+{{ entry.value }}</span>
+          <span class="text-ink-muted"> {{ entry.label }}</span>
+        </p>
+        <p v-if="pending && pending.superseded > 0" class="tabular text-sm text-ink">
+          <span class="font-semibold">{{ pending.superseded }}</span>
+          <span class="text-ink-muted"> days answered more recently in the file</span>
+        </p>
+      </div>
+
+      <p class="mt-2 text-xs text-ink-subtle">
+        Nothing is removed. A record the file does not mention stays exactly as it is.
+      </p>
+
+      <div v-if="pending && pending.collisions.length" class="mt-4">
+        <p class="mb-1.5 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+          {{ pending.collisions.length }}
+          {{ pending.collisions.length === 1 ? 'collision' : 'collisions' }}
+        </p>
+        <ul class="max-h-40 space-y-1.5 overflow-y-auto">
+          <li
+            v-for="collision in pending.collisions"
+            :key="`${collision.kind}-${collision.id}`"
+            class="rounded-cell bg-surface-sunken p-2.5"
+          >
+            <p class="truncate text-xs font-medium text-ink">{{ collision.label }}</p>
+            <p class="text-[0.6875rem] text-ink-muted">{{ collision.detail }}</p>
+          </li>
+        </ul>
+      </div>
+
+      <div class="mt-5 flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted"
+          @click="pending = null"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="flex-1 rounded-full bg-ink px-4 py-2.5 text-sm font-medium text-ink-inverse active:scale-95 disabled:opacity-50"
+          :disabled="pendingIsEmpty"
+          @click="applyImport"
+        >
+          Merge
+        </button>
+      </div>
+    </AppDialog>
   </div>
 </template>
