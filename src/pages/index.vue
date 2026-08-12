@@ -436,8 +436,13 @@ const OUTCOME_CLASS = {
               <span class="text-ink-subtle">Not yet</span>
             </div>
 
+            <!--
+              `relative` is load bearing, not layout. A positioned element paints above a
+              static one regardless of DOM order, so without this the reveal layer above
+              draws on top of the row instead of behind it.
+            -->
             <div
-              class="flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
+              class="relative flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
               :class="[
                 swipe.activeKey.value === row.key ? 'duration-0' : 'duration-200',
                 row.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',

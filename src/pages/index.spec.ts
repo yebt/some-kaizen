@@ -332,3 +332,23 @@ describe('a habit that was never placed on the calendar', () => {
     })
   })
 })
+
+describe('the swipe reveal', () => {
+  beforeEach(async () => {
+    await replaceDataset(persistence, buildPreviewDataset())
+  })
+
+  it('keeps the row painted above the labels behind it', async () => {
+    // A positioned element paints above a static one regardless of DOM order, so a row that
+    // is not itself positioned lets the reveal layer draw over its own content. jsdom cannot
+    // see paint order, so the structural condition that prevents it is asserted instead.
+    const wrapper = await renderToday()
+    const reveal = wrapper.find('[aria-hidden="true"].absolute')
+
+    expect(reveal.exists()).toBe(true)
+
+    const row = reveal.element.parentElement?.querySelector(':scope > div:not(.absolute)')
+
+    expect(row?.className).toContain('relative')
+  })
+})
