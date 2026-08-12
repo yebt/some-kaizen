@@ -12,6 +12,7 @@ import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
 import { PALETTE } from '@shared/domain/appearance'
+import { usePreferences } from '@core/preferences-store'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -357,5 +358,38 @@ describe('editing a block', () => {
     await replaceDataset(persistence, EMPTY_DATASET)
 
     expect((await renderEdit(newIdentifier())).text()).toContain('no longer exists')
+  })
+})
+
+describe('the clock preference', () => {
+  it('writes spans on a 24 hour clock by default', async () => {
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [workBlock()] })
+
+    expect((await render(BlockTimePage)).text()).toContain('09:00 – 17:00')
+  })
+
+  it('writes them on a 12 hour clock once that is chosen', async () => {
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [workBlock()] })
+
+    const instance = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/block-time', component: BlockTimePage }],
+    })
+
+    await instance.push('/block-time')
+    await instance.isReady()
+
+    const pinia = createPinia()
+    const wrapper = mount(BlockTimePage, {
+      global: {
+        plugins: [pinia, PiniaColada, instance],
+        provide: { [PERSISTENCE_KEY as symbol]: persistence },
+      },
+    })
+
+    usePreferences(pinia).setClock('12h')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('9:00 AM – 5:00 PM')
   })
 })

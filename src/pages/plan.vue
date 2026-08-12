@@ -13,7 +13,7 @@ import {
   weekday,
 } from '@shared/domain/calendar-date'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
-import { formatTime } from '@shared/domain/time-of-day'
+import { usePreferences } from '@core/preferences-store'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
@@ -41,6 +41,7 @@ const { data: instancesData } = usePlannedInstances()
 const saveInstance = useSaveInstance()
 const removeInstance = useRemoveInstance()
 const feedback = useFeedback()
+const preferences = usePreferences()
 
 const habits = computed(() => habitsData.value ?? [])
 const instances = computed(() => instancesData.value ?? [])
@@ -97,14 +98,26 @@ const rows = computed(() =>
           {
             instance,
             habit,
-            time: span ? formatTime(span.start) : undefined,
+            time: span ? preferences.formatClock(span.start) : undefined,
           },
         ]
       }),
   })),
 )
 
-const drag = useDragAndDrop<DragPayload>({ onDrop: handleDrop })
+const drag = useDragAndDrop<DragPayload>({
+  onDrop: handleDrop,
+  keyOf: (payload) =>
+    payload.kind === 'create' ? `new:${payload.habit.id}` : `move:${payload.instanceId}`,
+})
+
+/** True only for the card the finger is actually on, so the list does not animate at once. */
+function pressState(key: string) {
+  return {
+    pending: drag.isPending.value && drag.pressedKey.value === key,
+    dragging: drag.isDragging.value && drag.pressedKey.value === key,
+  }
+}
 
 const ghostLabel = computed(() => drag.payload.value?.habit.name ?? '')
 
@@ -198,6 +211,7 @@ function shiftWeek(offset: number) {
         <ul v-if="tray.length" class="flex flex-wrap gap-2">
           <li v-for="entry in tray" :key="entry.habit.id">
             <DraggableItem
+              v-bind="pressState(`new:${entry.habit.id}`)"
               @press="drag.press({ kind: 'create', habit: entry.habit }, $event)"
               @move="drag.move($event)"
               @release="drag.release($event)"
@@ -261,6 +275,7 @@ function shiftWeek(offset: number) {
                 :style="surfaceStyle(item.habit)"
               >
                 <DraggableItem
+                  v-bind="pressState(`move:${item.instance.id}`)"
                   @press="
                     drag.press(
                       { kind: 'move', instanceId: item.instance.id, habit: item.habit },

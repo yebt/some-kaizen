@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { addDays, todayIn } from '@shared/domain/calendar-date'
+import type { Identifier } from '@shared/domain/identifier'
+import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { usePressHold } from '@shared/ui/press/use-press-hold'
 import {
   archiveHabit,
   type Habit,
@@ -24,6 +28,7 @@ import { negativeStatistics, positiveStatistics } from '@modules/stats/domain/ha
 /** Long enough for a streak to mean something, short enough to stay quick to compute. */
 const SUMMARY_WINDOW_DAYS = 90
 
+const router = useRouter()
 const { data: habitsData, isLoading } = useHabits()
 const { data: entriesData } = useHabitEntries()
 const archive = useArchiveHabit()
@@ -53,9 +58,10 @@ function describe(habit: Habit): string {
 /** One honest headline number per habit, rather than a wall of figures nobody reads. */
 function summarise(habit: Habit): { label: string; value: number } {
   if (isPositive(habit)) {
-    const stats = positiveStatistics(habit, entries.value, windowStart, today, today)
-
-    return { label: 'streak', value: stats.currentStreak }
+    return {
+      label: 'streak',
+      value: positiveStatistics(habit, entries.value, windowStart, today, today).currentStreak,
+    }
   }
 
   return {
@@ -72,6 +78,63 @@ const rows = computed(() =>
     isArchived: habit.archivedOn !== undefined,
   })),
 )
+
+const menuFor = ref<Habit | null>(null)
+
+/**
+ * Holding a row opens the same menu the button does.
+ *
+ * The hold is a shortcut, never the only way in: an affordance nobody can see is one most
+ * people never find, which is why the button stays. Nothing on this list is draggable, so
+ * the hold has no drag gesture to compete with here.
+ */
+const hold = usePressHold({
+  onHold: (id) => {
+    menuFor.value = habits.value.find((habit) => habit.id === id) ?? null
+  },
+})
+
+const menuActions = computed<SheetAction[]>(() => {
+  const habit = menuFor.value
+
+  if (!habit) return []
+
+  return [
+    { key: 'edit', label: 'Edit', description: 'Name, frequency, colour' },
+    ...(habit.archivedOn
+      ? []
+      : [
+          {
+            key: 'archive',
+            label: 'Archive',
+            description: 'Stop planning it and keep every record',
+          },
+        ]),
+    {
+      key: 'delete',
+      label: 'Delete',
+      description: 'Remove it and its whole history',
+      tone: 'danger' as const,
+    },
+  ]
+})
+
+async function runAction(key: string) {
+  const habit = menuFor.value
+
+  menuFor.value = null
+
+  if (!habit) return
+
+  if (key === 'edit') {
+    await router.push(`/habits/${habit.id}`)
+
+    return
+  }
+
+  if (key === 'archive') await onArchive(habit)
+  if (key === 'delete') await onDelete(habit)
+}
 
 async function onArchive(habit: Habit) {
   const accepted = await feedback.confirm({
@@ -101,6 +164,10 @@ async function onDelete(habit: Habit) {
   await remove.mutateAsync(habit.id)
   feedback.notify(`${habit.name} deleted`, 'danger')
 }
+
+function isPressed(id: Identifier) {
+  return hold.pendingKey.value === id
+}
 </script>
 
 <template>
@@ -115,6 +182,21 @@ async function onDelete(habit: Habit) {
         New
       </RouterLink>
     </header>
+
+    <!--
+      Block time is the other half of a day, so it is reachable from here rather than only
+      from Settings, where nobody looks for it while thinking about their habits.
+    -->
+    <RouterLink
+      to="/block-time"
+      class="mb-4 flex items-center gap-3 rounded-card border border-line bg-surface p-3.5 shadow-card"
+    >
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium text-ink">Block time</p>
+        <p class="text-xs text-ink-muted">Sleep, work and the rest of the fixed day</p>
+      </div>
+      <AppIcon name="chevron-right" :size="18" />
+    </RouterLink>
 
     <div
       v-if="isLoading && habitsData === undefined"
@@ -134,8 +216,12 @@ async function onDelete(habit: Habit) {
       <li
         v-for="row in rows"
         :key="row.habit.id"
-        class="rounded-card border border-line bg-surface p-4 shadow-card"
-        :class="row.isArchived ? 'opacity-60' : ''"
+        class="rounded-card border border-line bg-surface p-4 shadow-card transition-transform duration-150"
+        :class="[row.isArchived && 'opacity-60', isPressed(row.habit.id) && 'scale-[0.97]']"
+        @pointerdown="hold.press(row.habit.id, $event)"
+        @pointermove="hold.move($event)"
+        @pointerup="hold.release($event)"
+        @pointercancel="hold.cancel()"
       >
         <div class="flex items-start gap-3">
           <span
@@ -153,38 +239,32 @@ async function onDelete(habit: Habit) {
             </p>
             <p class="mt-0.5 text-xs text-ink-muted">{{ row.description }}</p>
           </div>
-          <div class="shrink-0 text-right">
-            <p class="tabular text-lg leading-none font-semibold text-ink">
-              {{ row.summary.value }}
-            </p>
-            <p class="text-[0.625rem] text-ink-subtle">{{ row.summary.label }}</p>
+          <div class="flex shrink-0 items-center gap-2">
+            <div class="text-right">
+              <p class="tabular text-lg leading-none font-semibold text-ink">
+                {{ row.summary.value }}
+              </p>
+              <p class="text-[0.625rem] text-ink-subtle">{{ row.summary.label }}</p>
+            </div>
+            <button
+              type="button"
+              class="grid size-8 place-items-center rounded-full border border-line text-ink-muted"
+              :aria-label="`Actions for ${row.habit.name}`"
+              @click="menuFor = row.habit"
+            >
+              <AppIcon name="more" :size="16" />
+            </button>
           </div>
-        </div>
-
-        <div class="mt-3 flex gap-2">
-          <RouterLink
-            :to="`/habits/${row.habit.id}`"
-            class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
-          >
-            Edit
-          </RouterLink>
-          <button
-            v-if="!row.isArchived"
-            type="button"
-            class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
-            @click="onArchive(row.habit)"
-          >
-            Archive
-          </button>
-          <button
-            type="button"
-            class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-relapse"
-            @click="onDelete(row.habit)"
-          >
-            Delete
-          </button>
         </div>
       </li>
     </ul>
+
+    <ActionSheet
+      :open="menuFor !== null"
+      :title="menuFor?.name ?? ''"
+      :actions="menuActions"
+      @select="runAction"
+      @dismiss="menuFor = null"
+    />
   </div>
 </template>

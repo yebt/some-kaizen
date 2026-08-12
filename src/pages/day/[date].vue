@@ -11,7 +11,8 @@ import {
   todayIn,
 } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
-import { formatTime, snapToStep, type TimeOfDay } from '@shared/domain/time-of-day'
+import { snapToStep, type TimeOfDay } from '@shared/domain/time-of-day'
+import { usePreferences } from '@core/preferences-store'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
@@ -58,6 +59,7 @@ const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
 const saveInstance = useSaveInstance()
 const feedback = useFeedback()
+const preferences = usePreferences()
 
 const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
 const habitsById = computed(() => new Map(habits.value.map((habit) => [habit.id, habit])))
@@ -98,7 +100,7 @@ const timed = computed(() =>
         ...entry,
         top: span.start * PIXELS_PER_MINUTE,
         height: Math.max(span.durationMinutes * PIXELS_PER_MINUTE, 22),
-        label: `${formatTime(span.start)} – ${formatTime(span.start + span.durationMinutes)}`,
+        label: `${preferences.formatClock(span.start)} – ${preferences.formatClock(span.start + span.durationMinutes)}`,
       },
     ]
   }),
@@ -123,7 +125,18 @@ interface DragPayload {
   readonly habit: PositiveHabit
 }
 
-const drag = useDragAndDrop<DragPayload>({ onDrop: handleDrop })
+const drag = useDragAndDrop<DragPayload>({
+  onDrop: handleDrop,
+  keyOf: (payload) => payload.instanceId,
+})
+
+/** True only for the card the finger is actually on, so the day does not animate at once. */
+function pressState(instanceId: Identifier) {
+  return {
+    pending: drag.isPending.value && drag.pressedKey.value === instanceId,
+    dragging: drag.isDragging.value && drag.pressedKey.value === instanceId,
+  }
+}
 
 /** Previewed while dragging so the time is visible before committing to it. */
 const hoverTime = ref<number | null>(null)
@@ -160,7 +173,7 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   if (minutes === null) return
 
   await saveInstance.mutateAsync(scheduleAt(existing, minutes))
-  feedback.notify(`${payload.habit.name} at ${formatTime(minutes)}`, 'success')
+  feedback.notify(`${payload.habit.name} at ${preferences.formatClock(minutes)}`, 'success')
 }
 
 function trackHover(event: PointerEvent) {
@@ -226,6 +239,7 @@ function trackHover(event: PointerEvent) {
         <ul v-if="untimed.length" class="flex flex-wrap gap-2">
           <li v-for="entry in untimed" :key="entry.instance.id">
             <DraggableItem
+              v-bind="pressState(entry.instance.id)"
               @press="drag.press({ instanceId: entry.instance.id, habit: entry.habit }, $event)"
               @move="trackHover($event)"
               @release="drag.release($event)"
@@ -258,7 +272,7 @@ function trackHover(event: PointerEvent) {
             class="tabular relative text-[0.625rem] text-ink-subtle"
             :style="{ height: `${60 * PIXELS_PER_MINUTE}px` }"
           >
-            <span class="absolute -top-1.5 right-2">{{ formatTime(hour * 60) }}</span>
+            <span class="absolute -top-1.5 right-2">{{ preferences.formatClock(hour * 60) }}</span>
           </div>
         </div>
 
@@ -298,13 +312,14 @@ function trackHover(event: PointerEvent) {
             :style="{ top: `${hoverTime * PIXELS_PER_MINUTE}px` }"
           >
             <span class="tabular rounded-full bg-ink px-2 py-0.5 text-[0.625rem] text-ink-inverse">
-              {{ formatTime(hoverTime) }}
+              {{ preferences.formatClock(hoverTime) }}
             </span>
           </div>
 
           <DraggableItem
             v-for="entry in timed"
             :key="entry.instance.id"
+            v-bind="pressState(entry.instance.id)"
             class="absolute inset-x-1"
             :style="{ top: `${entry.top}px`, height: `${entry.height}px` }"
             @press="drag.press({ instanceId: entry.instance.id, habit: entry.habit }, $event)"

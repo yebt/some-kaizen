@@ -315,3 +315,59 @@ describe('editing a habit', () => {
     expect((await renderEdit(newIdentifier())).text()).toContain('no longer exists')
   })
 })
+
+describe('the actions menu', () => {
+  it('offers edit, archive and delete for a live habit', async () => {
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Run',
+          frequency: frequency('daily', 1),
+          createdOn: CREATED_ON,
+        }),
+      ],
+    })
+
+    const wrapper = await render(HabitsPage)
+
+    await wrapper.find('[aria-label="Actions for Run"]').trigger('click')
+    await flushPromises()
+
+    const text = wrapper.find('dialog').text()
+
+    expect(text).toContain('Edit')
+    expect(text).toContain('Archive')
+    expect(text).toContain('Delete')
+  })
+
+  it('does not offer to archive something already archived', async () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Run',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [{ ...habit, archivedOn: todayIn() }],
+    })
+
+    const wrapper = await render(HabitsPage)
+
+    await wrapper.find('[aria-label="Actions for Run"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('dialog').text()).not.toContain('Archive')
+  })
+
+  it('links to block time, which is the other half of a day', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(HabitsPage)
+
+    expect(wrapper.find('a[href="/block-time"]').exists()).toBe(true)
+  })
+})

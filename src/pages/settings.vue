@@ -6,6 +6,7 @@ import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePersistence } from '@core/persistence-context'
+import { usePreferences } from '@core/preferences-store'
 import { useHabits } from '@modules/habits/application/habit-queries'
 import { readDataset, useReplaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -18,7 +19,19 @@ const persistence = usePersistence()
 const replaceDataset = useReplaceDataset()
 const feedback = useFeedback()
 const files = createBrowserFileExchange()
+const preferences = usePreferences()
 const isExporting = ref(false)
+
+const THEMES = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+] as const
+
+const CLOCKS = [
+  { value: '24h', label: '24 hour' },
+  { value: '12h', label: '12 hour' },
+] as const
 
 const habitCount = computed(() => habitsData.value?.length ?? 0)
 const isWorking = computed(() => replaceDataset.isLoading.value)
@@ -109,6 +122,65 @@ async function clearEverything() {
         {{ habitCount }} {{ habitCount === 1 ? 'habit' : 'habits' }} stored on this device
       </p>
     </header>
+
+    <section class="mb-5" aria-labelledby="appearance-heading">
+      <h2
+        id="appearance-heading"
+        class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+      >
+        Appearance
+      </h2>
+
+      <div class="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card">
+        <div>
+          <p class="mb-1.5 text-sm font-medium text-ink">Theme</p>
+          <div class="flex gap-1.5">
+            <button
+              v-for="option in THEMES"
+              :key="option.value"
+              type="button"
+              class="flex-1 rounded-full border px-3 py-2 text-xs font-medium transition-colors"
+              :class="
+                preferences.preferences.theme === option.value
+                  ? 'border-ink bg-ink text-ink-inverse'
+                  : 'border-line text-ink-muted'
+              "
+              :aria-pressed="preferences.preferences.theme === option.value"
+              @click="preferences.setTheme(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-ink-subtle">
+            System follows the phone, so an evening switch to dark takes the app with it.
+          </p>
+        </div>
+
+        <div>
+          <p class="mb-1.5 text-sm font-medium text-ink">Clock</p>
+          <div class="flex gap-1.5">
+            <button
+              v-for="option in CLOCKS"
+              :key="option.value"
+              type="button"
+              class="flex-1 rounded-full border px-3 py-2 text-xs font-medium transition-colors"
+              :class="
+                preferences.preferences.clock === option.value
+                  ? 'border-ink bg-ink text-ink-inverse'
+                  : 'border-line text-ink-muted'
+              "
+              :aria-pressed="preferences.preferences.clock === option.value"
+              @click="preferences.setClock(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+          <p class="tabular mt-1.5 text-xs text-ink-subtle">
+            Times read like {{ preferences.formatClock(1110) }}.
+          </p>
+        </div>
+      </div>
+    </section>
 
     <section class="mb-5 space-y-2" aria-labelledby="day-heading">
       <h2

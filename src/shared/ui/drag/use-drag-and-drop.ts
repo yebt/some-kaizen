@@ -45,6 +45,11 @@ export interface DragAndDropOptions<T> {
    */
   resolveZone?: (x: number, y: number) => string | null
   longPressMs?: number
+  /**
+   * Identifies what is being carried, so a card can tell whether the press being held is
+   * its own. Without it every card in the list would animate at once.
+   */
+  keyOf?: (payload: T) => string
 }
 
 function resolveZoneFromDocument(x: number, y: number): string | null {
@@ -143,10 +148,20 @@ export function useDragAndDrop<T>(options: DragAndDropOptions<T>) {
     if (wasDragging && dropped !== null && zone !== null) await options.onDrop(dropped, zone, at)
   }
 
+  /** The key of whatever is currently pressed or dragged, or nothing when idle. */
+  const pressedKey = computed(() => {
+    const current = payload.value
+
+    if (current === null || !options.keyOf) return null
+
+    return options.keyOf(current)
+  })
+
   return {
     payload,
     position,
     activeZone,
+    pressedKey,
     isDragging: computed(() => isDragging.value),
     isPending: computed(() => isPending.value),
     press,

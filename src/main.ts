@@ -8,6 +8,10 @@ import App from '@core/App.vue'
 import router from '@core/router'
 import { createPersistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
+import { applyTheme, loadPreferences } from '@core/preferences-store'
+
+// Applied before anything mounts, so the app never flashes the wrong colours on launch.
+applyTheme(loadPreferences().theme)
 
 const app = createApp(App)
 

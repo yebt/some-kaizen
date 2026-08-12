@@ -1,5 +1,6 @@
 import {
   Ban,
+  MoreHorizontal,
   ChartNoAxesColumn,
   Check,
   ChevronLeft,
@@ -32,6 +33,7 @@ export const ICONS = {
   'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
   ban: Ban,
+  more: MoreHorizontal,
 } satisfies Record<string, Component>
 
 export type IconName = keyof typeof ICONS

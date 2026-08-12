@@ -11,7 +11,7 @@ import {
   todayIn,
 } from '@shared/domain/calendar-date'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
-import { formatTime } from '@shared/domain/time-of-day'
+import { usePreferences } from '@core/preferences-store'
 import AppDialog from '@shared/ui/AppDialog.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
@@ -50,6 +50,7 @@ const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
 const recordEntry = useRecordEntry()
 const feedback = useFeedback()
+const preferences = usePreferences()
 
 const habits = computed(() => habitsData.value ?? [])
 const entries = computed(() => entriesData.value ?? [])
@@ -341,7 +342,7 @@ const OUTCOME_CLASS = {
         <ol v-if="schedule.length" class="space-y-2">
           <li v-for="item in schedule" :key="item.key" class="flex gap-3">
             <span class="tabular w-12 shrink-0 pt-3 text-right text-xs font-medium text-ink-subtle">
-              {{ formatTime(item.from) }}
+              {{ preferences.formatClock(item.from) }}
             </span>
             <div
               class="flex flex-1 items-center gap-3 rounded-card border p-3.5"
@@ -355,7 +356,7 @@ const OUTCOME_CLASS = {
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">{{ item.name }}</p>
                 <p class="tabular text-xs opacity-70">
-                  {{ formatTime(item.from) }} – {{ formatTime(item.to) }}
+                  {{ preferences.formatClock(item.from) }} – {{ preferences.formatClock(item.to) }}
                   <span v-if="item.continues">· continues</span>
                 </p>
               </div>
