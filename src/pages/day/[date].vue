@@ -11,13 +11,21 @@ import {
   todayIn,
 } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
-import { snapToStep, type TimeOfDay } from '@shared/domain/time-of-day'
+import {
+  endOf,
+  formatTime,
+  parseTime,
+  snapToStep,
+  spanBetween,
+  type TimeOfDay,
+} from '@shared/domain/time-of-day'
 import { usePlatform } from '@core/platform-context'
 import { usePreferences } from '@core/preferences-store'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import AppDialog from '@shared/ui/AppDialog.vue'
+import SegmentedControl from '@shared/ui/SegmentedControl.vue'
 import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { type DropPoint, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
@@ -123,6 +131,7 @@ const timed = computed(() =>
             : undefined,
         top: span.start * PIXELS_PER_MINUTE,
         height: Math.max(span.durationMinutes * PIXELS_PER_MINUTE, 22),
+        startLabel: preferences.formatClock(span.start),
         label: `${preferences.formatClock(span.start)} – ${preferences.formatClock(span.start + span.durationMinutes)}`,
       },
     ]
@@ -334,6 +343,91 @@ async function chooseDuration(minutes: number) {
   feedback.notify(`${minutes} minutes`, 'success')
 }
 
+/**
+ * Two honest ways of saying the same thing, because a plan is held in one of two shapes.
+ *
+ * "Gym from seven to eight" and "gym at seven for an hour" describe the same block of the
+ * day. Offering only one of them means doing arithmetic in your head to enter something you
+ * already knew, and the answer you type is the one you get wrong.
+ */
+const lengthMode = ref('duration')
+
+const LENGTH_MODES = [
+  { value: 'duration', label: 'For how long' },
+  { value: 'end', label: 'Until' },
+]
+
+/** `HH:mm`, which is what a time input reads and writes whatever the locale draws. */
+const startValue = computed(() => {
+  const start = editingInstance.value?.startsAt
+
+  return start === undefined ? '' : formatTime(start)
+})
+
+const endValue = computed(() => {
+  const span = editingInstance.value ? spanOf(editingInstance.value) : undefined
+
+  return span ? formatTime(endOf(span)) : ''
+})
+
+/**
+ * Reads a time field, ignoring anything that is not a time yet.
+ *
+ * A field being cleared or half typed fires the same event as a finished one, and writing
+ * that would overwrite a plan while its owner is still in the middle of entering it.
+ */
+function readTime(event: Event): TimeOfDay | null {
+  try {
+    return parseTime((event.target as HTMLInputElement).value)
+  } catch {
+    return null
+  }
+}
+
+async function setStart(event: Event) {
+  const existing = editingInstance.value
+  const start = readTime(event)
+
+  if (!existing || start === null) return
+
+  await saveInstance.mutateAsync(scheduleAt(existing, start))
+  feedback.notify(`Starts at ${preferences.formatClock(start)}`, 'success')
+}
+
+async function setEnd(event: Event) {
+  const existing = editingInstance.value
+  const end = readTime(event)
+
+  if (!existing || end === null || existing.startsAt === undefined) return
+
+  // An end at or before the start reads as the following morning, the same rule block time
+  // uses, so a habit running past midnight can be entered rather than refused.
+  await chooseDuration(spanBetween(existing.startsAt, end).durationMinutes)
+}
+
+async function setDuration(event: Event) {
+  const minutes = Number((event.target as HTMLInputElement).value)
+
+  if (!Number.isFinite(minutes) || minutes < 1) return
+
+  await chooseDuration(Math.round(minutes))
+}
+
+/**
+ * The moment the hour column should call out while a gesture is still in flight.
+ *
+ * A badge floating over the timeline covers the very card it describes. The hour column is
+ * already where the eye goes to read a time, so the live reading belongs there, beside the
+ * fixed hours it is refining.
+ */
+const liveMinutes = computed<number | null>(() => {
+  const current = resizing.value
+
+  if (current) return Math.min(current.start + current.duration, MINUTES_IN_DAY)
+
+  return hoverTime.value
+})
+
 async function chooseReminder(key: string) {
   const existing = editingInstance.value
 
@@ -456,13 +550,16 @@ function trackHover(event: PointerEvent) {
       </section>
 
       <p class="mt-4 mb-2 text-xs text-ink-subtle">
-        Hold a card to move it, drag the grip on its lower edge to change how long it lasts, or tap
-        it for the rest. Everything snaps to {{ SNAP_MINUTES }} minutes.
+        Hold a card to move it, or drag the grip on its lower edge to change how long it lasts. Both
+        snap to {{ SNAP_MINUTES }} minutes — tap the time beside a card to set it to the minute.
       </p>
 
       <div class="flex">
         <!-- Hour gutter, outside the drop zone so a label never swallows a drop. -->
-        <div class="w-12 shrink-0" :style="{ height: `${MINUTES_IN_DAY * PIXELS_PER_MINUTE}px` }">
+        <div
+          class="relative w-14 shrink-0"
+          :style="{ height: `${MINUTES_IN_DAY * PIXELS_PER_MINUTE}px` }"
+        >
           <div
             v-for="hour in hours"
             :key="hour"
@@ -471,6 +568,33 @@ function trackHover(event: PointerEvent) {
           >
             <span class="absolute -top-1.5 right-2">{{ preferences.formatClock(hour * 60) }}</span>
           </div>
+
+          <!--
+            A marker per placed occurrence, level with the top edge of its card.
+            It is the precise counterpart to the two gestures: the ruler snaps to a quarter
+            hour, and a plan that does not fall on a quarter hour is entered from here.
+          -->
+          <button
+            v-for="entry in timed"
+            :key="`marker-${entry.key}`"
+            type="button"
+            class="tabular absolute right-1 z-20 -translate-y-1/2 rounded-full bg-ink px-1.5 py-0.5 text-[0.5625rem] font-medium text-ink-inverse shadow-card"
+            :style="{ top: `${entry.top}px` }"
+            :aria-label="`Set the exact time of ${entry.habit.name}`"
+            @click="editing = entry.duty.instance?.id ?? null"
+          >
+            {{ entry.startLabel }}
+          </button>
+
+          <!-- Where the finger is right now: the landing time, or the end being dragged out. -->
+          <span
+            v-if="liveMinutes !== null"
+            data-live-time
+            class="tabular pointer-events-none absolute right-1 z-30 -translate-y-1/2 rounded-full bg-accent px-1.5 py-0.5 text-[0.5625rem] font-semibold text-ink shadow-card"
+            :style="{ top: `${liveMinutes * PIXELS_PER_MINUTE}px` }"
+          >
+            {{ preferences.formatClock(liveMinutes) }}
+          </span>
         </div>
 
         <div
@@ -507,16 +631,15 @@ function trackHover(event: PointerEvent) {
             </p>
           </RouterLink>
 
-          <!-- The line the card will land on, shown before the finger commits. -->
+          <!--
+            The line the card will land on. The time itself is read off the hour column, so
+            the badge that used to sit here no longer covers the card it is describing.
+          -->
           <div
             v-if="hoverTime !== null"
-            class="pointer-events-none absolute inset-x-0 z-10 flex items-center gap-2 border-t-2 border-ink"
+            class="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-ink"
             :style="{ top: `${hoverTime * PIXELS_PER_MINUTE}px` }"
-          >
-            <span class="tabular rounded-full bg-ink px-2 py-0.5 text-[0.625rem] text-ink-inverse">
-              {{ preferences.formatClock(hoverTime) }}
-            </span>
-          </div>
+          />
 
           <DraggableItem
             v-for="entry in timed"
@@ -580,29 +703,69 @@ function trackHover(event: PointerEvent) {
       </h2>
 
       <p class="mb-2 text-xs text-ink-muted">
-        Drag the card to move it; the length and the reminder live here.
+        The ruler snaps to {{ SNAP_MINUTES }} minutes. Anything finer is typed here.
       </p>
 
-      <p class="mt-4 mb-1.5 text-xs font-semibold tracking-wide text-ink-muted uppercase">
-        How long
-      </p>
-      <div class="flex flex-wrap gap-1.5">
-        <button
-          v-for="minutes in DURATIONS"
-          :key="minutes"
-          type="button"
-          class="tabular rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
-          :class="
-            editingInstance?.durationMinutes === minutes
-              ? 'border-ink bg-ink text-ink-inverse'
-              : 'border-line text-ink-muted'
-          "
-          :aria-pressed="editingInstance?.durationMinutes === minutes"
-          @click="chooseDuration(minutes)"
-        >
-          {{ minutes }} min
-        </button>
+      <label class="mt-4 block text-xs font-semibold tracking-wide text-ink-muted uppercase">
+        Starts
+        <input
+          type="time"
+          class="tabular mt-1.5 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm font-normal tracking-normal text-ink normal-case"
+          :value="startValue"
+          @change="setStart"
+        />
+      </label>
+
+      <div class="mt-3">
+        <SegmentedControl
+          v-model="lengthMode"
+          :segments="LENGTH_MODES"
+          label="How the end is set"
+        />
       </div>
+
+      <label v-if="lengthMode === 'end'" class="mt-3 block text-xs text-ink-muted">
+        Ends
+        <input
+          type="time"
+          class="tabular mt-1.5 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          :value="endValue"
+          @change="setEnd"
+        />
+      </label>
+
+      <template v-else>
+        <label class="mt-3 flex items-center gap-2 text-xs text-ink-muted">
+          <input
+            type="number"
+            min="1"
+            step="5"
+            aria-label="Minutes"
+            class="tabular w-24 rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+            :value="editingInstance?.durationMinutes"
+            @change="setDuration"
+          />
+          minutes
+        </label>
+
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          <button
+            v-for="minutes in DURATIONS"
+            :key="minutes"
+            type="button"
+            class="tabular rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+            :class="
+              editingInstance?.durationMinutes === minutes
+                ? 'border-ink bg-ink text-ink-inverse'
+                : 'border-line text-ink-muted'
+            "
+            :aria-pressed="editingInstance?.durationMinutes === minutes"
+            @click="chooseDuration(minutes)"
+          >
+            {{ minutes }} min
+          </button>
+        </div>
+      </template>
 
       <p class="mt-4 mb-1.5 text-xs font-semibold tracking-wide text-ink-muted uppercase">
         Remind me

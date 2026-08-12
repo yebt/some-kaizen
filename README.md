@@ -16,7 +16,8 @@ a list. Fully offline, stored on the device, packaged for Android with Capacitor
 - **Planning in two gestures.** Drag an occurrence onto a day in the weekly board, then drag
   it onto an hour in the day timeline. An occurrence that never gets the second gesture is
   valid and simply happens sometime that day. Once placed, a grip on the card's lower edge
-  drags its length; a tap opens the same lengths as buttons, for anyone not using a finger.
+  drags its length. Both gestures snap to a quarter hour; the marker beside each card in the
+  hour column opens the exact times, either as a start and an end or as a start and a length.
 - **Block time** — sleep, work, and anything else immovable. Blocks may never overlap each
   other; habits may overlap them freely, because reading during a commute is a real plan.
 - **Statistics** per habit and overall, including a six-month heatmap.

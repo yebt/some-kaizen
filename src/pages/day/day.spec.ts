@@ -308,10 +308,11 @@ describe('adjusting an occurrence', () => {
     await settle()
   }
 
-  it('offers both the length and the reminder, which are the two things about it', async () => {
+  it('offers the time, the length and the reminder, which is all an occurrence has', async () => {
     const text = (await openSheet()).find('dialog').text()
 
-    expect(text).toContain('How long')
+    expect(text).toContain('Starts')
+    expect(text).toContain('For how long')
     expect(text).toContain('Remind me')
   })
 
@@ -476,5 +477,206 @@ describe('dragging the grip on a card', () => {
     await dragGripTo(wrapper, 8 * 60)
 
     expect(wrapper.find('dialog').attributes('open')).toBeUndefined()
+  })
+})
+
+describe('the time marker in the hour column', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  async function renderScheduled(startsAt = 7 * 60, durationMinutes = 30) {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({
+        id: newIdentifier(),
+        habitId: habit.id,
+        date: DAY,
+        period: 'daily',
+        durationMinutes,
+      }),
+      timeOfDay(startsAt),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    return await renderDay()
+  }
+
+  function marker(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.find('[aria-label="Set the exact time of Meditate"]')
+  }
+
+  it('reads the occurrence its own start time', async () => {
+    expect(marker(await renderScheduled()).text()).toBe('07:00')
+  })
+
+  it('sits level with the top edge of the card it belongs to', async () => {
+    // The column is a ruler, so a marker that is not level with its card is simply wrong.
+    expect(marker(await renderScheduled(9 * 60)).attributes('style')).toContain('top: 540px')
+  })
+
+  it('is a way into the editor, since a tap on the card competes with the drag', async () => {
+    const wrapper = await renderScheduled()
+
+    await marker(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('dialog').attributes('open')).toBeDefined()
+    expect(wrapper.find('dialog').text()).toContain('Meditate')
+  })
+
+  it('shows nothing live until a gesture is actually happening', async () => {
+    expect((await renderScheduled()).find('[data-live-time]').exists()).toBe(false)
+  })
+
+  it('calls out where a resize currently ends, while the finger is still down', async () => {
+    const wrapper = await renderScheduled()
+    const handle = wrapper.find('[data-resize-grip]').element
+
+    handle.dispatchEvent(new MouseEvent('pointerdown', { clientY: 7 * 60 + 30, bubbles: true }))
+    handle.dispatchEvent(new MouseEvent('pointermove', { clientY: 8 * 60 + 30, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.find('[data-live-time]').text()).toBe('08:30')
+
+    handle.dispatchEvent(new MouseEvent('pointerup', { clientY: 8 * 60 + 30, bubbles: true }))
+    await settle()
+
+    expect(wrapper.find('[data-live-time]').exists()).toBe(false)
+  })
+})
+
+describe('typing an exact time', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  async function openEditor(startsAt = 7 * 60, durationMinutes = 30) {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({
+        id: newIdentifier(),
+        habitId: habit.id,
+        date: DAY,
+        period: 'daily',
+        durationMinutes,
+      }),
+      timeOfDay(startsAt),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const wrapper = await renderDay()
+
+    await wrapper.find('[aria-label="Set the exact time of Meditate"]').trigger('click')
+    await flushPromises()
+
+    return wrapper
+  }
+
+  /** The label wrapping each field is the only thing separating them, so they go by index. */
+  async function fill(field: ReturnType<typeof timeFields>[number], value: string) {
+    await field.setValue(value)
+    await field.trigger('change')
+    await settle()
+  }
+
+  function timeFields(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.findAll('dialog input[type="time"]')
+  }
+
+  /** What the field currently shows, which is not the same as what the store holds. */
+  function shownAt(wrapper: Awaited<ReturnType<typeof renderDay>>, index: number) {
+    return (timeFields(wrapper)[index]?.element as HTMLInputElement | undefined)?.value
+  }
+
+  async function chooseMode(wrapper: Awaited<ReturnType<typeof renderDay>>, label: string) {
+    await wrapper
+      .findAll('dialog [role="tab"]')
+      .find((node) => node.text() === label)
+      ?.trigger('click')
+    await flushPromises()
+  }
+
+  it('offers the start already filled in, rather than an empty field', async () => {
+    expect(shownAt(await openEditor(), 0)).toBe('07:00')
+  })
+
+  it('moves the occurrence to a minute the ruler cannot express', async () => {
+    const wrapper = await openEditor()
+
+    await fill(timeFields(wrapper)[0]!, '07:07')
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(7 * 60 + 7)
+  })
+
+  it('keeps the length when only the start moves', async () => {
+    const wrapper = await openEditor(7 * 60, 45)
+
+    await fill(timeFields(wrapper)[0]!, '10:20')
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(45)
+  })
+
+  it('ignores a field that is being cleared rather than writing nonsense', async () => {
+    const wrapper = await openEditor()
+
+    await fill(timeFields(wrapper)[0]!, '')
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(7 * 60)
+  })
+
+  it('takes a length by the moment it ends', async () => {
+    const wrapper = await openEditor()
+
+    await chooseMode(wrapper, 'Until')
+    await fill(timeFields(wrapper)[1]!, '08:20')
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(80)
+  })
+
+  it('reads an end before the start as the next morning, as block time does', async () => {
+    // Otherwise the one habit most worth planning past midnight cannot be entered at all.
+    const wrapper = await openEditor(23 * 60)
+
+    await chooseMode(wrapper, 'Until')
+    await fill(timeFields(wrapper)[1]!, '01:00')
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(120)
+  })
+
+  it('takes a length in minutes directly', async () => {
+    const wrapper = await openEditor()
+
+    await fill(wrapper.find('dialog input[type="number"]'), '37')
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(37)
+  })
+
+  it('refuses a length of nothing', async () => {
+    const wrapper = await openEditor(7 * 60, 30)
+
+    await fill(wrapper.find('dialog input[type="number"]'), '0')
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(30)
+  })
+
+  it('shows the end that the current length implies, so the two agree', async () => {
+    const wrapper = await openEditor(7 * 60, 90)
+
+    await chooseMode(wrapper, 'Until')
+
+    expect(shownAt(wrapper, 1)).toBe('08:30')
   })
 })
