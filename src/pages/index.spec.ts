@@ -9,6 +9,8 @@ import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { calendarDate, todayIn } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
+import { interval, timeOfDay } from '@shared/domain/time-of-day'
+import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { createCompletedHabit, frequency } from '@modules/habits/domain/habit'
 import { latestEntryFor } from '@modules/habits/domain/habit-entry'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
@@ -350,5 +352,130 @@ describe('the swipe reveal', () => {
     const row = reveal.element.parentElement?.querySelector(':scope > div:not(.absolute)')
 
     expect(row?.className).toContain('relative')
+  })
+})
+
+describe('a day with block time but no habits yet', () => {
+  it('shows the schedule instead of pretending the day is empty', async () => {
+    // Someone who entered their sleep and their work day first was being told "no habits"
+    // over a schedule that already had something in it.
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      blocks: [
+        createBlockTime({
+          id: newIdentifier(),
+          name: 'Work',
+          span: interval(timeOfDay(9 * 60), 8 * 60),
+          weekdays: [1, 2, 3, 4, 5, 6, 7],
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+
+    const text = (await renderToday()).text()
+
+    expect(text).not.toContain('No habits yet')
+    expect(text).toContain('Schedule')
+  })
+
+  it('still invites a first habit when there is genuinely nothing at all', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    expect((await renderToday()).text()).toContain('No habits yet')
+  })
+})
+
+describe('holding a row', () => {
+  /** The hold outlasts a slow swipe on purpose, so the test has to outlast the hold. */
+  const HOLD_MS = 380
+
+  function wait(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  beforeEach(async () => {
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Meditate',
+          frequency: frequency('daily', 1),
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+  })
+
+  function row(wrapper: Awaited<ReturnType<typeof renderToday>>) {
+    return wrapper.find('.touch-pan-y')
+  }
+
+  /**
+   * The sheet, told apart from the amount dialog by the name it is labelled with.
+   *
+   * Both are `<dialog>` elements and both are always in the tree, so the label is the only
+   * thing that distinguishes them; a closed sheet carries no name and so is not found here.
+   */
+  function menu(wrapper: Awaited<ReturnType<typeof renderToday>>) {
+    return wrapper.find('dialog[aria-label="Meditate"]')
+  }
+
+  function press(element: Element, clientX: number, clientY = 100) {
+    element.dispatchEvent(
+      new MouseEvent('pointerdown', { clientX, clientY, bubbles: true, cancelable: true }),
+    )
+  }
+
+  it('opens what can be done with the habit behind it', async () => {
+    const wrapper = await renderToday()
+
+    press(row(wrapper).element, 20)
+    await wait(HOLD_MS + 60)
+    await flushPromises()
+
+    expect(menu(wrapper).attributes('open')).toBeDefined()
+    expect(menu(wrapper).text()).toContain('Meditate')
+  })
+
+  it('offers a time and an edit, which are the two things Today cannot do itself', async () => {
+    const wrapper = await renderToday()
+
+    press(row(wrapper).element, 20)
+    await wait(HOLD_MS + 60)
+    await flushPromises()
+
+    const text = menu(wrapper).text()
+
+    expect(text).toContain('Give it a time')
+    expect(text).toContain('Edit')
+  })
+
+  it('leaves a plain tap alone, which is still the way to open the habit', async () => {
+    const wrapper = await renderToday()
+    const element = row(wrapper).element
+
+    press(element, 20)
+    element.dispatchEvent(new MouseEvent('pointerup', { clientX: 20, clientY: 100, bubbles: true }))
+    await wait(HOLD_MS + 60)
+    await flushPromises()
+
+    expect(menu(wrapper).exists()).toBe(false)
+  })
+
+  it('gives way to the swipe when the finger travels', async () => {
+    // Both gestures are armed by the same press, so each has to disarm itself on the
+    // evidence it is waiting for. A finger that moves is not holding.
+    const wrapper = await renderToday()
+    const element = row(wrapper).element
+
+    press(element, 20)
+    element.dispatchEvent(
+      new MouseEvent('pointermove', { clientX: 90, clientY: 100, bubbles: true }),
+    )
+    await wait(HOLD_MS + 60)
+    await flushPromises()
+
+    expect(menu(wrapper).exists()).toBe(false)
   })
 })

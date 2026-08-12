@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 
+import { pushBackHandler } from './back-stack'
+
 const props = defineProps<{ open: boolean; label: string }>()
 const emit = defineEmits<{ dismiss: [] }>()
 
@@ -45,9 +47,37 @@ function hide() {
   element.removeAttribute('open')
 }
 
+/**
+ * Claims the back gesture while open, so Android's back closes this rather than the screen.
+ *
+ * `showModal` already gives us Esc for free, but the hardware button is not Esc and never
+ * reaches the element. Registering here rather than at each call site means every dialog in
+ * the app behaves the same way without anyone having to remember.
+ */
+let releaseBack: (() => void) | undefined
+
+function claimBack() {
+  releaseBack ??= pushBackHandler(() => emit('dismiss'))
+}
+
+function releaseBackGesture() {
+  releaseBack?.()
+  releaseBack = undefined
+}
+
 watch(
   () => props.open,
-  (isOpen) => (isOpen ? show() : hide()),
+  (isOpen) => {
+    if (isOpen) {
+      show()
+      claimBack()
+
+      return
+    }
+
+    hide()
+    releaseBackGesture()
+  },
   { flush: 'post' },
 )
 
@@ -62,7 +92,10 @@ function onBackdropClick() {
   emit('dismiss')
 }
 
-onBeforeUnmount(hide)
+onBeforeUnmount(() => {
+  hide()
+  releaseBackGesture()
+})
 </script>
 
 <template>

@@ -6,6 +6,7 @@ import { PiniaColada } from '@pinia/colada'
 
 import App from '@core/App.vue'
 import router from '@core/router'
+import { installBackButton } from '@core/back-button'
 import { createPersistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { createPlatformServices, PLATFORM_KEY } from '@core/platform-context'
@@ -32,6 +33,10 @@ try {
   app.provide(PLATFORM_KEY, createPlatformServices())
   app.provide(PERSISTENCE_KEY, await createPersistence())
   app.mount('#app')
+
+  // After mounting, so a back gesture can never arrive before there is anything to go back
+  // from. A failure here costs the gesture, not the app.
+  void installBackButton(router).catch((error: unknown) => console.error(error))
 } catch (error) {
   // Storage can genuinely be unavailable: private browsing, a corrupted database, or a
   // second tab pinning an older schema version. Mounting anyway would leave every screen

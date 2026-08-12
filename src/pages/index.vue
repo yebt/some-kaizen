@@ -13,6 +13,7 @@ import {
 } from '@shared/domain/calendar-date'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
 import { usePreferences } from '@core/preferences-store'
+import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
 import AppDialog from '@shared/ui/AppDialog.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
@@ -21,10 +22,12 @@ import DateStrip from '@shared/ui/DateStrip.vue'
 import ProgressRing from '@shared/ui/ProgressRing.vue'
 import SegmentedControl, { type Segment } from '@shared/ui/SegmentedControl.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { usePressHold } from '@shared/ui/press/use-press-hold'
 import { useSwipeAction } from '@shared/ui/press/use-swipe-action'
 import {
   type Achievement,
   achievementFor,
+  archiveHabit,
   isMeasured,
   isNegative,
   type MeasuredHabit,
@@ -39,6 +42,7 @@ import {
   recordNegative,
 } from '@modules/habits/domain/habit-entry'
 import {
+  useArchiveHabit,
   useHabitEntries,
   useHabits,
   useRecordEntry,
@@ -64,6 +68,7 @@ const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
 const recordEntry = useRecordEntry()
 const saveInstance = useSaveInstance()
+const archive = useArchiveHabit()
 const feedback = useFeedback()
 const preferences = usePreferences()
 
@@ -90,8 +95,6 @@ const dayLabel = computed(() =>
 const markedDays = computed(() => instances.value.map((instance) => instance.date))
 
 const isFirstLoad = computed(() => habitsLoading.value && habitsData.value === undefined)
-const isEmpty = computed(() => !habitsLoading.value && habits.value.length === 0)
-
 const ACHIEVEMENT_LABEL: Record<Achievement, string> = {
   none: 'nothing yet',
   below: 'under the minimum',
@@ -170,6 +173,17 @@ const schedule = computed(() => {
 
   return [...fixed, ...timed].sort((left, right) => left.from - right.from)
 })
+
+/**
+ * Nothing to show at all, which is not the same as owning no habits.
+ *
+ * Block time is on this screen too, so someone who has entered their sleep and their work
+ * day but no habits yet was being shown "no habits" over a schedule that already had
+ * something in it — and the invitation to add a habit hid the very thing they had added.
+ */
+const isEmpty = computed(
+  () => !habitsLoading.value && habits.value.length === 0 && schedule.value.length === 0,
+)
 
 const quitting = computed(() =>
   habits.value.filter(isNegative).map((habit) => {
@@ -313,6 +327,132 @@ const swipe = useSwipeAction({
   },
 })
 
+/**
+ * Holding a row opens what to do with the habit behind it.
+ *
+ * The same gesture the habit list already has, brought to the screen people actually live
+ * on. Today is where a habit becomes annoying, so it is where you want to stop planning it,
+ * fix its wording, or finally give it an hour — and walking to another screen to do that is
+ * the reason nobody ever does.
+ *
+ * Longer than the list's hold on purpose. This row also owns a horizontal swipe, so the
+ * timer has to outlast the moment of doubt at the start of a slow drag; firing at the list's
+ * 180ms would turn half the swipes into a menu.
+ */
+const HOLD_MS = 380
+
+const menuFor = ref<{ habit: PositiveHabit; duty: DayDuty } | null>(null)
+
+/** A hold ends with a click when the finger lifts, which would open the habit behind it. */
+const swallowNextClick = ref(false)
+
+const hold = usePressHold({
+  holdMs: HOLD_MS,
+  onHold: (key) => {
+    const row = duties.value.find((candidate) => candidate.key === key)
+
+    if (!row) return
+
+    // The row is being taken over by the menu, so the half finished swipe underneath it has
+    // to let go, or the row stays translated with nothing driving it.
+    swipe.cancel()
+    menuFor.value = { habit: row.habit, duty: row.duty }
+    swallowNextClick.value = true
+  },
+})
+
+function onRowClick(event: MouseEvent) {
+  if (!swallowNextClick.value) return
+
+  swallowNextClick.value = false
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+const menuActions = computed<SheetAction[]>(() => {
+  const current = menuFor.value
+
+  if (!current) return []
+
+  return [
+    {
+      key: 'time',
+      label: current.duty.instance?.startsAt === undefined ? 'Give it a time' : 'Change its time',
+      description: 'Open the day timeline',
+    },
+    { key: 'edit', label: 'Edit', description: 'Name, frequency, colour' },
+    {
+      key: 'archive',
+      label: 'Archive',
+      description: 'Stop planning it and keep every record',
+    },
+  ]
+})
+
+async function runMenuAction(key: string) {
+  const current = menuFor.value
+
+  menuFor.value = null
+
+  if (!current) return
+
+  if (key === 'time') {
+    await router.push(`/day/${selectedDay.value}`)
+
+    return
+  }
+
+  if (key === 'edit') {
+    await router.push(`/habits/${current.habit.id}/edit`)
+
+    return
+  }
+
+  if (key === 'archive') await onArchive(current.habit)
+}
+
+async function onArchive(habit: PositiveHabit) {
+  const accepted = await feedback.confirm({
+    title: `Archive ${habit.name}?`,
+    message:
+      'It stops appearing here and in planning, and everything you have already recorded stays exactly as it is.',
+    confirmLabel: 'Archive',
+  })
+
+  if (!accepted) return
+
+  await archive.mutateAsync(archiveHabit(habit, today))
+  feedback.notify(`${habit.name} archived`)
+}
+
+/**
+ * One press, two gestures, in that order.
+ *
+ * They cannot be told apart at the moment the finger lands — a swipe and a hold both start
+ * as a touch that has not moved — so both are armed and each disarms itself on the evidence
+ * it is waiting for: the swipe when the finger travels sideways, the hold when it travels at
+ * all.
+ */
+function onRowPress(key: string, event: PointerEvent) {
+  swipe.press(key, event)
+  hold.press(key, event)
+}
+
+function onRowMove(event: PointerEvent) {
+  swipe.move(event)
+  hold.move(event)
+}
+
+function onRowRelease(event: PointerEvent) {
+  void swipe.release(event)
+  hold.release(event)
+}
+
+function onRowCancel() {
+  swipe.cancel()
+  hold.cancel()
+}
+
 function swipeStyle(key: string) {
   if (swipe.activeKey.value !== key || swipe.offset.value === 0) return {}
 
@@ -450,10 +590,11 @@ const OUTCOME_CLASS = {
                 row.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',
               ]"
               :style="swipeStyle(row.key)"
-              @pointerdown="swipe.press(row.key, $event)"
-              @pointermove="swipe.move($event)"
-              @pointerup="swipe.release($event)"
-              @pointercancel="swipe.cancel()"
+              @pointerdown="onRowPress(row.key, $event)"
+              @pointermove="onRowMove($event)"
+              @pointerup="onRowRelease($event)"
+              @pointercancel="onRowCancel"
+              @click="onRowClick"
             >
               <button
                 type="button"
@@ -647,5 +788,12 @@ const OUTCOME_CLASS = {
         </div>
       </form>
     </AppDialog>
+    <ActionSheet
+      :open="menuFor !== null"
+      :title="menuFor?.habit.name ?? ''"
+      :actions="menuActions"
+      @select="runMenuAction"
+      @dismiss="menuFor = null"
+    />
   </div>
 </template>

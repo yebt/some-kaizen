@@ -15,6 +15,45 @@ export const LONG_PRESS_MS = 180
 /** A press that wanders further than this before the timer fires was a scroll, not a grab. */
 export const CANCEL_TOLERANCE_PX = 8
 
+/**
+ * How close to an edge a dragged card starts pulling the page along with it.
+ *
+ * A drag claims the whole gesture, so while a card is in the air the page cannot be
+ * scrolled: on a phone that means anything off screen is unreachable, and a day timeline is
+ * 1440 pixels tall on a 800 pixel screen. Roughly a thumb's width, so the band is reachable
+ * without being somewhere a finger lands by accident.
+ */
+export const EDGE_SCROLL_PX = 64
+
+/** The fastest the page moves, in pixels per frame, reached only at the very edge. */
+export const EDGE_SCROLL_SPEED = 14
+
+/** Roughly one frame at 60Hz. The page has to keep moving while the finger holds still. */
+export const EDGE_SCROLL_FRAME_MS = 16
+
+/**
+ * How far to scroll for a finger at this height, easing in across the band.
+ *
+ * Proportional rather than constant so the edge has a soft entry: a card nudged just inside
+ * the band creeps, and one pinned against the screen edge races. A fixed speed makes the
+ * band feel like a trapdoor, since the page lurches the instant the finger crosses it.
+ *
+ * Negative scrolls up, which is the direction of the edge the finger is near.
+ */
+export function edgeScrollBy(y: number, viewportHeight: number): number {
+  if (viewportHeight <= 0) return 0
+
+  const depth = (distance: number) => Math.min((EDGE_SCROLL_PX - distance) / EDGE_SCROLL_PX, 1)
+
+  if (y < EDGE_SCROLL_PX) return -Math.ceil(depth(y) * EDGE_SCROLL_SPEED)
+
+  const fromBottom = viewportHeight - y
+
+  if (fromBottom < EDGE_SCROLL_PX) return Math.ceil(depth(fromBottom) * EDGE_SCROLL_SPEED)
+
+  return 0
+}
+
 /** The subset of a pointer event this gesture needs, so a test need not fake the whole thing. */
 export interface PointerLike {
   readonly pointerId: number
@@ -46,6 +85,15 @@ export interface DragAndDropOptions<T> {
   resolveZone?: (x: number, y: number) => string | null
   longPressMs?: number
   /**
+   * Scrolls the page while a card is held against an edge, and stops when it is not.
+   *
+   * Injected for the same reason as the hit test: jsdom has no layout, so neither the
+   * viewport height nor a scroll position exists to drive it. A fake here makes the rule
+   * — how fast, in which direction, and when it stops — ordinary code to prove.
+   */
+  edgeScroll?: (byPixels: number) => void
+  viewportHeight?: () => number
+  /**
    * Identifies what is being carried, so a card can tell whether the press being held is
    * its own. Without it every card in the list would animate at once.
    */
@@ -75,6 +123,8 @@ function resolveZoneFromDocument(x: number, y: number): string | null {
 export function useDragAndDrop<T>(options: DragAndDropOptions<T>) {
   const resolveZone = options.resolveZone ?? resolveZoneFromDocument
   const longPressMs = options.longPressMs ?? LONG_PRESS_MS
+  const edgeScroll = options.edgeScroll ?? ((by: number) => globalThis.scrollBy?.(0, by))
+  const viewportHeight = options.viewportHeight ?? (() => globalThis.innerHeight ?? 0)
 
   const payload = shallowRef<T | null>(null)
   const position = ref<{ x: number; y: number } | null>(null)
@@ -85,9 +135,47 @@ export function useDragAndDrop<T>(options: DragAndDropOptions<T>) {
   let pointerId: number | null = null
   let origin: { x: number; y: number } | null = null
   let timer: ReturnType<typeof setTimeout> | undefined
+  let scrollTimer: ReturnType<typeof setInterval> | undefined
+  let scrollStep = 0
+
+  function stopEdgeScroll() {
+    clearInterval(scrollTimer)
+    scrollTimer = undefined
+    scrollStep = 0
+  }
+
+  /**
+   * Keeps the page moving under a finger that is holding still against an edge.
+   *
+   * A repeating tick rather than a nudge per pointer event, because the useful case is
+   * exactly the one where the finger has stopped: it is already as far down the screen as it
+   * can go, and no further events are coming.
+   */
+  function updateEdgeScroll(y: number) {
+    scrollStep = edgeScrollBy(y, viewportHeight())
+
+    if (scrollStep === 0) {
+      stopEdgeScroll()
+
+      return
+    }
+
+    if (scrollTimer !== undefined) return
+
+    scrollTimer = setInterval(() => {
+      edgeScroll(scrollStep)
+
+      // The finger has not moved but the page has, so a different zone is now underneath it.
+      // Without this the card lands on whatever was there when the scroll started.
+      const at = position.value
+
+      if (at) activeZone.value = resolveZone(at.x, at.y)
+    }, EDGE_SCROLL_FRAME_MS)
+  }
 
   function reset() {
     clearTimeout(timer)
+    stopEdgeScroll()
     timer = undefined
     pointerId = null
     origin = null
@@ -122,6 +210,7 @@ export function useDragAndDrop<T>(options: DragAndDropOptions<T>) {
     if (isDragging.value) {
       position.value = { x: event.clientX, y: event.clientY }
       activeZone.value = resolveZone(event.clientX, event.clientY)
+      updateEdgeScroll(event.clientY)
 
       return
     }
