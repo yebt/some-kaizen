@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_PREFERENCES, readPreferences, usesHour12 } from './preferences'
+import {
+  DEFAULT_PREFERENCES,
+  readPreferences,
+  TIMELINE_SCALES,
+  timelineScale,
+  usesHour12,
+  zoomedTimeline,
+} from './preferences'
 
 describe('readPreferences', () => {
-  it('reads a stored pair back', () => {
-    expect(readPreferences({ clock: '12h', theme: 'dark' })).toEqual({
+  it('reads stored choices back', () => {
+    expect(readPreferences({ clock: '12h', theme: 'dark', timeline: 'fine' })).toEqual({
       clock: '12h',
       theme: 'dark',
+      timeline: 'fine',
     })
   })
 
@@ -24,9 +32,10 @@ describe('readPreferences', () => {
   )
 
   it('replaces only the field it cannot understand', () => {
-    expect(readPreferences({ clock: 'sundial', theme: 'dark' })).toEqual({
+    expect(readPreferences({ clock: 'sundial', theme: 'dark', timeline: 'fine' })).toEqual({
       clock: DEFAULT_PREFERENCES.clock,
       theme: 'dark',
+      timeline: 'fine',
     })
   })
 
@@ -34,13 +43,59 @@ describe('readPreferences', () => {
     expect(readPreferences({ clock: '12h', theme: 'light', future: true })).toEqual({
       clock: '12h',
       theme: 'light',
+      timeline: DEFAULT_PREFERENCES.timeline,
     })
+  })
+
+  it('fills in a timeline detail an older stored value never had', () => {
+    expect(readPreferences({ clock: '24h', theme: 'dark' }).timeline).toBe('normal')
+  })
+})
+
+describe('the timeline scale', () => {
+  it('is the middle setting by default, so the app opens on the ruler it was built around', () => {
+    expect(timelineScale(DEFAULT_PREFERENCES)).toEqual(TIMELINE_SCALES.normal)
+  })
+
+  it('keeps a taller day and a finer step together', () => {
+    // The two cannot be separated: a five minute step on a short ruler is unhittable.
+    expect(TIMELINE_SCALES.fine.pixelsPerMinute).toBeGreaterThan(
+      TIMELINE_SCALES.normal.pixelsPerMinute,
+    )
+    expect(TIMELINE_SCALES.fine.snapMinutes).toBeLessThan(TIMELINE_SCALES.normal.snapMinutes)
+  })
+
+  it('never draws a step smaller than four pixels, which is smaller than a fingertip', () => {
+    for (const scale of Object.values(TIMELINE_SCALES)) {
+      expect(scale.snapMinutes * scale.pixelsPerMinute).toBeGreaterThanOrEqual(10)
+    }
+  })
+})
+
+describe('zooming', () => {
+  const at = (timeline: 'coarse' | 'normal' | 'fine') => ({ ...DEFAULT_PREFERENCES, timeline })
+
+  it('steps towards more detail', () => {
+    expect(zoomedTimeline(at('normal'), 1)).toBe('fine')
+  })
+
+  it('steps towards a wider view', () => {
+    expect(zoomedTimeline(at('normal'), -1)).toBe('coarse')
+  })
+
+  it('stops at the closest view rather than wrapping around to the widest', () => {
+    // Wrapping reads as the control having broken, not as having run out of room.
+    expect(zoomedTimeline(at('fine'), 1)).toBe('fine')
+  })
+
+  it('stops at the widest view too', () => {
+    expect(zoomedTimeline(at('coarse'), -1)).toBe('coarse')
   })
 })
 
 describe('usesHour12', () => {
   it('is true only for the twelve hour clock', () => {
-    expect(usesHour12({ clock: '12h', theme: 'system' })).toBe(true)
-    expect(usesHour12({ clock: '24h', theme: 'system' })).toBe(false)
+    expect(usesHour12({ clock: '12h', theme: 'system', timeline: 'normal' })).toBe(true)
+    expect(usesHour12({ clock: '24h', theme: 'system', timeline: 'normal' })).toBe(false)
   })
 })

@@ -7,7 +7,10 @@ import {
   type Preferences,
   readPreferences,
   type ThemeChoice,
+  type TimelineDetail,
+  timelineScale,
   usesHour12,
+  zoomedTimeline,
 } from '@shared/domain/preferences'
 import { formatTime } from '@shared/domain/time-of-day'
 
@@ -80,5 +83,25 @@ export const usePreferences = defineStore('preferences', () => {
     preferences.value = { ...preferences.value, theme }
   }
 
-  return { preferences, hour12, formatClock, setClock, setTheme }
+  /** How tall a minute is drawn and what a drag snaps to, which move together. */
+  const timeline = computed(() => timelineScale(preferences.value))
+
+  function setTimeline(detail: TimelineDetail) {
+    preferences.value = { ...preferences.value, timeline: detail }
+  }
+
+  function zoomTimeline(steps: number) {
+    setTimeline(zoomedTimeline(preferences.value, steps))
+  }
+
+  return {
+    preferences,
+    hour12,
+    formatClock,
+    timeline,
+    setClock,
+    setTheme,
+    setTimeline,
+    zoomTimeline,
+  }
 })

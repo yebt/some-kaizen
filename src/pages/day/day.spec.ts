@@ -680,3 +680,107 @@ describe('typing an exact time', () => {
     expect(shownAt(wrapper, 1)).toBe('08:30')
   })
 })
+
+describe('stretching the day', () => {
+  beforeEach(() => {
+    globalThis.localStorage?.clear()
+  })
+
+  async function renderScheduled() {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({
+        id: newIdentifier(),
+        habitId: habit.id,
+        date: DAY,
+        period: 'daily',
+        durationMinutes: 60,
+      }),
+      timeOfDay(9 * 60),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    return await renderDay()
+  }
+
+  function zoom(wrapper: Awaited<ReturnType<typeof renderDay>>, label: string) {
+    return wrapper.find(`[aria-label="${label}"]`)
+  }
+
+  const closer = (wrapper: Awaited<ReturnType<typeof renderDay>>) =>
+    zoom(wrapper, 'Closer view, finer steps')
+  const wider = (wrapper: Awaited<ReturnType<typeof renderDay>>) =>
+    zoom(wrapper, 'Wider view, coarser steps')
+
+  function marker(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.find('[aria-label="Set the exact time of Meditate"]')
+  }
+
+  it('opens on the ruler the screen was built around', async () => {
+    expect((await renderScheduled()).text()).toContain('15 min')
+  })
+
+  it('names the step rather than the zoom, since the step is what can be saved', async () => {
+    const wrapper = await renderScheduled()
+
+    await closer(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('5 min')
+  })
+
+  it('moves every card down with the ruler it is measured against', async () => {
+    const wrapper = await renderScheduled()
+
+    expect(marker(wrapper).attributes('style')).toContain('top: 540px')
+
+    await closer(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(marker(wrapper).attributes('style')).toContain('top: 1080px')
+  })
+
+  it('shortens the day when asked for a wider view', async () => {
+    const wrapper = await renderScheduled()
+
+    await wider(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(marker(wrapper).attributes('style')).toContain('top: 270px')
+  })
+
+  it('lands a drag on the finer step once the day is stretched', async () => {
+    const wrapper = await renderScheduled()
+
+    await closer(wrapper).trigger('click')
+    await flushPromises()
+
+    // On a doubled ruler 1210px is 10:05, a time the quarter hour step cannot express.
+    const handle = wrapper.find('[data-resize-grip]').element
+
+    handle.dispatchEvent(new MouseEvent('pointerdown', { clientY: 1080, bubbles: true }))
+    handle.dispatchEvent(new MouseEvent('pointermove', { clientY: 1210, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.find('[data-live-time]').text()).toBe('10:05')
+  })
+
+  it('refuses to go closer than the closest view', async () => {
+    const wrapper = await renderScheduled()
+
+    await closer(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(closer(wrapper).attributes('disabled')).toBeDefined()
+  })
+
+  it('remembers the choice, since a ruler you keep re-picking is a ruler you resent', async () => {
+    const first = await renderScheduled()
+
+    await closer(first).trigger('click')
+    await flushPromises()
+
+    expect((await renderDay()).text()).toContain('5 min')
+  })
+})

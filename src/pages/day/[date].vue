@@ -52,11 +52,7 @@ import {
   useSaveInstance,
 } from '@modules/planning/application/planning-queries'
 
-/** One minute is one pixel, so the whole day is 1440px of honest, scrollable ruler. */
-const PIXELS_PER_MINUTE = 1
 const MINUTES_IN_DAY = 1440
-/** Quarter hours: fine enough to be useful, coarse enough that a finger can hit it. */
-const SNAP_MINUTES = 15
 
 const TIMELINE_ZONE = 'timeline'
 const TRAY_ZONE = 'tray'
@@ -83,6 +79,18 @@ const saveInstance = useSaveInstance()
 const feedback = useFeedback()
 const preferences = usePreferences()
 const platform = usePlatform()
+
+/**
+ * The ruler's scale and its step, which are one setting rather than two.
+ *
+ * A step has to stay big enough to aim at, so making the day taller is the only way to make
+ * a drag land on something finer than a quarter hour. Zooming and precision are the same
+ * knob, and pretending otherwise would offer a five minute step no finger could hit.
+ */
+const pixelsPerMinute = computed(() => preferences.timeline.pixelsPerMinute)
+const snapMinutes = computed(() => preferences.timeline.snapMinutes)
+
+const ZOOM_LABEL = 'Timeline detail'
 
 const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
 const instances = computed(() => instancesData.value ?? [])
@@ -129,8 +137,8 @@ const timed = computed(() =>
           entry.duty.instance && hasReminder(entry.duty.instance)
             ? entry.duty.instance.reminderMinutesBefore
             : undefined,
-        top: span.start * PIXELS_PER_MINUTE,
-        height: Math.max(span.durationMinutes * PIXELS_PER_MINUTE, 22),
+        top: span.start * pixelsPerMinute.value,
+        height: Math.max(span.durationMinutes * pixelsPerMinute.value, 22),
         startLabel: preferences.formatClock(span.start),
         label: `${preferences.formatClock(span.start)} – ${preferences.formatClock(span.start + span.durationMinutes)}`,
       },
@@ -144,8 +152,8 @@ const bands = computed(() =>
     key: `${occurrence.block.id}-${occurrence.segment.from}`,
     blockId: occurrence.block.id,
     name: occurrence.block.name,
-    top: occurrence.segment.from * PIXELS_PER_MINUTE,
-    height: (occurrence.segment.to - occurrence.segment.from) * PIXELS_PER_MINUTE,
+    top: occurrence.segment.from * pixelsPerMinute.value,
+    height: (occurrence.segment.to - occurrence.segment.from) * pixelsPerMinute.value,
     continues: occurrence.continuesFromPreviousDay || occurrence.continuesIntoNextDay,
     style: surfaceStyle(occurrence.block),
   })),
@@ -202,9 +210,11 @@ function minutesAt(y: number): TimeOfDay | null {
   if (!element) return null
 
   // clientY is viewport relative and so is the rect, which makes scrolling cancel out.
-  const offset = (y - element.getBoundingClientRect().top) / PIXELS_PER_MINUTE
+  const offset = (y - element.getBoundingClientRect().top) / pixelsPerMinute.value
 
-  return snapToStep(Math.min(Math.max(offset, 0), MINUTES_IN_DAY - SNAP_MINUTES), SNAP_MINUTES)
+  const step = snapMinutes.value
+
+  return snapToStep(Math.min(Math.max(offset, 0), MINUTES_IN_DAY - step), step)
 }
 
 async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
@@ -304,7 +314,7 @@ function moveResize(event: PointerEvent) {
   if (end === null) return
 
   // At least one snap step long, so a card can never be dragged into nothing.
-  resizing.value = { ...current, duration: Math.max(end - current.start, SNAP_MINUTES) }
+  resizing.value = { ...current, duration: Math.max(end - current.start, snapMinutes.value) }
 }
 
 async function endResize(event: PointerEvent) {
@@ -549,22 +559,58 @@ function trackHover(event: PointerEvent) {
         </p>
       </section>
 
-      <p class="mt-4 mb-2 text-xs text-ink-subtle">
-        Hold a card to move it, or drag the grip on its lower edge to change how long it lasts. Both
-        snap to {{ SNAP_MINUTES }} minutes — tap the time beside a card to set it to the minute.
-      </p>
+      <div class="mt-4 mb-2 flex items-end justify-between gap-3">
+        <p class="text-xs text-ink-subtle">
+          Hold a card to move it, or drag the grip on its lower edge to change how long it lasts.
+          Both snap to {{ snapMinutes }} minutes — tap the time beside a card to set it to the
+          minute.
+        </p>
+
+        <!--
+          Stretching the day is how a step gets smaller, so the readout names the step rather
+          than the zoom: what changes here is what you can actually save, and a magnifying
+          glass would only have promised a better view.
+        -->
+        <div
+          class="flex shrink-0 items-center gap-1 rounded-full border border-line p-1"
+          role="group"
+          :aria-label="ZOOM_LABEL"
+        >
+          <button
+            type="button"
+            class="grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
+            aria-label="Wider view, coarser steps"
+            :disabled="preferences.preferences.timeline === 'coarse'"
+            @click="preferences.zoomTimeline(-1)"
+          >
+            <AppIcon name="minus" :size="14" />
+          </button>
+          <span class="tabular w-12 text-center text-[0.625rem] text-ink-muted">
+            {{ snapMinutes }} min
+          </span>
+          <button
+            type="button"
+            class="grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
+            aria-label="Closer view, finer steps"
+            :disabled="preferences.preferences.timeline === 'fine'"
+            @click="preferences.zoomTimeline(1)"
+          >
+            <AppIcon name="plus" :size="14" />
+          </button>
+        </div>
+      </div>
 
       <div class="flex">
         <!-- Hour gutter, outside the drop zone so a label never swallows a drop. -->
         <div
           class="relative w-14 shrink-0"
-          :style="{ height: `${MINUTES_IN_DAY * PIXELS_PER_MINUTE}px` }"
+          :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
         >
           <div
             v-for="hour in hours"
             :key="hour"
             class="tabular relative text-[0.625rem] text-ink-subtle"
-            :style="{ height: `${60 * PIXELS_PER_MINUTE}px` }"
+            :style="{ height: `${60 * pixelsPerMinute}px` }"
           >
             <span class="absolute -top-1.5 right-2">{{ preferences.formatClock(hour * 60) }}</span>
           </div>
@@ -591,7 +637,7 @@ function trackHover(event: PointerEvent) {
             v-if="liveMinutes !== null"
             data-live-time
             class="tabular pointer-events-none absolute right-1 z-30 -translate-y-1/2 rounded-full bg-accent px-1.5 py-0.5 text-[0.5625rem] font-semibold text-ink shadow-card"
-            :style="{ top: `${liveMinutes * PIXELS_PER_MINUTE}px` }"
+            :style="{ top: `${liveMinutes * pixelsPerMinute}px` }"
           >
             {{ preferences.formatClock(liveMinutes) }}
           </span>
@@ -606,13 +652,13 @@ function trackHover(event: PointerEvent) {
               ? 'border-ink'
               : 'border-line'
           "
-          :style="{ height: `${MINUTES_IN_DAY * PIXELS_PER_MINUTE}px` }"
+          :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
         >
           <div
             v-for="hour in hours"
             :key="hour"
             class="absolute inset-x-0 border-t border-line/60"
-            :style="{ top: `${hour * 60 * PIXELS_PER_MINUTE}px` }"
+            :style="{ top: `${hour * 60 * pixelsPerMinute}px` }"
           />
 
           <!--
@@ -638,7 +684,7 @@ function trackHover(event: PointerEvent) {
           <div
             v-if="hoverTime !== null"
             class="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-ink"
-            :style="{ top: `${hoverTime * PIXELS_PER_MINUTE}px` }"
+            :style="{ top: `${hoverTime * pixelsPerMinute}px` }"
           />
 
           <DraggableItem
@@ -648,7 +694,7 @@ function trackHover(event: PointerEvent) {
             class="absolute inset-x-1"
             :style="{
               top: `${entry.top}px`,
-              height: `${(previewDuration(entry.duty.instance?.id) ?? 0) * PIXELS_PER_MINUTE || entry.height}px`,
+              height: `${(previewDuration(entry.duty.instance?.id) ?? 0) * pixelsPerMinute || entry.height}px`,
             }"
             @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
             @move="trackHover($event)"
@@ -703,7 +749,7 @@ function trackHover(event: PointerEvent) {
       </h2>
 
       <p class="mb-2 text-xs text-ink-muted">
-        The ruler snaps to {{ SNAP_MINUTES }} minutes. Anything finer is typed here.
+        The ruler snaps to {{ snapMinutes }} minutes. Anything finer is typed here.
       </p>
 
       <label class="mt-4 block text-xs font-semibold tracking-wide text-ink-muted uppercase">
