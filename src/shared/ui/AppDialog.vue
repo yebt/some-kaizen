@@ -51,6 +51,17 @@ watch(
   { flush: 'post' },
 )
 
+/**
+ * Dismisses when the backdrop is clicked.
+ *
+ * A native dialog does not do this on its own, and on a phone the sheet covers a fraction
+ * of the screen: tapping the dimmed area above it is the first thing anyone tries, and
+ * having nothing happen reads as a stuck app.
+ */
+function onBackdropClick() {
+  emit('dismiss')
+}
+
 onBeforeUnmount(hide)
 </script>
 
@@ -61,8 +72,14 @@ onBeforeUnmount(hide)
     :aria-label="label"
     @close="emit('dismiss')"
     @cancel.prevent="emit('dismiss')"
+    @click="onBackdropClick"
   >
-    <div class="p-5">
+    <!--
+      The dialog element covers the whole viewport, so a click on the backdrop lands on the
+      dialog itself. This inner wrapper is the actual sheet, and stopping the click here is
+      what tells the two apart: anything reaching the dialog came from outside the content.
+    -->
+    <div class="p-5" @click.stop>
       <slot />
     </div>
   </dialog>

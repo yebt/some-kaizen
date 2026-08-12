@@ -7,7 +7,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
-import { todayIn } from '@shared/domain/calendar-date'
+import { calendarDate, todayIn } from '@shared/domain/calendar-date'
+import { newIdentifier } from '@shared/domain/identifier'
+import { createCompletedHabit, frequency } from '@modules/habits/domain/habit'
 import { latestEntryFor } from '@modules/habits/domain/habit-entry'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -77,11 +79,19 @@ describe('with a populated day', () => {
     expect(text).toContain('Meditate')
   })
 
-  it('lists an occurrence with no time under anytime today', async () => {
+  it('lists an occurrence with no time under what is due today', async () => {
     const text = (await renderToday()).text()
 
-    expect(text).toContain('Anytime today')
+    expect(text).toContain('Due today')
     expect(text).toContain('Drink water')
+  })
+
+  it('shows the quitting habits, which are never planned and never performed', async () => {
+    // Otherwise a habit you are quitting leaves no trace on the day it is being tracked.
+    const text = (await renderToday()).text()
+
+    expect(text).toContain('Quitting')
+    expect(text).toContain('clean days')
   })
 
   it('asks about the most recent unanswered negative habit', async () => {
@@ -252,6 +262,73 @@ describe('with nothing stored', () => {
     const text = (await renderToday()).text()
 
     expect(text).toContain('No habits yet')
-    expect(text).not.toContain('Anytime today')
+    expect(text).not.toContain('Due today')
+  })
+})
+
+describe('a habit that was never placed on the calendar', () => {
+  it('shows a daily habit today without anyone dragging it there', async () => {
+    // Its period is the day, so there is no planning decision to make and demanding one
+    // would mean dragging seven cards a week for something that happens every day.
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Stretch',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    expect((await renderToday()).text()).toContain('Stretch')
+  })
+
+  it('shows a daily habit once per repetition', async () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Stretch',
+      frequency: frequency('daily', 3),
+      createdOn: calendarDate('2020-01-01'),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    expect((await renderToday()).findAll('[aria-label="Mark Stretch"]')).toHaveLength(3)
+  })
+
+  it('leaves a weekly habit off until it is placed, since that day is a real choice', async () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Run',
+      frequency: frequency('weekly', 2),
+      createdOn: calendarDate('2020-01-01'),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    expect((await renderToday()).text()).not.toContain('Run')
+  })
+
+  it('creates the occurrence when it is marked, rather than demanding it be planned first', async () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Stretch',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label="Mark Stretch"]').trigger('click')
+    await settle()
+
+    const stored = await persistence.instances.all()
+
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ habitId: habit.id, date: todayIn() })
+    expect(latestEntryFor(await persistence.entries.all(), habit.id, todayIn())).toMatchObject({
+      outcome: 'done',
+    })
   })
 })

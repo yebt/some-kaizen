@@ -22,7 +22,6 @@ import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import {
   isMeasured,
   isNegative,
-  isPositive,
   type MeasuredHabit,
   type NegativeHabit,
   type PositiveHabit,
@@ -41,14 +40,24 @@ import {
 } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
-import { spanOf } from '@modules/planning/domain/planned-instance'
-import { usePlannedInstances } from '@modules/planning/application/planning-queries'
+import { type DayDuty, dutiesFor } from '@modules/planning/domain/day-agenda'
+import {
+  planInstance,
+  type PlannedInstance,
+  spanOf,
+} from '@modules/planning/domain/planned-instance'
+import {
+  usePlannedInstances,
+  useSaveInstance,
+} from '@modules/planning/application/planning-queries'
+import { negativeStatistics } from '@modules/stats/domain/habit-statistics'
 
 const { data: habitsData, isLoading: habitsLoading } = useHabits()
 const { data: entriesData } = useHabitEntries()
 const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
 const recordEntry = useRecordEntry()
+const saveInstance = useSaveInstance()
 const feedback = useFeedback()
 const preferences = usePreferences()
 
@@ -77,44 +86,40 @@ const dayLabel = computed(() =>
   ),
 )
 
-const habitsById = computed(() => new Map(habits.value.map((habit) => [habit.id, habit])))
 const markedDays = computed(() => instances.value.map((instance) => instance.date))
 
 const isFirstLoad = computed(() => habitsLoading.value && habitsData.value === undefined)
 const isEmpty = computed(() => !habitsLoading.value && habits.value.length === 0)
 
 /**
- * Everything planned for the selected day, already joined to its habit and its latest
- * verdict, so both sections below read the same shape and record through the same handlers.
+ * What the day owes, joined to the verdict that currently stands for each.
+ *
+ * A duty may have no occurrence yet: a daily habit is due today whether or not anyone
+ * dragged a card onto today. Marking one creates the occurrence on the spot, so the plan
+ * catches up with what actually happened instead of demanding to be filled in first.
  */
-const occurrences = computed(() =>
-  instances.value
-    .filter((instance) => instance.date === selectedDay.value)
-    .flatMap((instance) => {
-      const habit = habitsById.value.get(instance.habitId)
+const duties = computed(() =>
+  dutiesFor(habits.value, instances.value, selectedDay.value).map((duty, index) => {
+    const entry = duty.instance
+      ? latestEntryForInstance(entries.value, duty.instance.id)
+      : undefined
+    const value = entry?.value ?? 0
+    const span = duty.instance ? spanOf(duty.instance) : undefined
 
-      if (!habit || !isPositive(habit)) return []
-
-      const entry = latestEntryForInstance(entries.value, instance.id)
-      const outcome = entry?.outcome
-      const value = entry?.value ?? 0
-      const span = spanOf(instance)
-
-      return [
-        {
-          instance,
-          habit,
-          entryId: entry?.id,
-          outcome,
-          value,
-          progress: isMeasured(habit) ? value / habit.measure.goal : outcome === 'done' ? 1 : 0,
-          span,
-        },
-      ]
-    }),
+    return {
+      key: duty.instance?.id ?? `${duty.habit.id}-${index}`,
+      duty,
+      habit: duty.habit,
+      entryId: entry?.id,
+      outcome: entry?.outcome,
+      value,
+      progress: isMeasured(duty.habit) ? value / duty.habit.measure.goal : 0,
+      span,
+    }
+  }),
 )
 
-/** Block time and timed occurrences merged into one ribbon, as the day is lived. */
+/** Block time and timed duties merged into one ribbon, as the day is lived. */
 const schedule = computed(() => {
   const fixed = blocksOnDate(blocks.value, selectedDay.value).map((occurrence) => ({
     kind: 'block' as const,
@@ -124,26 +129,34 @@ const schedule = computed(() => {
     to: occurrence.segment.to,
     continues: occurrence.continuesFromPreviousDay || occurrence.continuesIntoNextDay,
     style: surfaceStyle(occurrence.block),
-    occurrence: undefined,
+    row: undefined,
   }))
 
-  const timed = occurrences.value
-    .filter((entry) => entry.span !== undefined)
-    .map((entry) => ({
+  const timed = duties.value
+    .filter((row) => row.span !== undefined)
+    .map((row) => ({
       kind: 'habit' as const,
-      key: entry.instance.id,
-      name: entry.habit.name,
-      from: entry.span?.start ?? 0,
-      to: (entry.span?.start ?? 0) + entry.instance.durationMinutes,
+      key: row.key,
+      name: row.habit.name,
+      from: row.span?.start ?? 0,
+      to: (row.span?.start ?? 0) + (row.duty.instance?.durationMinutes ?? 0),
       continues: false,
-      style: surfaceStyle(entry.habit),
-      occurrence: entry,
+      style: surfaceStyle(row.habit),
+      row,
     }))
 
   return [...fixed, ...timed].sort((left, right) => left.from - right.from)
 })
 
-const untimed = computed(() => occurrences.value.filter((entry) => entry.span === undefined))
+const untimed = computed(() => duties.value.filter((row) => row.span === undefined))
+
+const quitting = computed(() =>
+  habits.value.filter(isNegative).map((habit) => {
+    const stats = negativeStatistics(habit, entries.value, today)
+
+    return { habit, streak: stats.currentCleanStreak, lastRelapse: stats.lastRelapse }
+  }),
+)
 
 /** Yesterday's unanswered negative habits, which is the first thing to greet you. */
 const pendingChecks = computed(() =>
@@ -157,10 +170,31 @@ const pendingChecks = computed(() =>
 /** The measured habit currently being logged, if any. */
 const logging = ref<{
   habit: MeasuredHabit
-  instanceId: Identifier
+  duty: DayDuty
   entryId: Identifier | undefined
   value: number
 } | null>(null)
+
+/**
+ * Makes sure the duty has an occurrence to record against, creating one if it has none.
+ *
+ * A daily habit is due whether or not it was planned, so completing it must not require a
+ * detour through the planner first.
+ */
+async function occurrenceFor(duty: DayDuty): Promise<PlannedInstance> {
+  if (duty.instance) return duty.instance
+
+  const created = planInstance({
+    id: newIdentifier(),
+    habitId: duty.habit.id,
+    date: selectedDay.value,
+    period: duty.habit.frequency.period,
+  })
+
+  await saveInstance.mutateAsync(created)
+
+  return created
+}
 
 async function answerNegative(habit: NegativeHabit, day: CalendarDate, avoided: boolean) {
   await recordEntry.mutateAsync(
@@ -174,38 +208,37 @@ async function answerNegative(habit: NegativeHabit, day: CalendarDate, avoided: 
 }
 
 /**
- * Sets the verdict for one occurrence.
+ * Sets the verdict for one duty.
  *
  * The existing entry's identity is reused so a correction replaces the answer rather than
- * appending beside it. Appending was tried first and is wrong twice over: toggling a
- * checkbox a dozen times would leave a dozen rows, and two answers written in the same
- * millisecond leave "which one counts" decided by storage order, which for a UUID key is
- * effectively random.
+ * appending beside it.
  */
 async function toggleCompleted(
   habit: PositiveHabit,
-  instanceId: Identifier,
+  duty: DayDuty,
   wasDone: boolean,
   entryId: Identifier | undefined,
 ) {
   if (isMeasured(habit)) return
 
+  const instance = await occurrenceFor(duty)
+
   await recordEntry.mutateAsync(
     recordCompleted(entryId ?? newIdentifier(), habit, selectedDay.value, !wasDone, {
-      instanceId,
+      instanceId: instance.id,
     }),
   )
 }
 
 function startLogging(
   habit: PositiveHabit,
-  instanceId: Identifier,
+  duty: DayDuty,
   current: number,
   entryId: Identifier | undefined,
 ) {
   if (!isMeasured(habit)) return
 
-  logging.value = { habit, instanceId, entryId, value: current }
+  logging.value = { habit, duty, entryId, value: current }
 }
 
 async function saveAmount() {
@@ -216,12 +249,13 @@ async function saveAmount() {
   logging.value = null
 
   try {
+    const instance = await occurrenceFor(pending.duty)
     const entry = recordMeasured(
       pending.entryId ?? newIdentifier(),
       pending.habit,
       selectedDay.value,
       Number(pending.value),
-      { instanceId: pending.instanceId },
+      { instanceId: instance.id },
     )
 
     await recordEntry.mutateAsync(entry)
@@ -323,6 +357,58 @@ const OUTCOME_CLASS = {
         </ul>
       </section>
 
+      <section v-if="untimed.length" class="mt-6" aria-labelledby="due-heading">
+        <h2
+          id="due-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        >
+          Due today
+        </h2>
+        <ul class="space-y-2">
+          <li
+            v-for="row in untimed"
+            :key="row.key"
+            class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
+          >
+            <span
+              v-if="row.habit.colour"
+              class="size-8 shrink-0 rounded-full"
+              :style="surfaceStyle(row.habit)"
+              aria-hidden="true"
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-ink">{{ row.habit.name }}</p>
+              <p v-if="row.habit.tracking === 'measured'" class="tabular text-xs text-ink-muted">
+                {{ row.value }} / {{ row.habit.measure.goal }} {{ row.habit.measure.unit }}
+              </p>
+              <p v-else class="text-xs text-ink-muted">
+                {{ row.outcome === 'done' ? 'Done' : 'Not yet' }}
+              </p>
+            </div>
+
+            <button
+              v-if="row.habit.tracking === 'measured'"
+              type="button"
+              :aria-label="`Log ${row.habit.name}`"
+              @click="startLogging(row.habit, row.duty, row.value, row.entryId)"
+            >
+              <ProgressRing :value="row.progress" />
+            </button>
+            <button
+              v-else
+              type="button"
+              class="grid size-9 place-items-center rounded-full border transition-colors"
+              :class="OUTCOME_CLASS[row.outcome ?? 'missed']"
+              :aria-label="`Mark ${row.habit.name}`"
+              :aria-pressed="row.outcome === 'done'"
+              @click="toggleCompleted(row.habit, row.duty, row.outcome === 'done', row.entryId)"
+            >
+              <AppIcon name="check" :size="18" />
+            </button>
+          </li>
+        </ul>
+      </section>
+
       <section class="mt-6" aria-labelledby="schedule-heading">
         <div class="mb-2 flex items-baseline justify-between">
           <h2
@@ -356,31 +442,27 @@ const OUTCOME_CLASS = {
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">{{ item.name }}</p>
                 <p class="tabular text-xs opacity-70">
-                  {{ preferences.formatClock(item.from) }} – {{ preferences.formatClock(item.to) }}
+                  {{ preferences.formatClock(item.from) }} –
+                  {{ preferences.formatClock(item.to) }}
                   <span v-if="item.continues">· continues</span>
                 </p>
               </div>
 
               <button
-                v-if="item.occurrence"
+                v-if="item.row"
                 type="button"
                 class="grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
-                :class="OUTCOME_CLASS[item.occurrence.outcome ?? 'missed']"
+                :class="OUTCOME_CLASS[item.row.outcome ?? 'missed']"
                 :aria-label="`Mark ${item.name}`"
-                :aria-pressed="item.occurrence.outcome === 'done'"
+                :aria-pressed="item.row.outcome === 'done'"
                 @click="
-                  item.occurrence.habit.tracking === 'measured'
-                    ? startLogging(
-                        item.occurrence.habit,
-                        item.occurrence.instance.id,
-                        item.occurrence.value,
-                        item.occurrence.entryId,
-                      )
+                  item.row.habit.tracking === 'measured'
+                    ? startLogging(item.row.habit, item.row.duty, item.row.value, item.row.entryId)
                     : toggleCompleted(
-                        item.occurrence.habit,
-                        item.occurrence.instance.id,
-                        item.occurrence.outcome === 'done',
-                        item.occurrence.entryId,
+                        item.row.habit,
+                        item.row.duty,
+                        item.row.outcome === 'done',
+                        item.row.entryId,
                       )
                 "
               >
@@ -393,62 +475,47 @@ const OUTCOME_CLASS = {
           v-else
           class="rounded-card border border-dashed border-line p-6 text-center text-sm text-ink-muted"
         >
-          Nothing scheduled. Place a habit on this day from Plan, then give it a time.
+          Nothing at a fixed time. Open the timeline to give something an hour.
         </p>
       </section>
 
-      <section v-if="untimed.length" class="mt-6" aria-labelledby="anytime-heading">
+      <!--
+        Quitting habits are never planned and never performed, so they would otherwise leave
+        no trace on the day they are being tracked. Shown as standing, with yesterday's
+        question living in its own section above.
+      -->
+      <section v-if="quitting.length" class="mt-6" aria-labelledby="quitting-heading">
         <h2
-          id="anytime-heading"
+          id="quitting-heading"
           class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
         >
-          Anytime today
+          Quitting
         </h2>
         <ul class="space-y-2">
           <li
-            v-for="entry in untimed"
-            :key="entry.instance.id"
+            v-for="row in quitting"
+            :key="row.habit.id"
             class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
           >
             <span
-              v-if="entry.habit.colour"
-              class="size-8 shrink-0 rounded-full"
-              :style="surfaceStyle(entry.habit)"
-              aria-hidden="true"
-            />
+              class="grid size-8 shrink-0 place-items-center rounded-full"
+              :style="surfaceStyle(row.habit)"
+              :class="row.habit.colour ? '' : 'bg-surface-sunken text-ink-subtle'"
+            >
+              <AppIcon name="ban" :size="16" />
+            </span>
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-ink">{{ entry.habit.name }}</p>
-              <p v-if="entry.habit.tracking === 'measured'" class="tabular text-xs text-ink-muted">
-                {{ entry.value }} / {{ entry.habit.measure.goal }} {{ entry.habit.measure.unit }}
+              <p class="truncate text-sm font-medium text-ink">{{ row.habit.name }}</p>
+              <p class="text-xs text-ink-muted">
+                Judged tomorrow morning<span v-if="row.lastRelapse">
+                  · last relapse {{ row.lastRelapse }}</span
+                >
               </p>
             </div>
-
-            <button
-              v-if="entry.habit.tracking === 'measured'"
-              type="button"
-              :aria-label="`Log ${entry.habit.name}`"
-              @click="startLogging(entry.habit, entry.instance.id, entry.value, entry.entryId)"
-            >
-              <ProgressRing :value="entry.progress" />
-            </button>
-            <button
-              v-else
-              type="button"
-              class="grid size-9 place-items-center rounded-full border transition-colors"
-              :class="OUTCOME_CLASS[entry.outcome ?? 'missed']"
-              :aria-label="`Mark ${entry.habit.name}`"
-              :aria-pressed="entry.outcome === 'done'"
-              @click="
-                toggleCompleted(
-                  entry.habit,
-                  entry.instance.id,
-                  entry.outcome === 'done',
-                  entry.entryId,
-                )
-              "
-            >
-              <AppIcon name="check" :size="18" />
-            </button>
+            <div class="shrink-0 text-right">
+              <p class="tabular text-lg leading-none font-semibold text-ink">{{ row.streak }}</p>
+              <p class="text-[0.625rem] text-ink-subtle">clean days</p>
+            </div>
           </li>
         </ul>
       </section>
