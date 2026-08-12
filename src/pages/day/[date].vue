@@ -16,6 +16,7 @@ import { usePreferences } from '@core/preferences-store'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
+import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
 import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { type DropPoint, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
@@ -24,7 +25,15 @@ import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
 import { useHabits } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
-import { scheduleAt, spanOf, unschedule } from '@modules/planning/domain/planned-instance'
+import {
+  hasReminder,
+  remindBefore,
+  REMINDER_LEAD_TIMES,
+  scheduleAt,
+  spanOf,
+  unschedule,
+  withoutReminder,
+} from '@modules/planning/domain/planned-instance'
 import {
   usePlannedInstances,
   useSaveInstance,
@@ -98,6 +107,7 @@ const timed = computed(() =>
     return [
       {
         ...entry,
+        reminder: hasReminder(entry.instance) ? entry.instance.reminderMinutesBefore : undefined,
         top: span.start * PIXELS_PER_MINUTE,
         height: Math.max(span.durationMinutes * PIXELS_PER_MINUTE, 22),
         label: `${preferences.formatClock(span.start)} – ${preferences.formatClock(span.start + span.durationMinutes)}`,
@@ -156,6 +166,7 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   const existing = instances.value.find((instance) => instance.id === payload.instanceId)
 
   hoverTime.value = null
+  swallowNextClick.value = true
 
   if (!existing) return
 
@@ -174,6 +185,61 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
 
   await saveInstance.mutateAsync(scheduleAt(existing, minutes))
   feedback.notify(`${payload.habit.name} at ${preferences.formatClock(minutes)}`, 'success')
+}
+
+/** The occurrence whose reminder is being chosen, if any. */
+const reminderFor = ref<Identifier | null>(null)
+
+/**
+ * A drag ends with a click when the finger lifts.
+ *
+ * Left alone it would open the reminder sheet every time a card is moved, so the click that
+ * follows a real drag is swallowed.
+ */
+const swallowNextClick = ref(false)
+
+const reminderActions = computed<SheetAction[]>(() => [
+  ...REMINDER_LEAD_TIMES.map((minutes) => ({
+    key: String(minutes),
+    label: minutes === 0 ? 'At the time' : `${minutes} minutes before`,
+  })),
+  { key: 'none', label: 'No reminder', tone: 'danger' as const },
+])
+
+function openReminder(instanceId: Identifier, event: MouseEvent) {
+  if (swallowNextClick.value) {
+    swallowNextClick.value = false
+    event.preventDefault()
+
+    return
+  }
+
+  reminderFor.value = instanceId
+}
+
+async function chooseReminder(key: string) {
+  const instanceId = reminderFor.value
+
+  reminderFor.value = null
+
+  const existing = instances.value.find((instance) => instance.id === instanceId)
+
+  if (!existing) return
+
+  if (key === 'none') {
+    await saveInstance.mutateAsync(withoutReminder(existing))
+    feedback.notify('Reminder removed')
+
+    return
+  }
+
+  const minutes = Number(key)
+
+  await saveInstance.mutateAsync(remindBefore(existing, minutes))
+  feedback.notify(
+    minutes === 0 ? 'Reminder set for the start' : `Reminder set ${minutes} minutes before`,
+    'success',
+  )
 }
 
 function trackHover(event: PointerEvent) {
@@ -261,6 +327,7 @@ function trackHover(event: PointerEvent) {
 
       <p class="mt-4 mb-2 text-xs text-ink-subtle">
         Hold a card, then drop it on the hour you want. Times snap to {{ SNAP_MINUTES }} minutes.
+        Tap a card to set a reminder.
       </p>
 
       <div class="flex">
@@ -330,14 +397,28 @@ function trackHover(event: PointerEvent) {
             <div
               class="h-full overflow-hidden rounded-cell border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
               :style="surfaceStyle(entry.habit)"
+              role="button"
+              :aria-label="`Reminder for ${entry.habit.name}`"
+              @click="openReminder(entry.instance.id, $event)"
             >
-              <p class="truncate text-xs font-medium">{{ entry.habit.name }}</p>
+              <p class="flex items-center gap-1 truncate text-xs font-medium">
+                <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />
+                {{ entry.habit.name }}
+              </p>
               <p class="tabular truncate text-[0.625rem] opacity-75">{{ entry.label }}</p>
             </div>
           </DraggableItem>
         </div>
       </div>
     </template>
+
+    <ActionSheet
+      :open="reminderFor !== null"
+      title="Remind me"
+      :actions="reminderActions"
+      @select="chooseReminder"
+      @dismiss="reminderFor = null"
+    />
 
     <DragGhost
       v-if="drag.isDragging.value"

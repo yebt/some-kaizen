@@ -197,6 +197,11 @@ function readInstance(raw: unknown): PlannedInstance {
   const value = asRecord(raw, 'An occurrence is not an object.')
   const startsAt = value.startsAt === undefined ? undefined : readTime(value.startsAt, 'occurrence')
 
+  const reminder =
+    value.reminderMinutesBefore === undefined
+      ? undefined
+      : asNumber(value.reminderMinutesBefore, 'reminder')
+
   const instance: PlannedInstance = {
     id: readId(value.id, 'occurrence'),
     habitId: readId(value.habitId, 'occurrence'),
@@ -205,7 +210,13 @@ function readInstance(raw: unknown): PlannedInstance {
     durationMinutes: assertDuration(asNumber(value.durationMinutes, 'duration')),
   }
 
-  return startsAt === undefined ? instance : { ...instance, startsAt }
+  if (startsAt === undefined) return instance
+
+  // A reminder only means anything with a start to count back from, so it is dropped with
+  // the time rather than restored onto an occurrence that has none.
+  return reminder === undefined
+    ? { ...instance, startsAt }
+    : { ...instance, startsAt, reminderMinutesBefore: reminder }
 }
 
 function readBlock(raw: unknown): BlockTime {

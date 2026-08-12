@@ -7,6 +7,10 @@ import { frequency } from '@modules/habits/domain/habit'
 
 import {
   countPlacedIn,
+  hasReminder,
+  InvalidReminderError,
+  remindBefore,
+  reminderOffsetMinutes,
   DEFAULT_INSTANCE_DURATION_MINUTES,
   isScheduled,
   moveToDate,
@@ -16,6 +20,7 @@ import {
   scheduleAt,
   spanOf,
   unschedule,
+  withoutReminder,
 } from './planned-instance'
 
 const HABIT = newIdentifier()
@@ -182,5 +187,63 @@ describe('remainingPlacements', () => {
   it('never goes negative when more were placed than required', () => {
     // Over-placing is allowed; it must not read as a negative backlog.
     expect(remainingPlacements(frequency('weekly', 2), 5)).toBe(0)
+  })
+})
+
+describe('reminders', () => {
+  function scheduled(at = 450) {
+    return scheduleAt(anInstance(), timeOfDay(at))
+  }
+
+  it('attaches a lead time to a scheduled occurrence', () => {
+    expect(remindBefore(scheduled(), 15).reminderMinutesBefore).toBe(15)
+  })
+
+  it('accepts zero, which means at the time itself', () => {
+    expect(remindBefore(scheduled(), 0).reminderMinutesBefore).toBe(0)
+  })
+
+  it('refuses an occurrence with no time rather than doing nothing quietly', () => {
+    // A reminder that silently never fires is worse than one you were told you cannot set.
+    expect(() => remindBefore(anInstance(), 15)).toThrow(InvalidReminderError)
+  })
+
+  it.each([-5, 1.5, 1441, Number.NaN])('refuses the lead time %s', (minutes) => {
+    expect(() => remindBefore(scheduled(), minutes)).toThrow(InvalidReminderError)
+  })
+
+  it('reports when the reminder falls', () => {
+    expect(reminderOffsetMinutes(remindBefore(scheduled(450), 15))).toBe(435)
+  })
+
+  it('goes negative when the reminder belongs to the previous evening', () => {
+    // An hour before 00:30 is 23:30 the night before. Folding that onto the clock would
+    // give 23:30 of the same day and fire seventeen hours late.
+    expect(reminderOffsetMinutes(remindBefore(scheduled(30), 60))).toBe(-30)
+  })
+
+  it('has no offset without a reminder', () => {
+    expect(reminderOffsetMinutes(scheduled())).toBeUndefined()
+  })
+
+  it('is removable', () => {
+    const withReminder = remindBefore(scheduled(), 15)
+
+    expect(hasReminder(withoutReminder(withReminder))).toBe(false)
+  })
+
+  it('loses the reminder when the time is taken away', () => {
+    // A reminder counts back from a start that no longer exists.
+    const withReminder = remindBefore(scheduled(), 15)
+
+    expect(unschedule(withReminder).reminderMinutesBefore).toBeUndefined()
+  })
+
+  it('loses the reminder when the occurrence moves to another day', () => {
+    const withReminder = remindBefore(scheduled(), 15)
+
+    expect(
+      moveToDate(withReminder, calendarDate('2026-03-13'), 'weekly').reminderMinutesBefore,
+    ).toBeUndefined()
   })
 })

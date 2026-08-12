@@ -3,6 +3,7 @@ import type { Identifier } from '@shared/domain/identifier'
 import {
   assertDuration,
   interval,
+  MINUTES_PER_DAY,
   type TimeInterval,
   type TimeOfDay,
 } from '@shared/domain/time-of-day'
@@ -30,6 +31,14 @@ export interface PlannedInstance {
   readonly periodKey: string
   readonly startsAt?: TimeOfDay
   readonly durationMinutes: number
+  /**
+   * How many minutes before the start to be reminded.
+   *
+   * Only meaningful once the occurrence has a time: there is no "before" to count back from
+   * when something merely happens sometime today. Zero is a legitimate value and means "at
+   * the time", which is why this is optional rather than defaulting to zero.
+   */
+  readonly reminderMinutesBefore?: number
 }
 
 export interface PlanInstanceDraft {
@@ -59,9 +68,14 @@ export function scheduleAt(instance: PlannedInstance, startsAt: TimeOfDay): Plan
   return { ...instance, startsAt }
 }
 
-/** Returns the occurrence to "sometime that day" without moving it off the day. */
+/**
+ * Returns the occurrence to "sometime that day" without moving it off the day.
+ *
+ * The reminder goes with the time, because a reminder counts back from a start that no
+ * longer exists.
+ */
 export function unschedule(instance: PlannedInstance): PlannedInstance {
-  const { startsAt: _discarded, ...rest } = instance
+  const { startsAt: _discardedTime, reminderMinutesBefore: _discardedReminder, ...rest } = instance
 
   return rest
 }
@@ -90,6 +104,60 @@ export function spanOf(instance: PlannedInstance): TimeInterval | undefined {
   if (instance.startsAt === undefined) return undefined
 
   return interval(instance.startsAt, instance.durationMinutes)
+}
+
+/** The lead times offered, in minutes. Zero means at the time itself. */
+export const REMINDER_LEAD_TIMES: readonly number[] = [0, 5, 10, 15, 30, 60]
+
+export class InvalidReminderError extends Error {
+  constructor(readonly minutesBefore: number) {
+    super(`A reminder must be a whole number of minutes, from 0 to ${MINUTES_PER_DAY}.`)
+    this.name = 'InvalidReminderError'
+  }
+}
+
+/**
+ * Attaches a reminder to an occurrence that has a time.
+ *
+ * Refused on an unscheduled occurrence rather than silently ignored, because a reminder
+ * that quietly does nothing is worse than one you were told you could not set.
+ */
+export function remindBefore(instance: PlannedInstance, minutesBefore: number): PlannedInstance {
+  if (instance.startsAt === undefined) {
+    throw new InvalidReminderError(minutesBefore)
+  }
+
+  if (!Number.isInteger(minutesBefore) || minutesBefore < 0 || minutesBefore > MINUTES_PER_DAY) {
+    throw new InvalidReminderError(minutesBefore)
+  }
+
+  return { ...instance, reminderMinutesBefore: minutesBefore }
+}
+
+export function withoutReminder(instance: PlannedInstance): PlannedInstance {
+  const { reminderMinutesBefore: _cleared, ...rest } = instance
+
+  return rest
+}
+
+export function hasReminder(instance: PlannedInstance): boolean {
+  return instance.reminderMinutesBefore !== undefined && instance.startsAt !== undefined
+}
+
+/**
+ * When the reminder falls, as minutes from the start of the occurrence's own day.
+ *
+ * Deliberately allowed to go negative, which means the reminder belongs to the previous
+ * day: an hour before a 00:30 start is 23:30 the night before. Folding that onto the clock
+ * would produce 23:30 of the same day and fire seventeen hours late, so whatever schedules
+ * these has to see the negative rather than be handed a tidy lie.
+ */
+export function reminderOffsetMinutes(instance: PlannedInstance): number | undefined {
+  if (instance.startsAt === undefined || instance.reminderMinutesBefore === undefined) {
+    return undefined
+  }
+
+  return instance.startsAt - instance.reminderMinutesBefore
 }
 
 export function countPlacedIn(instances: readonly PlannedInstance[], periodKey: string): number {

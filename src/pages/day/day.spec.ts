@@ -199,3 +199,80 @@ describe('a bad date in the url', () => {
     expect(wrapper.find('h1').text()).toBe('Day')
   })
 })
+
+describe('reminders', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  function scheduledMeditation() {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({ id: newIdentifier(), habitId: habit.id, date: DAY, period: 'daily' }),
+      timeOfDay(7 * 60),
+    )
+
+    return { habit, instance }
+  }
+
+  it('offers lead times when a scheduled card is tapped', async () => {
+    const { habit, instance } = scheduledMeditation()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const wrapper = await renderDay()
+
+    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
+    await flushPromises()
+
+    const text = wrapper.find('dialog').text()
+
+    expect(text).toContain('At the time')
+    expect(text).toContain('15 minutes before')
+  })
+
+  it('stores the chosen lead time', async () => {
+    const { habit, instance } = scheduledMeditation()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const wrapper = await renderDay()
+
+    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('dialog button')
+      .find((node) => node.text() === '15 minutes before')
+      ?.trigger('click')
+    await settle()
+
+    expect((await persistence.instances.all())[0]?.reminderMinutesBefore).toBe(15)
+  })
+
+  it('removes a reminder again', async () => {
+    const { habit, instance } = scheduledMeditation()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [{ ...instance, reminderMinutesBefore: 15 }],
+    })
+
+    const wrapper = await renderDay()
+
+    await wrapper.find('[aria-label="Reminder for Meditate"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('dialog button')
+      .find((node) => node.text() === 'No reminder')
+      ?.trigger('click')
+    await settle()
+
+    expect((await persistence.instances.all())[0]?.reminderMinutesBefore).toBeUndefined()
+  })
+})
