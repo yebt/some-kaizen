@@ -10,6 +10,7 @@ import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { calendarDate, todayIn } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
+import { PALETTE } from '@shared/domain/appearance'
 import {
   createCompletedHabit,
   createMeasuredHabit,
@@ -21,6 +22,7 @@ import {
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 
+import EditHabitPage from './[id].vue'
 import HabitsPage from './index.vue'
 import NewHabitPage from './new.vue'
 
@@ -207,5 +209,109 @@ describe('creating a habit', () => {
     await flushPromises()
 
     expect(await persistence.habits.all()).toEqual([])
+  })
+})
+
+describe('editing a habit', () => {
+  async function renderEdit(habitId: string) {
+    const instance = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/habits', component: HabitsPage },
+        { path: '/habits/:id', component: EditHabitPage },
+      ],
+    })
+
+    await instance.push(`/habits/${habitId}`)
+    await instance.isReady()
+
+    const wrapper = mount(EditHabitPage, {
+      global: {
+        plugins: [createPinia(), PiniaColada, instance],
+        provide: { [PERSISTENCE_KEY as symbol]: persistence },
+      },
+    })
+
+    await flushPromises()
+
+    return wrapper
+  }
+
+  function running() {
+    return createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Run',
+      frequency: frequency('weekly', 2),
+      createdOn: CREATED_ON,
+    })
+  }
+
+  it('prefills the form with what is stored', async () => {
+    const habit = running()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderEdit(habit.id)
+
+    expect((wrapper.find('#habit-name').element as HTMLInputElement).value).toBe('Run')
+  })
+
+  it('keeps the identity and the creation day, so the recorded history still belongs to it', async () => {
+    const habit = running()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderEdit(habit.id)
+
+    await wrapper.find('#habit-name').setValue('Jog')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const stored = await persistence.habits.all()
+
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ id: habit.id, name: 'Jog', createdOn: habit.createdOn })
+  })
+
+  it('stores a chosen colour and pattern', async () => {
+    const habit = running()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderEdit(habit.id)
+
+    await wrapper.find(`[aria-label="Colour ${PALETTE[0]}"]`).trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text() === 'Dots')
+      ?.trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).toMatchObject({
+      colour: PALETTE[0],
+      pattern: 'dots',
+    })
+  })
+
+  it('keeps an archived habit archived when it is edited', async () => {
+    const habit = { ...running(), archivedOn: calendarDate('2026-05-05') }
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderEdit(habit.id)
+
+    await wrapper.find('#habit-name').setValue('Jog')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]?.archivedOn).toBe('2026-05-05')
+  })
+
+  it('says so plainly when the habit is gone', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    expect((await renderEdit(newIdentifier())).text()).toContain('no longer exists')
   })
 })

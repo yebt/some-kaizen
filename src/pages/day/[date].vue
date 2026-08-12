@@ -14,6 +14,7 @@ import type { Identifier } from '@shared/domain/identifier'
 import { formatTime, snapToStep, type TimeOfDay } from '@shared/domain/time-of-day'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import { surfaceStyle } from '@shared/ui/appearance-style'
 import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { type DropPoint, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
@@ -111,6 +112,7 @@ const bands = computed(() =>
     top: occurrence.segment.from * PIXELS_PER_MINUTE,
     height: (occurrence.segment.to - occurrence.segment.from) * PIXELS_PER_MINUTE,
     continues: occurrence.continuesFromPreviousDay || occurrence.continuesIntoNextDay,
+    style: surfaceStyle(occurrence.block),
   })),
 )
 
@@ -231,6 +233,7 @@ function trackHover(event: PointerEvent) {
             >
               <span
                 class="block rounded-full border border-line bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
+                :style="surfaceStyle(entry.habit)"
               >
                 {{ entry.habit.name }}
               </span>
@@ -281,9 +284,9 @@ function trackHover(event: PointerEvent) {
             v-for="band in bands"
             :key="band.key"
             class="absolute inset-x-0 bg-accent/70 px-2 py-1"
-            :style="{ top: `${band.top}px`, height: `${band.height}px` }"
+            :style="{ top: `${band.top}px`, height: `${band.height}px`, ...band.style }"
           >
-            <p class="text-[0.625rem] font-medium text-accent-ink">
+            <p class="text-[0.625rem] font-medium">
               {{ band.name }}<span v-if="band.continues"> ·</span>
             </p>
           </div>
@@ -311,9 +314,10 @@ function trackHover(event: PointerEvent) {
           >
             <div
               class="h-full overflow-hidden rounded-cell border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
+              :style="surfaceStyle(entry.habit)"
             >
-              <p class="truncate text-xs font-medium text-ink">{{ entry.habit.name }}</p>
-              <p class="tabular truncate text-[0.625rem] text-ink-muted">{{ entry.label }}</p>
+              <p class="truncate text-xs font-medium">{{ entry.habit.name }}</p>
+              <p class="tabular truncate text-[0.625rem] opacity-75">{{ entry.label }}</p>
             </div>
           </DraggableItem>
         </div>

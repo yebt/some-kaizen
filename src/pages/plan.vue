@@ -16,6 +16,7 @@ import { type Identifier, newIdentifier } from '@shared/domain/identifier'
 import { formatTime } from '@shared/domain/time-of-day'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import { surfaceStyle } from '@shared/ui/appearance-style'
 import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
@@ -204,9 +205,10 @@ function shiftWeek(offset: number) {
             >
               <span
                 class="flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card transition-transform active:scale-95"
+                :style="surfaceStyle(entry.habit)"
               >
                 {{ entry.habit.name }}
-                <span class="tabular rounded-full bg-accent px-1.5 py-0.5 text-accent-ink">
+                <span class="tabular rounded-full bg-black/15 px-1.5 py-0.5">
                   {{ entry.remaining }}
                 </span>
               </span>
@@ -256,6 +258,7 @@ function shiftWeek(offset: number) {
             <li v-for="item in row.placed" :key="item.instance.id">
               <span
                 class="flex items-center gap-1 rounded-full bg-surface-sunken py-1 pr-1 pl-2.5 text-xs font-medium text-ink"
+                :style="surfaceStyle(item.habit)"
               >
                 <DraggableItem
                   @press="

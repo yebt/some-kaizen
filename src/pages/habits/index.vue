@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { addDays, todayIn } from '@shared/domain/calendar-date'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import { surfaceStyle } from '@shared/ui/appearance-style'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import {
   archiveHabit,
@@ -137,6 +138,12 @@ async function onDelete(habit: Habit) {
         :class="row.isArchived ? 'opacity-60' : ''"
       >
         <div class="flex items-start gap-3">
+          <span
+            v-if="row.habit.colour"
+            class="mt-0.5 size-8 shrink-0 rounded-full border border-line"
+            :style="surfaceStyle(row.habit)"
+            aria-hidden="true"
+          />
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-ink">
               {{ row.habit.name }}
@@ -155,6 +162,12 @@ async function onDelete(habit: Habit) {
         </div>
 
         <div class="mt-3 flex gap-2">
+          <RouterLink
+            :to="`/habits/${row.habit.id}`"
+            class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-ink"
+          >
+            Edit
+          </RouterLink>
           <button
             v-if="!row.isArchived"
             type="button"

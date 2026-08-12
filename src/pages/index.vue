@@ -15,6 +15,7 @@ import { formatTime } from '@shared/domain/time-of-day'
 import AppDialog from '@shared/ui/AppDialog.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import { surfaceStyle } from '@shared/ui/appearance-style'
 import DateStrip from '@shared/ui/DateStrip.vue'
 import ProgressRing from '@shared/ui/ProgressRing.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
@@ -121,6 +122,7 @@ const schedule = computed(() => {
     from: occurrence.segment.from,
     to: occurrence.segment.to,
     continues: occurrence.continuesFromPreviousDay || occurrence.continuesIntoNextDay,
+    style: surfaceStyle(occurrence.block),
     occurrence: undefined,
   }))
 
@@ -133,6 +135,7 @@ const schedule = computed(() => {
       from: entry.span?.start ?? 0,
       to: (entry.span?.start ?? 0) + entry.instance.durationMinutes,
       continues: false,
+      style: surfaceStyle(entry.habit),
       occurrence: entry,
     }))
 
@@ -347,6 +350,7 @@ const OUTCOME_CLASS = {
                   ? 'border-transparent bg-accent text-accent-ink'
                   : 'border-line bg-surface text-ink shadow-card'
               "
+              :style="item.style"
             >
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">{{ item.name }}</p>
@@ -405,6 +409,12 @@ const OUTCOME_CLASS = {
             :key="entry.instance.id"
             class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
           >
+            <span
+              v-if="entry.habit.colour"
+              class="size-8 shrink-0 rounded-full"
+              :style="surfaceStyle(entry.habit)"
+              aria-hidden="true"
+            />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium text-ink">{{ entry.habit.name }}</p>
               <p v-if="entry.habit.tracking === 'measured'" class="tabular text-xs text-ink-muted">

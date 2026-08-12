@@ -1,4 +1,6 @@
+import { type Appearance, patternName } from '@shared/domain/appearance'
 import { calendarDate, type CalendarDate } from '@shared/domain/calendar-date'
+import { hexColour } from '@shared/domain/colour'
 import { identifier, type Identifier } from '@shared/domain/identifier'
 import { assertDuration, timeOfDay, type TimeOfDay } from '@shared/domain/time-of-day'
 import { createBlockTime, type BlockTime } from '@modules/block-time/domain/block-time'
@@ -91,14 +93,26 @@ function readHabit(raw: unknown): Habit {
   const archivedOn =
     value.archivedOn === undefined ? undefined : readDate(value.archivedOn, 'habit')
 
-  const built = buildHabit(value, { id, name, createdOn })
+  const built = buildHabit(value, { id, name, createdOn, ...readAppearance(value) })
 
   return archivedOn ? { ...built, archivedOn } : built
 }
 
+/** Colour and pattern are optional, and each is validated only when it is actually present. */
+function readAppearance(value: Record<string, unknown>): Appearance {
+  return {
+    ...(value.colour === undefined
+      ? {}
+      : { colour: hexColour(asString(value.colour, 'A colour must be text.')) }),
+    ...(value.pattern === undefined
+      ? {}
+      : { pattern: patternName(asString(value.pattern, 'A pattern must be text.')) }),
+  }
+}
+
 function buildHabit(
   value: Record<string, unknown>,
-  core: { id: Identifier; name: string; createdOn: CalendarDate },
+  core: { id: Identifier; name: string; createdOn: CalendarDate } & Appearance,
 ): Habit {
   if (value.polarity === 'negative') return createNegativeHabit(core)
 
@@ -202,10 +216,9 @@ function readBlock(raw: unknown): BlockTime {
     value.archivedOn === undefined ? undefined : readDate(value.archivedOn, 'block')
 
   const block = createBlockTime({
+    ...readAppearance(value),
     id: readId(value.id, 'block'),
     name: asString(value.name, 'A block needs a name.'),
-    colour:
-      value.colour === undefined ? undefined : asString(value.colour, 'A colour must be text.'),
     span: {
       start: readTime(span.start, 'block'),
       durationMinutes: assertDuration(asNumber(span.durationMinutes, 'duration')),

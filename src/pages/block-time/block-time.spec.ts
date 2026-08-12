@@ -11,10 +11,12 @@ import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
+import { PALETTE } from '@shared/domain/appearance'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 
+import EditBlockPage from './[id].vue'
 import BlockTimePage from './index.vue'
 import NewBlockPage from './new.vue'
 
@@ -59,6 +61,15 @@ async function render(component: typeof BlockTimePage | typeof NewBlockPage) {
   await flushPromises()
 
   return wrapper
+}
+
+/** Reads a rendered input, failing loudly rather than optional-chaining into a cast. */
+function inputValue(wrapper: ReturnType<typeof mount>, selector: string, index: number): string {
+  const node = wrapper.findAll(selector)[index]
+
+  if (!node) throw new Error(`No ${selector} found at index ${index}.`)
+
+  return (node.element as HTMLInputElement).value
 }
 
 function workBlock() {
@@ -223,5 +234,128 @@ describe('creating a block', () => {
 
     expect(wrapper.find('[role="alert"]').exists()).toBe(true)
     expect(await persistence.blocks.all()).toEqual([])
+  })
+})
+
+describe('editing a block', () => {
+  async function renderEdit(blockId: string) {
+    const instance = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/block-time', component: BlockTimePage },
+        { path: '/block-time/:id', component: EditBlockPage },
+      ],
+    })
+
+    await instance.push(`/block-time/${blockId}`)
+    await instance.isReady()
+
+    const wrapper = mount(EditBlockPage, {
+      global: {
+        plugins: [createPinia(), PiniaColada, instance],
+        provide: { [PERSISTENCE_KEY as symbol]: persistence },
+      },
+    })
+
+    await flushPromises()
+
+    return wrapper
+  }
+
+  it('prefills the span as two clock times', async () => {
+    const block = workBlock()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [block] })
+
+    const wrapper = await renderEdit(block.id)
+
+    expect(inputValue(wrapper, 'input[type="time"]', 0)).toBe('09:00')
+    expect(inputValue(wrapper, 'input[type="time"]', 1)).toBe('17:00')
+  })
+
+  it('prefills a span crossing midnight without turning it backwards', async () => {
+    const sleep = createBlockTime({
+      id: newIdentifier(),
+      name: 'Sleep',
+      span: interval(timeOfDay(23 * 60), 8 * 60),
+      weekdays: [1, 2, 3, 4, 5, 6, 7],
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [sleep] })
+
+    const wrapper = await renderEdit(sleep.id)
+
+    expect(inputValue(wrapper, 'input[type="time"]', 0)).toBe('23:00')
+    expect(inputValue(wrapper, 'input[type="time"]', 1)).toBe('07:00')
+  })
+
+  it('saves an unchanged block without reporting it as clashing with itself', async () => {
+    // The overlap check skips the block's own stored copy, which is exactly what keeps an
+    // edit that does not move the block saveable.
+    const block = workBlock()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [block] })
+
+    const wrapper = await renderEdit(block.id)
+
+    await wrapper.find('#block-name').setValue('Office')
+    await wrapper.find('form').trigger('submit')
+    await settle()
+
+    const stored = await persistence.blocks.all()
+
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ id: block.id, name: 'Office' })
+  })
+
+  it('still refuses a move that would collide with another block', async () => {
+    const work = workBlock()
+    const gym = createBlockTime({
+      id: newIdentifier(),
+      name: 'Gym',
+      span: interval(timeOfDay(18 * 60), 60),
+      weekdays: [1, 2, 3, 4, 5],
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [work, gym] })
+
+    const wrapper = await renderEdit(gym.id)
+
+    await wrapper.findAll('input[type="time"]')[0]?.setValue('10:00')
+    await wrapper.findAll('input[type="time"]')[1]?.setValue('11:00')
+    await wrapper.find('form').trigger('submit')
+    await settle()
+
+    expect(wrapper.find('[role="alert"]').text()).toContain('Work')
+  })
+
+  it('stores a chosen colour and pattern', async () => {
+    const block = workBlock()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, blocks: [block] })
+
+    const wrapper = await renderEdit(block.id)
+
+    await wrapper.find(`[aria-label="Colour ${PALETTE[1]}"]`).trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text() === 'Stripes')
+      ?.trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await settle()
+
+    expect((await persistence.blocks.all())[0]).toMatchObject({
+      colour: PALETTE[1],
+      pattern: 'stripes',
+    })
+  })
+
+  it('says so plainly when the block is gone', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    expect((await renderEdit(newIdentifier())).text()).toContain('no longer exists')
   })
 })

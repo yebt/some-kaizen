@@ -1,3 +1,4 @@
+import type { Appearance } from '@shared/domain/appearance'
 import { type CalendarDate, isAfter, isBefore } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
 
@@ -41,7 +42,7 @@ export type PositiveOutcome = 'done' | 'partial' | 'missed'
 /** How a negative habit ended up on a given day, answered the following morning. */
 export type NegativeOutcome = 'avoided' | 'relapsed'
 
-interface HabitCore {
+interface HabitCore extends Appearance {
   readonly id: Identifier
   readonly name: string
   readonly createdOn: CalendarDate
@@ -147,28 +148,33 @@ export function outcomeFor(value: Measure, recorded: number): PositiveOutcome {
   return 'missed'
 }
 
-export interface CompletedHabitDraft {
+export interface CompletedHabitDraft extends Appearance {
   readonly id: Identifier
   readonly name: string
   readonly frequency: Frequency
   readonly createdOn: CalendarDate
+  /** Kept when editing, so re-saving a retired habit does not quietly revive it. */
+  readonly archivedOn?: CalendarDate
 }
 
 export interface MeasuredHabitDraft extends CompletedHabitDraft {
   readonly measure: Measure
 }
 
-export interface NegativeHabitDraft {
+export interface NegativeHabitDraft extends Appearance {
   readonly id: Identifier
   readonly name: string
   readonly createdOn: CalendarDate
+  readonly archivedOn?: CalendarDate
 }
 
 export function createCompletedHabit(draft: CompletedHabitDraft): CompletedHabit {
   return {
+    ...appearanceOf(draft),
     id: draft.id,
     name: habitName(draft.name),
     createdOn: draft.createdOn,
+    ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
     polarity: 'positive',
     tracking: 'completed',
     frequency: draft.frequency,
@@ -177,9 +183,11 @@ export function createCompletedHabit(draft: CompletedHabitDraft): CompletedHabit
 
 export function createMeasuredHabit(draft: MeasuredHabitDraft): MeasuredHabit {
   return {
+    ...appearanceOf(draft),
     id: draft.id,
     name: habitName(draft.name),
     createdOn: draft.createdOn,
+    ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
     polarity: 'positive',
     tracking: 'measured',
     frequency: draft.frequency,
@@ -189,9 +197,11 @@ export function createMeasuredHabit(draft: MeasuredHabitDraft): MeasuredHabit {
 
 export function createNegativeHabit(draft: NegativeHabitDraft): NegativeHabit {
   return {
+    ...appearanceOf(draft),
     id: draft.id,
     name: habitName(draft.name),
     createdOn: draft.createdOn,
+    ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
     polarity: 'negative',
   }
 }
@@ -228,6 +238,14 @@ export function isNegative(habit: Habit): habit is NegativeHabit {
 
 export function isMeasured(habit: Habit): habit is MeasuredHabit {
   return habit.polarity === 'positive' && habit.tracking === 'measured'
+}
+
+/** Only the parts that were actually chosen, so an unstyled habit stores no empty fields. */
+function appearanceOf(draft: Appearance): Appearance {
+  return {
+    ...(draft.colour ? { colour: draft.colour } : {}),
+    ...(draft.pattern ? { pattern: draft.pattern } : {}),
+  }
 }
 
 function habitName(value: string): string {

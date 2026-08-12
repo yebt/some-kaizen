@@ -1,3 +1,4 @@
+import type { Appearance } from '@shared/domain/appearance'
 import {
   addDays,
   type CalendarDate,
@@ -17,10 +18,9 @@ import { segmentsOf, type TimeInterval, type TimeSegment } from '@shared/domain/
  * time, and letting that be representable would make the day view lie about how much room
  * is actually left.
  */
-export interface BlockTime {
+export interface BlockTime extends Appearance {
   readonly id: Identifier
   readonly name: string
-  readonly colour?: string
   readonly span: TimeInterval
   /** ISO weekdays the block recurs on, sorted ascending. */
   readonly weekdays: readonly Weekday[]
@@ -59,24 +59,43 @@ export class BlockTimeOverlapError extends Error {
   }
 }
 
-export interface BlockTimeDraft {
+export interface BlockTimeDraft extends Appearance {
   readonly id: Identifier
   readonly name: string
-  readonly colour?: string
   readonly span: TimeInterval
   readonly weekdays: readonly Weekday[]
   readonly createdOn: CalendarDate
+  /** Kept when editing, so re-saving a retired block does not quietly revive it. */
+  readonly archivedOn?: CalendarDate
 }
 
 export function createBlockTime(draft: BlockTimeDraft): BlockTime {
   return {
+    // Only the parts actually chosen, so an unstyled block stores no empty fields.
+    ...(draft.colour ? { colour: draft.colour } : {}),
+    ...(draft.pattern ? { pattern: draft.pattern } : {}),
     id: draft.id,
-    name: draft.name.trim(),
-    colour: draft.colour,
+    name: blockName(draft.name),
     span: draft.span,
     weekdays: normaliseWeekdays(draft.weekdays),
     createdOn: draft.createdOn,
+    ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
   }
+}
+
+export class InvalidBlockNameError extends Error {
+  constructor(readonly value: string) {
+    super('A block needs a name.')
+    this.name = 'InvalidBlockNameError'
+  }
+}
+
+function blockName(value: string): string {
+  const trimmed = value.trim()
+
+  if (!trimmed) throw new InvalidBlockNameError(value)
+
+  return trimmed
 }
 
 /**

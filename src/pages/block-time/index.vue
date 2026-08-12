@@ -5,6 +5,7 @@ import type { Weekday } from '@shared/domain/calendar-date'
 import { endOf, formatTime } from '@shared/domain/time-of-day'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import { surfaceStyle } from '@shared/ui/appearance-style'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import type { BlockTime } from '@modules/block-time/domain/block-time'
 import {
@@ -101,19 +102,33 @@ async function onDelete(block: BlockTime) {
         :key="block.id"
         class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
       >
+        <span
+          v-if="block.colour"
+          class="size-8 shrink-0 rounded-full border border-line"
+          :style="surfaceStyle(block)"
+          aria-hidden="true"
+        />
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium text-ink">{{ block.name }}</p>
           <p class="tabular text-xs text-ink-muted">{{ describeSpan(block) }}</p>
           <p class="mt-0.5 text-xs text-ink-subtle">{{ describeDays(block) }}</p>
         </div>
-        <button
-          type="button"
-          class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-relapse"
-          :aria-label="`Remove ${block.name}`"
-          @click="onDelete(block)"
-        >
-          Remove
-        </button>
+        <div class="flex shrink-0 flex-col gap-1.5">
+          <RouterLink
+            :to="`/block-time/${block.id}`"
+            class="rounded-full border border-line px-3 py-1.5 text-center text-xs font-medium text-ink-muted hover:text-ink"
+          >
+            Edit
+          </RouterLink>
+          <button
+            type="button"
+            class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-relapse"
+            :aria-label="`Remove ${block.name}`"
+            @click="onDelete(block)"
+          >
+            Remove
+          </button>
+        </div>
       </li>
     </ul>
   </div>

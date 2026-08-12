@@ -45,6 +45,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/block-time/[id]': RouteRecordInfo<
+      '/block-time/[id]',
+      '/block-time/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
+      | never
+    >,
     '/block-time/new': RouteRecordInfo<
       '/block-time/new',
       '/block-time/new',
@@ -64,6 +71,13 @@ declare module 'vue-router/auto-routes' {
       '/habits',
       Record<never, never>,
       Record<never, never>,
+      | never
+    >,
+    '/habits/[id]': RouteRecordInfo<
+      '/habits/[id]',
+      '/habits/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
       | never
     >,
     '/habits/new': RouteRecordInfo<
@@ -116,6 +130,14 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
+    'src/pages/block-time/[id].vue': {
+      routes:
+        | '/block-time/[id]'
+      views:
+        | never
+      pathParamNames:
+        | 'id'
+    }
     'src/pages/block-time/new.vue': {
       routes:
         | '/block-time/new'
@@ -139,6 +161,14 @@ declare module 'vue-router/auto-routes' {
         | never
       pathParamNames:
         | never
+    }
+    'src/pages/habits/[id].vue': {
+      routes:
+        | '/habits/[id]'
+      views:
+        | never
+      pathParamNames:
+        | 'id'
     }
     'src/pages/habits/new.vue': {
       routes:
