@@ -73,14 +73,6 @@ There is one now, and it fails on exactly the reported bug when the fix is undon
 Raised in one session and deliberately not attempted in it, because several of them were
 introduced by fixing something else in the same sitting.
 
-**Refusing an impossible swipe does not work.** Marking done twice and taking back a day
-nobody recorded both still go through, and the shake is never seen. The condition reads
-`row.outcome`, which is not `undefined` as often as the code assumes.
-
-**Finished habits want an accordion, not a counter.** A row below the outstanding ones —
-"4 done" — that opens them in place, rather than a number in the header that toggles the whole
-list. The list should be the work left, with the finished ones reachable directly underneath.
-
 **Swiping a card off the ruler, right to left, should unschedule it.** Now reachable two
 other ways — the sheet on the card, and the drop strip that turns red — so this is a shortcut
 rather than the only route, and it can wait until the drag work has settled.

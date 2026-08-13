@@ -23,7 +23,7 @@ import ProgressRing from '@shared/ui/ProgressRing.vue'
 import SegmentedControl, { type Segment } from '@shared/ui/SegmentedControl.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
-import { useSwipeAction } from '@shared/ui/press/use-swipe-action'
+import { type SwipeDirection, useSwipeAction } from '@shared/ui/press/use-swipe-action'
 import {
   type Achievement,
   achievementFor,
@@ -34,6 +34,7 @@ import {
   type MeasuredHabit,
   type NegativeHabit,
   type PositiveHabit,
+  type PositiveOutcome,
 } from '@modules/habits/domain/habit'
 import {
   latestEntryForInstance,
@@ -177,17 +178,30 @@ watch(selectedDay, async () => {
   swappingDay.value = false
 })
 
-const visibleDuties = computed(() => {
-  const setting = revealingDone.value ? 'show' : preferences.preferences.done
+/**
+ * The rows still owed, always at the top.
+ *
+ * With the setting on `show` there is nothing to separate and the finished ones sit where
+ * they are; otherwise they leave the list and become the accordion below it.
+ */
+const outstandingDuties = computed(() =>
+  preferences.preferences.done === 'show'
+    ? duties.value
+    : duties.value.filter((row) => row.outcome !== 'done'),
+)
 
-  if (setting === 'show') return duties.value
+/** The finished ones, which the accordion owns whenever they are not in the list above. */
+const finishedDuties = computed(() =>
+  preferences.preferences.done === 'show'
+    ? []
+    : duties.value.filter((row) => row.outcome === 'done'),
+)
 
-  const outstanding = duties.value.filter((row) => row.outcome !== 'done')
-
-  if (setting === 'hide') return outstanding
-
-  return [...outstanding, ...duties.value.filter((row) => row.outcome === 'done')]
-})
+const visibleDuties = computed(() =>
+  revealingDone.value
+    ? [...outstandingDuties.value, ...finishedDuties.value]
+    : outstandingDuties.value,
+)
 
 /** Block time and timed duties merged into one ribbon, as the day is lived. */
 const schedule = computed(() => {
@@ -387,12 +401,11 @@ const swipe = useSwipeAction({
 
     if (!row) return
 
-    // Marking something done twice is almost always a thumb catching a row that was already
-    // finished, and taking back a day nobody recorded is the same mistake mirrored.
-    const alreadyDone = row.outcome === 'done' && !preferences.preferences.allowRedo
-    const nothingToTakeBack = row.outcome === undefined
-
-    if ((direction === 'right' && alreadyDone) || (direction === 'left' && nothingToTakeBack)) {
+    // A swipe towards the state a row is already in has nothing to do. Rightward completes and
+    // leftward takes back, so the test is the direction against the outcome — not whether an
+    // entry exists, which was the old check and let a second "not yet" through because the
+    // first one had left a `missed` behind rather than nothing.
+    if (!preferences.preferences.allowRedo && isAlready(row.outcome, direction)) {
       refuse(key)
 
       return
@@ -630,6 +643,19 @@ const menuTitle = computed(() => {
  * A toast at the other end of the screen explains a refusal to somebody still looking at the
  * row, and by the time they read it the swipe has snapped back with nothing attached to it.
  */
+/**
+ * Whether a swipe is asking for the state the row is already in.
+ *
+ * Rightward means done, so it is refused only when the row is done. Leftward means not yet,
+ * which covers both a day answered as missed and a day never answered at all — they look the
+ * same on screen and taking either of them back is the same nothing.
+ *
+ * A partial day is neither: swiping it in either direction is a real change.
+ */
+function isAlready(outcome: PositiveOutcome | undefined, direction: SwipeDirection): boolean {
+  return direction === 'right' ? outcome === 'done' : outcome === 'missed' || outcome === undefined
+}
+
 const refused = ref<string | null>(null)
 
 const REFUSAL_MS = 260
@@ -648,11 +674,11 @@ function swipeStyle(key: string) {
 }
 
 /**
- * Puts the finished rows back on screen for as long as they are being looked at.
+ * Whether the accordion of finished rows is open.
  *
  * Not a change to the setting: someone checking what they already did today has not changed
- * their mind about how the list should behave tomorrow. It lasts until the day changes, which
- * is exactly as long as the question does.
+ * their mind about how the list should behave tomorrow. It closes when the day changes, which
+ * is exactly as long as the question lasts.
  */
 const revealingDone = ref(false)
 
@@ -665,16 +691,36 @@ function shiftWeek(offset: number) {
 }
 
 /**
- * Selecting a day the strip cannot show pulls the strip along with it.
+ * Moves the window the strip shows, leaving the day alone.
  *
- * Stepping one day at a time walks off the end of the week, and a selection you cannot see is
- * worse than no selection: the header changes, the list changes, and the strip still points
- * somewhere else.
+ * Turning a strip to look at next week is not a decision about what you are working on. The
+ * two used to be the same action, which meant you could not look ahead without abandoning
+ * today — and getting back meant scrolling until you found it again.
  */
+function shiftDays(days: number) {
+  weekAnchor.value = addDays(weekAnchor.value, days)
+}
+
+/** Choosing a day the strip cannot show brings the strip to it, since a hidden choice is none. */
 function selectDay(day: CalendarDate) {
   selectedDay.value = day
 
   if (!weekDays.value.includes(day)) weekAnchor.value = day
+}
+
+/**
+ * Whether the strip has been turned away from the day being worked on.
+ *
+ * The cost of separating the window from the selection: you can now be looking at March while
+ * working on August, and nothing on screen would say how to get back.
+ */
+const hasWandered = computed(
+  () => !weekDays.value.includes(selectedDay.value) || selectedDay.value !== today,
+)
+
+function returnToToday() {
+  selectedDay.value = today
+  weekAnchor.value = today
 }
 
 /** Puts the chosen day in the middle of the week rather than at whichever end it drifted to. */
@@ -702,24 +748,10 @@ const OUTCOME_CLASS = {
         <p class="text-sm text-ink-muted">{{ dayLabel }}</p>
       </div>
       <div class="flex items-center gap-3">
-        <!--
-          Also the way back to habits the list is hiding. Folding finished rows away is only
-          safe if the number that says how many there were is still a door to them.
-        -->
-        <button
-          v-if="duties.length"
-          type="button"
-          class="tabular text-xs text-ink-muted"
-          :aria-label="
-            preferences.preferences.done === 'show'
-              ? `${doneCount} of ${duties.length} done`
-              : `Show all ${duties.length}, including the ${doneCount} already done`
-          "
-          @click="revealDone"
-        >
+        <p v-if="duties.length" class="tabular text-xs text-ink-muted">
           <span class="text-base font-semibold text-ink">{{ doneCount }}</span>
           / {{ duties.length }} done
-        </button>
+        </p>
 
         <!--
           Beside the date rather than at the foot of the schedule. Looking at the shape of a
@@ -744,7 +776,19 @@ const OUTCOME_CLASS = {
       @previous="shiftWeek(-1)"
       @next="shiftWeek(1)"
       @centre="centreOn"
+      @shift="shiftDays"
     />
+
+    <div class="mt-1.5 flex items-center justify-center gap-3">
+      <button
+        v-if="hasWandered"
+        type="button"
+        class="rounded-full border border-line-strong px-3 py-1 text-[0.625rem] font-medium text-ink-muted"
+        @click="returnToToday"
+      >
+        Back to today
+      </button>
+    </div>
 
     <!-- The dot has to say what it is, or it is decoration people quietly worry about. -->
     <p v-if="markedDays.length" class="mt-1.5 text-center text-[0.625rem] text-ink-subtle">
@@ -935,6 +979,30 @@ const OUTCOME_CLASS = {
             </div>
           </li>
         </TransitionGroup>
+
+        <!--
+          A divider that is also a door. The list above is the work left; this says how much
+          is behind it and opens in place, rather than a number in the header that silently
+          rewrote the whole list.
+        -->
+        <button
+          v-if="finishedDuties.length"
+          type="button"
+          class="mt-3 flex w-full items-center gap-3 text-xs text-ink-muted"
+          :aria-expanded="revealingDone"
+          @click="revealDone"
+        >
+          <span class="h-px flex-1 bg-line" />
+          <span class="tabular">
+            {{ finishedDuties.length }} done
+            <AppIcon
+              :name="revealingDone ? 'chevron-left' : 'chevron-right'"
+              :size="12"
+              class="inline align-middle"
+            />
+          </span>
+          <span class="h-px flex-1 bg-line" />
+        </button>
 
         <p
           v-if="!duties.length"

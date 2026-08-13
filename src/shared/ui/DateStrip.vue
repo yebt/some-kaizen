@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { addDays, type CalendarDate, toDate, weekday } from '@shared/domain/calendar-date'
+import { type CalendarDate, toDate, weekday } from '@shared/domain/calendar-date'
 
 import { tick } from '@core/haptics'
 
@@ -20,6 +20,8 @@ const emit = defineEmits<{
   previous: []
   next: []
   centre: [day: CalendarDate]
+  /** Days to move the window by, positive meaning later. The selection is left alone. */
+  shift: [days: number]
 }>()
 
 /**
@@ -32,12 +34,12 @@ const emit = defineEmits<{
 const STEP_PX = 46
 
 /**
- * The strip follows the finger and settles on a day.
+ * The strip follows the finger and settles on a day boundary — and changes nothing else.
  *
- * It used to commit a whole day per swipe: a detent with no travel, where nothing moved until
- * the gesture was over and the day then jumped. Now the row slides under the finger, ticks as
- * it crosses each day, and lands on the nearest one when released — so half a day is never
- * left sitting at an edge, and you can see you are between two before choosing.
+ * Turning the strip moves the window, not the selection. Scrolling a calendar to look at next
+ * Tuesday is not the same as saying you are now working on next Tuesday, and conflating the
+ * two means you cannot look ahead without losing the day you were on. The day only changes
+ * when one is tapped.
  *
  * The arrows stay, and they still move a whole week. A gesture nobody can see is one most
  * people never find, and the two are useful at different distances.
@@ -45,7 +47,7 @@ const STEP_PX = 46
 const drag = useDetentDrag({
   stepPx: STEP_PX,
   onDetent: tick,
-  onSettle: (steps) => emit('select', addDays(props.selected, steps)),
+  onSettle: (steps) => emit('shift', steps),
 })
 
 /**

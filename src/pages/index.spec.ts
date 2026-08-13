@@ -12,7 +12,8 @@ import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { createCompletedHabit, createNegativeHabit, frequency } from '@modules/habits/domain/habit'
-import { latestEntryFor } from '@modules/habits/domain/habit-entry'
+import { latestEntryFor, recordCompleted } from '@modules/habits/domain/habit-entry'
+import { planInstance } from '@modules/planning/domain/planned-instance'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
 import { buildPreviewDataset } from '@shared/dev/preview-dataset'
@@ -28,8 +29,20 @@ import TodayPage from './index.vue'
 let persistence: Persistence
 let databaseCounter = 0
 
+/**
+ * Keeps a finished row in the list, so a test about recording is not also a test about
+ * where finished rows are displayed.
+ */
+function showFinishedRows() {
+  globalThis.localStorage?.setItem(
+    'some-kaisen.preferences',
+    JSON.stringify({ clock: '24h', theme: 'system', timeline: 'normal', done: 'show' }),
+  )
+}
+
 beforeEach(async () => {
   databaseCounter += 1
+  globalThis.localStorage?.clear()
   persistence = await createPersistence(`today-spec-${databaseCounter}`)
 })
 
@@ -196,6 +209,7 @@ describe('recording what happened', () => {
   })
 
   it('replaces the verdict when you change your mind, rather than piling answers up', async () => {
+    showFinishedRows()
     // Appending would leave a dozen rows behind a dozen taps, and two answers written in
     // the same millisecond would leave "which one counts" decided by storage order.
     const wrapper = await renderToday()
@@ -215,6 +229,7 @@ describe('recording what happened', () => {
   })
 
   it('shows the verdict back on the card it belongs to', async () => {
+    showFinishedRows()
     const wrapper = await renderToday()
 
     await wrapper.find('[aria-label="Mark Meditate"]').trigger('click')
@@ -548,6 +563,7 @@ describe('reaching the timeline', () => {
 })
 
 describe('finished habits and the way back to them', () => {
+  /** Seeded rather than clicked: this is about where a finished row goes, not how it got there. */
   async function renderWithOneDone() {
     const habit = createCompletedHabit({
       id: newIdentifier(),
@@ -555,24 +571,30 @@ describe('finished habits and the way back to them', () => {
       frequency: frequency('daily', 2),
       createdOn: calendarDate('2020-01-01'),
     })
+    const instance = planInstance({
+      id: newIdentifier(),
+      habitId: habit.id,
+      date: todayIn(),
+      period: 'daily',
+    })
 
-    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [instance],
+      entries: [
+        recordCompleted(newIdentifier(), habit, todayIn(), true, { instanceId: instance.id }),
+      ],
+    })
 
-    const wrapper = await renderToday()
-
-    // Mark the first of the two occurrences.
-    await wrapper.findAll('[aria-label^="Mark"], [aria-label^="Complete"]').at(0)?.trigger('click')
-    await flushPromises()
-
-    return wrapper
+    return await renderToday()
   }
 
-  it('keeps the count reachable as a control, not just a label', async () => {
-    // Folding finished rows away is only safe if the number saying how many there were is
-    // still a door back to them.
+  it('offers the finished ones as a divider that opens, not as a rewritten list', async () => {
+    // The list above stays the work left; this says how much is behind it and opens in place.
     const wrapper = await renderWithOneDone()
 
-    expect(wrapper.find('button[aria-label*="done"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-expanded]').exists()).toBe(true)
   })
 })
 
@@ -585,5 +607,129 @@ describe('a gesture that cannot do anything', () => {
 
     // The refusal is a class on the row, which is the only part of it a test can see.
     expect(wrapper.html()).not.toContain('refuse')
+  })
+})
+
+describe('a swipe towards the state a row is already in', () => {
+  const DAY = todayIn()
+
+  async function renderWith(done: boolean) {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+    })
+    const instance = planInstance({
+      id: newIdentifier(),
+      habitId: habit.id,
+      date: DAY,
+      period: 'daily',
+    })
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [instance],
+      entries: [recordCompleted(newIdentifier(), habit, DAY, done, { instanceId: instance.id })],
+    })
+
+    showFinishedRows()
+
+    return await renderToday()
+  }
+
+  function row(wrapper: Awaited<ReturnType<typeof renderToday>>) {
+    const inner = wrapper.find('[aria-label="Open Meditate"]').element
+    const found = inner.closest('.touch-pan-y')
+
+    if (!found) throw new Error('No habit row found')
+
+    return found
+  }
+
+  async function swipe(element: Element, dx: number) {
+    element.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0, clientY: 0, bubbles: true }))
+    element.dispatchEvent(new MouseEvent('pointermove', { clientX: dx, clientY: 0, bubbles: true }))
+    element.dispatchEvent(new MouseEvent('pointerup', { clientX: dx, clientY: 0, bubbles: true }))
+
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  it('refuses to complete something already complete', async () => {
+    const wrapper = await renderWith(true)
+    const before = (await persistence.entries.all())[0]?.recordedAt
+
+    await swipe(row(wrapper), 140)
+
+    expect((await persistence.entries.all())[0]?.recordedAt).toBe(before)
+  })
+
+  it('refuses to take back a day already taken back', async () => {
+    // The old check asked whether an entry existed, so the first "not yet" left a `missed`
+    // behind and every one after it sailed through.
+    const wrapper = await renderWith(false)
+    const before = (await persistence.entries.all())[0]?.recordedAt
+
+    await swipe(row(wrapper), -140)
+
+    expect((await persistence.entries.all())[0]?.recordedAt).toBe(before)
+  })
+
+  it('still allows the swipe that changes something', async () => {
+    const wrapper = await renderWith(true)
+
+    await swipe(row(wrapper), -140)
+
+    expect((await persistence.entries.all())[0]?.outcome).toBe('missed')
+  })
+
+  it('allows both once the setting says a habit may be done again', async () => {
+    globalThis.localStorage?.setItem(
+      'some-kaisen.preferences',
+      JSON.stringify({
+        clock: '24h',
+        theme: 'system',
+        timeline: 'normal',
+        done: 'show',
+        allowRedo: true,
+      }),
+    )
+
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+    })
+    const instance = planInstance({
+      id: newIdentifier(),
+      habitId: habit.id,
+      date: DAY,
+      period: 'daily',
+    })
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [instance],
+      entries: [
+        recordCompleted(newIdentifier(), habit, DAY, true, {
+          instanceId: instance.id,
+          recordedAt: 1,
+        }),
+      ],
+    })
+
+    const wrapper = await renderToday()
+
+    await swipe(row(wrapper), 140)
+
+    expect((await persistence.entries.all())[0]?.recordedAt).not.toBe(1)
   })
 })

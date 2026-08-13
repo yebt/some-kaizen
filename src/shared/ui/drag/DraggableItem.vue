@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { onBeforeUnmount, useTemplateRef, watch } from 'vue'
+
 import { LONG_PRESS_MS } from './use-drag-and-drop'
 
-withDefaults(defineProps<{ pending?: boolean; dragging?: boolean }>(), {
+const props = withDefaults(defineProps<{ pending?: boolean; dragging?: boolean }>(), {
   pending: false,
   dragging: false,
 })
@@ -28,16 +30,49 @@ function onPointerDown(event: PointerEvent) {
   target.setPointerCapture?.(event.pointerId)
   emit('press', event)
 }
+
+const root = useTemplateRef<HTMLElement>('root')
+
+/**
+ * Refuses the browser's scroll, but only once the card has actually been picked up.
+ *
+ * `touch-action: none` did this by declaration and cost too much: it is read when the finger
+ * lands, so a card claimed every gesture that started on it — including a scroll. On a
+ * timeline where cards cover the busy hours, that meant the day could not be scrolled from
+ * anywhere worth touching.
+ *
+ * `pan-y` gives the scroll back, and this takes it away again at the one moment it must:
+ * after the hold has completed and the card is in the air. `touchmove` is the cancellable
+ * event — `pointermove` is not — so the listener has to be a non-passive one of those.
+ */
+function refuseScroll(event: TouchEvent) {
+  if (event.cancelable) event.preventDefault()
+}
+
+watch(
+  () => props.dragging,
+  (isDragging) => {
+    const element = root.value
+
+    if (!element) return
+
+    if (isDragging) element.addEventListener('touchmove', refuseScroll, { passive: false })
+    else element.removeEventListener('touchmove', refuseScroll)
+  },
+)
+
+onBeforeUnmount(() => root.value?.removeEventListener('touchmove', refuseScroll))
 </script>
 
 <template>
   <!--
-    touch-action:none hands the whole gesture to us instead of letting the browser claim it
-    for a scroll. Draggable items are kept small so a finger starting on empty space still
-    scrolls the page normally.
+    `pan-y` rather than `none`: a finger that lands on a card and moves is scrolling, and it
+    keeps scrolling until the hold has completed. Only then does the card take the gesture,
+    which is what makes a timeline covered in cards still feel like a page.
   -->
   <div
-    class="grippable touch-none"
+    ref="root"
+    class="grippable touch-pan-y"
     :class="[pending && 'is-pending', dragging && 'is-dragging']"
     :style="{ '--hold-duration': `${LONG_PRESS_MS}ms` }"
     @pointerdown="onPointerDown"
