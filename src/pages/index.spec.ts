@@ -733,3 +733,49 @@ describe('a swipe towards the state a row is already in', () => {
     expect((await persistence.entries.all())[0]?.recordedAt).not.toBe(1)
   })
 })
+
+describe('the ribbon of days', () => {
+  it('reaches far past the week on screen, so scrolling has somewhere to go', async () => {
+    // The two hand written versions moved a fixed set of seven days and had nothing to show
+    // at the edges, so mid-gesture the strip slid away from empty space.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+
+    expect(wrapper.findAll('[data-day]').length).toBeGreaterThan(60)
+  })
+
+  it('leaves the chosen day alone when the ribbon moves', async () => {
+    // Scrolling a calendar to look at next Tuesday is not a decision to work on next Tuesday.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+    const before = wrapper.find('h1 + p').text()
+
+    await wrapper.find('[data-day]').trigger('scroll')
+    await flushPromises()
+
+    expect(wrapper.find('h1 + p').text()).toBe(before)
+  })
+
+  it('changes the day only when one is tapped', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+    const tomorrow = addDays(todayIn(), 1)
+
+    await wrapper.find(`[data-day="${tomorrow}"] button`).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Back to today"], button').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Back to today')
+  })
+
+  it('offers the way back once the day is not today', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+
+    expect(wrapper.text()).not.toContain('Back to today')
+  })
+})

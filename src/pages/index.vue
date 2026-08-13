@@ -6,8 +6,6 @@ import {
   addDays,
   type CalendarDate,
   eachDayBetween,
-  endOfWeek,
-  startOfWeek,
   toDate,
   todayIn,
 } from '@shared/domain/calendar-date'
@@ -84,11 +82,21 @@ const blocks = computed(() => blocksData.value ?? [])
 
 const today = todayIn()
 const selectedDay = ref<CalendarDate>(today)
-const weekAnchor = ref<CalendarDate>(today)
 const pane = ref<'due' | 'schedule'>('due')
 
-const weekDays = computed(() =>
-  eachDayBetween(startOfWeek(weekAnchor.value), endOfWeek(weekAnchor.value)),
+/**
+ * Every day the ribbon can reach: four months either side of today.
+ *
+ * Rendered whole rather than grown as it is scrolled. Extending a scroller at its edges means
+ * correcting the scroll position in the same frame you add to it, and getting that a frame
+ * wrong is a visible jump — a cost paid on every flick to save a few hundred buttons that
+ * cost nothing. Someone who scrolls past the end has gone further than this screen is for,
+ * and the day picker on the habit itself is the tool for that.
+ */
+const RIBBON_DAYS = 120
+
+const ribbonDays = computed(() =>
+  eachDayBetween(addDays(today, -RIBBON_DAYS), addDays(today, RIBBON_DAYS)),
 )
 
 const dayLabel = computed(() =>
@@ -197,11 +205,14 @@ const finishedDuties = computed(() =>
     : duties.value.filter((row) => row.outcome === 'done'),
 )
 
-const visibleDuties = computed(() =>
-  revealingDone.value
-    ? [...outstandingDuties.value, ...finishedDuties.value]
-    : outstandingDuties.value,
-)
+/**
+ * The list above the divider: always and only the work still owed.
+ *
+ * Opening the accordion used to append the finished rows to this list, which put the divider
+ * underneath everything and made it a footer rather than a seam. Two lists with the door
+ * between them is what the divider was drawn to look like in the first place.
+ */
+const visibleDuties = computed(() => outstandingDuties.value)
 
 /** Block time and timed duties merged into one ribbon, as the day is lived. */
 const schedule = computed(() => {
@@ -686,47 +697,20 @@ function revealDone() {
   revealingDone.value = !revealingDone.value
 }
 
-function shiftWeek(offset: number) {
-  weekAnchor.value = addDays(weekAnchor.value, offset * 7)
-}
-
-/**
- * Moves the window the strip shows, leaving the day alone.
- *
- * Turning a strip to look at next week is not a decision about what you are working on. The
- * two used to be the same action, which meant you could not look ahead without abandoning
- * today — and getting back meant scrolling until you found it again.
- */
-function shiftDays(days: number) {
-  weekAnchor.value = addDays(weekAnchor.value, days)
-}
-
-/** Choosing a day the strip cannot show brings the strip to it, since a hidden choice is none. */
 function selectDay(day: CalendarDate) {
   selectedDay.value = day
-
-  if (!weekDays.value.includes(day)) weekAnchor.value = day
 }
 
 /**
- * Whether the strip has been turned away from the day being worked on.
+ * Whether the day being worked on is not today.
  *
- * The cost of separating the window from the selection: you can now be looking at March while
- * working on August, and nothing on screen would say how to get back.
+ * The ribbon scrolls freely and the selection stays put, so the two can end up far apart with
+ * nothing on screen saying how to get back. This is that.
  */
-const hasWandered = computed(
-  () => !weekDays.value.includes(selectedDay.value) || selectedDay.value !== today,
-)
+const hasWandered = computed(() => selectedDay.value !== today)
 
 function returnToToday() {
   selectedDay.value = today
-  weekAnchor.value = today
-}
-
-/** Puts the chosen day in the middle of the week rather than at whichever end it drifted to. */
-function centreOn(day: CalendarDate) {
-  selectedDay.value = day
-  weekAnchor.value = addDays(day, -3)
 }
 
 function openHabit(habitId: Identifier) {
@@ -769,14 +753,10 @@ const OUTCOME_CLASS = {
     </header>
 
     <DateStrip
-      :days="weekDays"
+      :days="ribbonDays"
       :selected="selectedDay"
       :marked="markedDays"
       @select="selectDay"
-      @previous="shiftWeek(-1)"
-      @next="shiftWeek(1)"
-      @centre="centreOn"
-      @shift="shiftDays"
     />
 
     <div class="mt-1.5 flex items-center justify-center gap-3">
@@ -1003,6 +983,29 @@ const OUTCOME_CLASS = {
           </span>
           <span class="h-px flex-1 bg-line" />
         </button>
+
+        <!--
+          Their own list, below the seam. Sharing the list above would put a finished row back
+          among the work left, which is the arrangement the setting exists to avoid.
+        -->
+        <ul v-if="revealingDone" class="mt-1.5 space-y-1.5">
+          <li
+            v-for="row in finishedDuties"
+            :key="row.key"
+            class="flex items-center gap-3 rounded-card border border-line bg-surface p-3 opacity-70 shadow-card"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-ink line-through">{{ row.habit.name }}</p>
+              <p class="text-xs text-ink-muted">
+                {{ row.measured && row.achievement ? ACHIEVEMENT_LABEL[row.achievement] : 'Done' }}
+                <span v-if="row.time">· {{ row.time }}</span>
+              </p>
+            </div>
+            <span class="grid size-8 shrink-0 place-items-center rounded-full text-done">
+              <AppIcon name="check" :size="16" />
+            </span>
+          </li>
+        </ul>
 
         <p
           v-if="!duties.length"
