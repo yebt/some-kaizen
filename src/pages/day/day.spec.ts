@@ -1132,3 +1132,117 @@ describe('the indicator and the drop agree', () => {
     expect(stored).toBe(9 * 60)
   })
 })
+
+describe('a day with more than a drawer can show', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  /** Twelve unplaced habits: a plausible bad day, not a synthetic thousand. */
+  async function renderCrowded(count = 12) {
+    const habits = Array.from({ length: count }, (_, index) =>
+      createCompletedHabit({
+        id: newIdentifier(),
+        name: `Habit number ${index + 1}`,
+        frequency: frequency('daily', 1),
+        createdOn: CREATED_ON,
+      }),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits })
+
+    return await renderDay()
+  }
+
+  async function openTray(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('need an hour'))
+      ?.trigger('click')
+    await flushPromises()
+
+    return wrapper
+  }
+
+  it('says how many there are before opening anything', async () => {
+    expect((await renderCrowded()).text()).toContain('12')
+  })
+
+  it('holds all of them rather than quietly showing the first few', async () => {
+    // A drawer that truncates is a drawer that hides work while claiming to list it.
+    const wrapper = await openTray(await renderCrowded())
+
+    expect(wrapper.findAll('[data-drop-zone="tray"] li')).toHaveLength(12)
+  })
+
+  it('scrolls instead of growing over the ruler', async () => {
+    // The one thing it must never do is cover the hours the chips are going onto.
+    const wrapper = await openTray(await renderCrowded())
+    const list = wrapper.find('[data-drop-zone="tray"] ul')
+
+    expect(list.classes().join(' ')).toContain('overflow-y-auto')
+    expect(list.classes().join(' ')).toContain('max-h-44')
+  })
+
+  it('closes when the backdrop behind it is tapped', async () => {
+    const wrapper = await openTray(await renderCrowded())
+
+    await wrapper.find('.backdrop-blur-sm').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-drop-zone="tray"]').exists()).toBe(false)
+  })
+
+  it('takes a habit off the day from the chip itself', async () => {
+    const wrapper = await openTray(await renderCrowded(2))
+
+    await wrapper.find('[aria-label^="Take Habit number 1"]').trigger('click')
+    await settle()
+
+    // Nothing was ever placed, so there is no record to remove: the day owes this through
+    // the habit itself, and the chip stays until the habit is archived.
+    expect(await persistence.instances.all()).toEqual([])
+    expect(wrapper.findAll('[data-drop-zone="tray"] li')).toHaveLength(2)
+  })
+})
+
+describe('taking an hour back', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  it('is offered on the card that has one', async () => {
+    // Loosening used to need a drag onto a strip that only appears mid-drag, which is a
+    // gesture you have to already know about.
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({ id: newIdentifier(), habitId: habit.id, date: DAY, period: 'daily' }),
+      timeOfDay(7 * 60),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const wrapper = await renderDay()
+
+    await wrapper.find('[aria-label="Adjust Meditate"]').trigger('click')
+    await flushPromises()
+
+    await wrapper
+      .findAll('dialog[aria-label="Adjust this occurrence"] button')
+      .find((node) => node.text() === 'Take its hour away')
+      ?.trigger('click')
+    await settle()
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBeUndefined()
+  })
+})

@@ -23,6 +23,7 @@ import { usePlatform } from '@core/platform-context'
 import { usePreferences } from '@core/preferences-store'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import BackLink from '@shared/ui/BackLink.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import AppDialog from '@shared/ui/AppDialog.vue'
 import SegmentedControl from '@shared/ui/SegmentedControl.vue'
@@ -50,6 +51,7 @@ import {
 } from '@modules/planning/domain/planned-instance'
 import {
   usePlannedInstances,
+  useRemoveInstance,
   useSaveInstance,
 } from '@modules/planning/application/planning-queries'
 
@@ -78,6 +80,7 @@ const { data: habitsData, isLoading: habitsLoading } = useHabits()
 const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
 const saveInstance = useSaveInstance()
+const removeInstance = useRemoveInstance()
 const feedback = useFeedback()
 const preferences = usePreferences()
 const platform = usePlatform()
@@ -581,6 +584,26 @@ function openSlot(event: MouseEvent) {
   slot.value = { start, duration: DEFAULT_DURATION_MINUTES }
 }
 
+/**
+ * Takes a habit off the day from the drawer, rather than only from the ruler.
+ *
+ * The drawer holds what the day owes and has not placed. Some of that is not going to happen,
+ * and the only way to say so was to place it first and then loosen it — asking someone to
+ * schedule a thing in order to cancel it.
+ */
+async function dropChip(duty: DayDuty) {
+  const existing = duty.instance
+
+  if (!existing) {
+    feedback.notify('This one is owed by the habit itself. Archive the habit to stop it.')
+
+    return
+  }
+
+  await removeInstance.mutateAsync(existing.id)
+  feedback.notify(`${duty.habit.name} is off today`)
+}
+
 async function fillSlot(duty: DayDuty) {
   const current = slot.value
 
@@ -703,6 +726,29 @@ const liveMinutes = computed<number | null>(() => {
   return hoverTime.value
 })
 
+/**
+ * Returns the occurrence to "sometime today" from its own sheet.
+ *
+ * Loosening was only reachable by dragging the card onto a strip that appears while a drag is
+ * already under way, which is a gesture you have to already know. A card you have tapped is a
+ * card you are looking at, and this is the one thing about it the sheet could not say.
+ */
+async function loosenEditing() {
+  const existing = editingInstance.value
+
+  editing.value = null
+
+  if (!existing) return
+
+  await saveInstance.mutateAsync(unschedule(existing))
+  feedback.notify(`${habitFor(existing)?.name ?? 'It'} has no fixed time now`)
+}
+
+/** The habit an occurrence belongs to, for a message that can name it. */
+function habitFor(instance: PlannedInstance): PositiveHabit | undefined {
+  return habits.value.find((habit) => habit.id === instance.habitId)
+}
+
 async function chooseReminder(key: string) {
   const existing = editingInstance.value
 
@@ -757,7 +803,9 @@ function trackHover(event: PointerEvent) {
   <div class="safe-top">
     <header class="flex items-baseline justify-between pt-2 pb-4">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-ink">Day</h1>
+        <!-- The tab bar is hidden here, so the way back has to be visible rather than known. -->
+        <BackLink to="/" label="Today" />
+        <h1 class="mt-1 text-2xl font-semibold tracking-tight text-ink">Day</h1>
         <p class="text-sm text-ink-muted">{{ dayLabel }}</p>
       </div>
       <div class="flex gap-3">
@@ -796,18 +844,26 @@ function trackHover(event: PointerEvent) {
         collapsing panel shift the ruler out from under the finger.
       -->
       <div
+        v-if="trayOpen"
+        class="fixed inset-0 z-40 bg-canvas/60 backdrop-blur-sm"
+        aria-hidden="true"
+        @click="trayOpen = false"
+      />
+
+      <div
         v-if="untimed.length"
-        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-4 pb-20 transition-transform duration-200"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-4 pb-4 transition-transform duration-200"
         :class="drag.isDragging.value ? 'translate-y-full' : 'translate-y-0'"
       >
         <div
           v-if="trayOpen"
           :data-drop-zone="TRAY_ZONE"
-          class="rounded-card border border-dashed border-line-strong bg-surface/95 p-3 shadow-float backdrop-blur-md"
+          class="rounded-card border border-dashed border-line-strong bg-surface p-3 shadow-float"
         >
           <div class="mb-2 flex items-baseline justify-between">
             <h2 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
               Anytime today
+              <span class="tabular ml-1 font-normal text-ink-subtle">{{ untimed.length }}</span>
             </h2>
             <button
               type="button"
@@ -818,8 +874,12 @@ function trackHover(event: PointerEvent) {
             </button>
           </div>
 
-          <!-- Scrolls rather than grows: a long list must not swallow the day behind it. -->
-          <ul class="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+          <!--
+            Scrolls rather than grows. A day can genuinely owe a dozen habits, and a drawer
+            that keeps growing eats the ruler it exists to fill — which is the one thing it
+            must never do, since the ruler is where the chips are going.
+          -->
+          <ul class="flex max-h-44 flex-wrap gap-2 overflow-y-auto overscroll-contain">
             <li v-for="entry in untimed" :key="entry.key">
               <DraggableItem
                 v-bind="pressState(entry.key)"
@@ -829,10 +889,18 @@ function trackHover(event: PointerEvent) {
                 @cancel="abandonLift"
               >
                 <span
-                  class="block rounded-md border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
+                  class="flex items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
                   :style="surfaceStyle(entry.habit)"
                 >
                   {{ entry.habit.name }}
+                  <button
+                    type="button"
+                    class="hit-area -mr-1 grid size-5 place-items-center rounded-full text-current opacity-50"
+                    :aria-label="`Take ${entry.habit.name} off today`"
+                    @click.stop="dropChip(entry.duty)"
+                  >
+                    <AppIcon name="ban" :size="12" />
+                  </button>
                 </span>
               </DraggableItem>
             </li>
@@ -843,7 +911,7 @@ function trackHover(event: PointerEvent) {
         <button
           v-else
           type="button"
-          class="mx-auto flex items-center gap-2 rounded-full border border-line-strong bg-surface/95 px-4 py-2 text-xs font-medium text-ink shadow-float backdrop-blur-md"
+          class="mx-auto flex items-center gap-2 rounded-full border border-line-strong bg-surface px-4 py-2 text-xs font-medium text-ink shadow-float"
           @click="trayOpen = true"
         >
           <span class="tabular">{{ untimed.length }}</span>
@@ -855,18 +923,28 @@ function trackHover(event: PointerEvent) {
         Where a lifted card goes back to. The drawer has slid away by then, so the strip above
         the tab bar becomes the target instead.
 
-        Shown whenever something is in the air, including when the drawer is empty: an empty
-        drawer is exactly the situation where the only card you can loosen is one already on
-        the ruler, and it was the one case with nowhere to drop it.
+        It turns red once the finger is actually over it. A drop zone that looks the same
+        whether or not it is armed makes the difference between moving a card and unscheduling
+        it something you find out afterwards.
       -->
       <div
         v-if="drag.isDragging.value"
         :data-drop-zone="TRAY_ZONE"
-        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md items-center justify-center px-4 pb-20 text-xs font-medium transition-colors"
-        :class="drag.activeZone.value === TRAY_ZONE ? 'text-ink' : 'text-ink-subtle'"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md items-center justify-center px-4 pb-4 text-xs font-medium transition-colors"
       >
-        <span class="rounded-full border border-dashed border-line-strong bg-surface/95 px-4 py-2">
-          Drop here to loosen it
+        <span
+          class="rounded-full border px-4 py-2 transition-colors"
+          :class="
+            drag.activeZone.value === TRAY_ZONE
+              ? 'border-relapse bg-relapse-soft text-relapse'
+              : 'border-dashed border-line-strong bg-surface text-ink-subtle'
+          "
+        >
+          {{
+            drag.activeZone.value === TRAY_ZONE
+              ? 'Release to take its hour away'
+              : 'Drop here to loosen it'
+          }}
         </span>
       </div>
 
@@ -964,7 +1042,7 @@ function trackHover(event: PointerEvent) {
         <div
           ref="timeline"
           :data-drop-zone="TIMELINE_ZONE"
-          class="relative mr-2 flex-1 rounded-md border transition-colors"
+          class="grippable relative mr-2 flex-1 rounded-md border transition-colors"
           :class="
             drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
               ? 'border-line-strong'
@@ -1079,7 +1157,7 @@ function trackHover(event: PointerEvent) {
                 :key="edge"
                 data-resize-grip
                 :data-edge="edge"
-                class="absolute right-0 z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
+                class="grippable absolute right-0 z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
                 :class="edge === 'start' ? '-top-1' : '-bottom-1'"
                 aria-hidden="true"
                 @pointerdown="startResize(entry.duty.instance, edge, $event)"
@@ -1250,13 +1328,26 @@ function trackHover(event: PointerEvent) {
         </button>
       </div>
 
-      <button
-        type="button"
-        class="mt-5 w-full rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
-        @click="editing = null"
-      >
-        Done
-      </button>
+      <!--
+        The way off the day, from the sheet that opens on the card itself. Everything else
+        here changes when a thing happens; this is the one that says it will not.
+      -->
+      <div class="mt-5 flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-relapse"
+          @click="loosenEditing"
+        >
+          Take its hour away
+        </button>
+        <button
+          type="button"
+          class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
+          @click="editing = null"
+        >
+          Done
+        </button>
+      </div>
     </AppDialog>
 
     <DragGhost

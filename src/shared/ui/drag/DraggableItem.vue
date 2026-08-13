@@ -37,7 +37,7 @@ function onPointerDown(event: PointerEvent) {
     scrolls the page normally.
   -->
   <div
-    class="touch-none select-none"
+    class="grippable touch-none"
     :class="[pending && 'is-pending', dragging && 'is-dragging']"
     :style="{ '--hold-duration': `${LONG_PRESS_MS}ms` }"
     @pointerdown="onPointerDown"

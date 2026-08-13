@@ -257,6 +257,26 @@
   }
 }
 
+/*
+ * A surface a finger holds rather than reads.
+ *
+ * A long press on text is the platform's own gesture for selecting it, and it fires first:
+ * the selection handles come up, the magnifier appears, and the drag the hold was meant to
+ * start arrives to find the page busy doing something else. `user-select` stops the
+ * selection; `-webkit-touch-callout` stops the menu that follows it on iOS and in some
+ * Android WebViews, and Tailwind's own utility does not set it.
+ *
+ * Applied to the gesture surface rather than globally, because text everywhere else should
+ * stay selectable — a habit's name is worth copying out of the page it lives on.
+ */
+@utility grippable {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /* Stops the grey flash Android paints over anything held down. */
+  -webkit-tap-highlight-color: transparent;
+}
+
 @utility hit-area {
   position: relative;
 

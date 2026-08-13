@@ -81,7 +81,7 @@ const cells = computed(() =>
 
 <template>
   <div
-    class="flex touch-pan-y items-center gap-3"
+    class="grippable flex touch-pan-y items-center gap-3"
     @pointerdown="swipe.press($event)"
     @pointermove="swipe.move($event)"
     @pointerup="swipe.release($event)"

@@ -73,12 +73,9 @@ nobody recorded both still go through, and the shake is never seen. The conditio
 "4 done" — that opens them in place, rather than a number in the header that toggles the whole
 list. The list should be the work left, with the finished ones reachable directly underneath.
 
-**The sheet on a timeline card has no way to remove the occurrence.** Tapping a card offers
-length and reminder and no way to take it off the day.
-
-**Tapping a chip in the drawer should remove it outright.**
-
-**Swiping a card off the ruler, right to left, should unschedule it** with a confirm.
+**Swiping a card off the ruler, right to left, should unschedule it.** Now reachable two
+other ways — the sheet on the card, and the drop strip that turns red — so this is a shortcut
+rather than the only route, and it can wait until the drag work has settled.
 
 **Feel.** A detent that can be felt: a short haptic tick as the day strip passes each valid
 day, and on the timeline as a card crosses each snap step. Capacitor's Haptics plugin covers

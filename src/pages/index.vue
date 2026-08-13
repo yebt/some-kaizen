@@ -868,7 +868,7 @@ const OUTCOME_CLASS = {
               draws on top of the row instead of behind it.
             -->
             <div
-              class="relative flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
+              class="grippable relative flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
               :class="[
                 swipe.activeKey.value === row.key ? 'duration-0' : 'duration-200',
                 row.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',
@@ -958,7 +958,7 @@ const OUTCOME_CLASS = {
             <li
               v-for="row in quitting"
               :key="row.habit.id"
-              class="flex items-center gap-3 rounded-card border border-line bg-surface p-3 shadow-card"
+              class="grippable flex items-center gap-3 rounded-card border border-line bg-surface p-3 shadow-card"
               @pointerdown="plainHold.press(row.habit.id, $event)"
               @pointermove="plainHold.move($event)"
               @pointerup="plainHold.release($event)"
@@ -1003,7 +1003,7 @@ const OUTCOME_CLASS = {
           <li
             v-for="item in schedule"
             :key="item.key"
-            class="flex gap-3"
+            class="grippable flex gap-3"
             @pointerdown="plainHold.press(item.holdKey, $event)"
             @pointermove="plainHold.move($event)"
             @pointerup="plainHold.release($event)"

@@ -12,23 +12,27 @@ useReminderSync()
 const route = useRoute()
 
 /**
- * A form is a place you are already in the middle of leaving.
+ * Screens that carry their own way out, and are worse for a tab bar underneath.
  *
- * It carries its own Cancel and its own Save, so a tab bar underneath offers a third way out
- * that discards what you typed without saying so. Hiding it also gives a long form back the
- * bottom of the screen, which is where its buttons are.
+ * A form has its own Cancel and its own Save, so a third exit that discards what you typed
+ * without saying so is a trap. The day timeline is the other kind: a full height working
+ * surface where the bar covers the last two hours of the day and competes for the same
+ * corner as the drawer of unplaced habits. Both put a back control beside their title
+ * instead, which is a way out you can see rather than one you have to know about.
  */
-const isForm = computed(() => /\/(new|edit)$/.test(route.path))
+const isImmersive = computed(
+  () => /\/(new|edit)$/.test(route.path) || route.path.startsWith('/day/'),
+)
 </script>
 
 <template>
   <div class="min-h-dvh bg-canvas">
     <!-- Padded for the floating tab bar so the last card is never trapped underneath it. -->
-    <main class="mx-auto w-full max-w-md px-4" :class="isForm ? 'pb-8' : 'pb-28'">
+    <main class="mx-auto w-full max-w-md px-4" :class="isImmersive ? 'pb-8' : 'pb-28'">
       <RouterView />
     </main>
 
-    <TabBar v-if="!isForm" />
+    <TabBar v-if="!isImmersive" />
 
     <!-- Mounted once at the root so a dialog is never clipped by a scrolling ancestor. -->
     <FeedbackHost />
