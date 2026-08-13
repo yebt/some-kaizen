@@ -219,6 +219,7 @@ function minutesAt(y: number): TimeOfDay | null {
 
 async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   hoverTime.value = null
+  slot.value = null
   swallowNextClick.value = true
   editing.value = null
 
@@ -275,16 +276,27 @@ const swallowNextClick = ref(false)
  * invisible as an affordance besides. A grip you can see, on its own element, competes with
  * nothing — the parent's press never starts because the gesture is claimed here first.
  */
-const resizing = ref<{ instanceId: Identifier; start: TimeOfDay; duration: number } | null>(null)
+type Edge = 'start' | 'end'
 
-/** The length to draw while a resize is in flight, before anything has been saved. */
-function previewDuration(instanceId: Identifier | undefined): number | undefined {
-  if (!instanceId || resizing.value?.instanceId !== instanceId) return undefined
-
-  return resizing.value.duration
+interface Resizing {
+  readonly instanceId: Identifier
+  readonly edge: Edge
+  /** The edge that is standing still, in minutes. Dragging one never moves the other. */
+  readonly anchor: TimeOfDay
+  readonly start: TimeOfDay
+  readonly duration: number
 }
 
-function startResize(instance: PlannedInstance | undefined, event: PointerEvent) {
+const resizing = ref<Resizing | null>(null)
+
+/** The span to draw while a resize is in flight, before anything has been saved. */
+function preview(instanceId: Identifier | undefined): Resizing | undefined {
+  if (!instanceId || resizing.value?.instanceId !== instanceId) return undefined
+
+  return resizing.value
+}
+
+function startResize(instance: PlannedInstance | undefined, edge: Edge, event: PointerEvent) {
   if (!instance || instance.startsAt === undefined) return
 
   // Claimed here so the card underneath never begins its own press.
@@ -297,6 +309,11 @@ function startResize(instance: PlannedInstance | undefined, event: PointerEvent)
   target.setPointerCapture?.(event.pointerId)
   resizing.value = {
     instanceId: instance.id,
+    edge,
+    anchor:
+      edge === 'end'
+        ? instance.startsAt
+        : ((instance.startsAt + instance.durationMinutes) as TimeOfDay),
     start: instance.startsAt,
     duration: instance.durationMinutes,
   }
@@ -309,12 +326,23 @@ function moveResize(event: PointerEvent) {
 
   event.stopPropagation()
 
-  const end = minutesAt(event.clientY)
+  const at = minutesAt(event.clientY)
 
-  if (end === null) return
+  if (at === null) return
 
-  // At least one snap step long, so a card can never be dragged into nothing.
-  resizing.value = { ...current, duration: Math.max(end - current.start, snapMinutes.value) }
+  // The anchored edge holds still: dragging the top moves the start and leaves the finish
+  // where it was, which is the opposite of dragging the bottom. Anything else means the
+  // card runs away from the finger.
+  const step = snapMinutes.value
+
+  resizing.value =
+    current.edge === 'end'
+      ? { ...current, duration: Math.max(at - current.anchor, step) }
+      : {
+          ...current,
+          start: Math.min(at, current.anchor - step) as TimeOfDay,
+          duration: Math.max(current.anchor - at, step),
+        }
 }
 
 async function endResize(event: PointerEvent) {
@@ -327,10 +355,107 @@ async function endResize(event: PointerEvent) {
 
   const existing = instances.value.find((instance) => instance.id === current.instanceId)
 
-  if (!existing || existing.durationMinutes === current.duration) return
+  if (!existing) return
 
-  await saveInstance.mutateAsync(resize(existing, current.duration))
-  feedback.notify(`${current.duration} minutes`, 'success')
+  const unchanged =
+    existing.durationMinutes === current.duration && existing.startsAt === current.start
+
+  if (unchanged) return
+
+  await saveInstance.mutateAsync(resize(scheduleAt(existing, current.start), current.duration))
+  feedback.notify(
+    `${preferences.formatClock(current.start)} – ${preferences.formatClock(current.start + current.duration)}`,
+    'success',
+  )
+}
+
+/**
+ * Where the card sits and how tall it is, preferring an edge that is currently being dragged.
+ *
+ * Computed rather than written inline: the first version fell back with `|| entry.top`, and
+ * a card starting at midnight is a top of zero, which that expression quietly replaced.
+ */
+function cardTop(entry: { top: number; duty: DayDuty }): number {
+  const current = preview(entry.duty.instance?.id)
+
+  return current ? current.start * pixelsPerMinute.value : entry.top
+}
+
+function cardHeight(entry: { height: number; duty: DayDuty }): number {
+  const current = preview(entry.duty.instance?.id)
+
+  return current ? Math.max(current.duration * pixelsPerMinute.value, 22) : entry.height
+}
+
+/** What the card reads while an edge is being dragged, before anything is saved. */
+function previewLabel(instanceId: Identifier | undefined): string | undefined {
+  const current = preview(instanceId)
+
+  if (!current) return undefined
+
+  return `${preferences.formatClock(current.start)} – ${preferences.formatClock(current.start + current.duration)}`
+}
+
+/**
+ * Where the card in the air was sitting before it was picked up.
+ *
+ * A day closes up behind a lifted card and leaves no trace of it, so there is nothing to
+ * aim back at and no way to see what is being moved. The outline is that trace.
+ */
+const liftedFrom = computed(() => {
+  if (!drag.isDragging.value) return undefined
+
+  const instance = drag.payload.value?.duty.instance
+
+  return instance ? spanOf(instance) : undefined
+})
+
+/** The footprint the card will take when it lands, drawn under the finger at real size. */
+const ghostHeight = computed(() => {
+  const instance = drag.payload.value?.duty.instance
+  const minutes = instance?.durationMinutes ?? DEFAULT_DURATION_MINUTES
+
+  return minutes * pixelsPerMinute.value
+})
+
+/**
+ * An hour claimed before anything has been chosen to fill it.
+ *
+ * The reverse of dragging a habit onto a time, and the order people actually think in when
+ * the constraint is the calendar rather than the habit: this hour is free, what goes in it?
+ */
+const slot = ref<{ start: TimeOfDay; duration: number } | null>(null)
+
+const DEFAULT_DURATION_MINUTES = 30
+
+function openSlot(event: MouseEvent) {
+  if (swallowNextClick.value) {
+    swallowNextClick.value = false
+
+    return
+  }
+
+  // A tap that landed on a card, a band or a grip is not a tap on an empty hour.
+  if ((event.target as Element).closest('[data-occupied]')) return
+
+  const start = minutesAt(event.clientY)
+
+  if (start === null) return
+
+  slot.value = { start, duration: DEFAULT_DURATION_MINUTES }
+}
+
+async function fillSlot(duty: DayDuty) {
+  const current = slot.value
+
+  slot.value = null
+
+  if (!current) return
+
+  const instance = await occurrenceFor(duty)
+
+  await saveInstance.mutateAsync(resize(scheduleAt(instance, current.start), current.duration))
+  feedback.notify(`${duty.habit.name} at ${preferences.formatClock(current.start)}`, 'success')
 }
 
 function openOccurrence(instanceId: Identifier | undefined, event: MouseEvent) {
@@ -433,7 +558,11 @@ async function setDuration(event: Event) {
 const liveMinutes = computed<number | null>(() => {
   const current = resizing.value
 
-  if (current) return Math.min(current.start + current.duration, MINUTES_IN_DAY)
+  if (current) {
+    return current.edge === 'end'
+      ? Math.min(current.start + current.duration, MINUTES_IN_DAY)
+      : current.start
+  }
 
   return hoverTime.value
 })
@@ -519,25 +648,34 @@ function trackHover(event: PointerEvent) {
     </div>
 
     <template v-else>
+      <!--
+        The tray folds away the moment a card leaves it.
+
+        It is a staging area, not a permanent feature of the day: while something is in the
+        air the only thing worth looking at is the hours it can land on, and on a phone the
+        tray was eating the top third of them. Collapsed rather than hidden, so it is still
+        a target to drop back onto.
+      -->
       <section
         :data-drop-zone="TRAY_ZONE"
-        class="rounded-card border border-dashed p-3 transition-colors"
-        :class="
+        class="overflow-hidden rounded-card border border-dashed transition-all duration-200"
+        :class="[
           drag.isDragging.value && drag.activeZone.value === TRAY_ZONE
             ? 'border-ink bg-accent'
-            : 'border-line'
-        "
+            : 'border-line',
+          drag.isDragging.value ? 'max-h-14 p-2 opacity-70' : 'max-h-64 p-3',
+        ]"
         aria-labelledby="untimed-heading"
       >
         <h2
           id="untimed-heading"
           class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
         >
-          Anytime today
+          {{ drag.isDragging.value ? 'Drop here to loosen it' : 'Anytime today' }}
         </h2>
 
-        <ul v-if="untimed.length" class="flex flex-wrap gap-2">
-          <li v-for="entry in untimed" :key="entry.key">
+        <ul v-if="untimed.length" class="flex snap-x gap-2 overflow-x-auto pb-1">
+          <li v-for="entry in untimed" :key="entry.key" class="shrink-0 snap-start">
             <DraggableItem
               v-bind="pressState(entry.key)"
               @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
@@ -561,9 +699,9 @@ function trackHover(event: PointerEvent) {
 
       <div class="mt-4 mb-2 flex items-end justify-between gap-3">
         <p class="text-xs text-ink-subtle">
-          Hold a card to move it, or drag the grip on its lower edge to change how long it lasts.
-          Both snap to {{ snapMinutes }} minutes — tap the time beside a card to set it to the
-          minute.
+          Hold a card to move it, drag a corner to change when it starts or ends, or tap an empty
+          hour to claim it. Everything snaps to {{ snapMinutes }} minutes — tap the time beside a
+          card to set it to the minute.
         </p>
 
         <!--
@@ -600,10 +738,15 @@ function trackHover(event: PointerEvent) {
         </div>
       </div>
 
-      <div class="flex">
+      <!--
+        Bled to the edges of the screen. The timeline is the one surface here whose value is
+        proportional to its area, and the page's reading margins were spending a tenth of
+        every hour on whitespace beside a ruler.
+      -->
+      <div class="-mx-4 flex">
         <!-- Hour gutter, outside the drop zone so a label never swallows a drop. -->
         <div
-          class="relative w-14 shrink-0"
+          class="relative w-11 shrink-0"
           :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
         >
           <div
@@ -646,13 +789,14 @@ function trackHover(event: PointerEvent) {
         <div
           ref="timeline"
           :data-drop-zone="TIMELINE_ZONE"
-          class="relative flex-1 rounded-card border transition-colors"
+          class="relative mr-2 flex-1 rounded-card border transition-colors"
           :class="
             drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
               ? 'border-ink'
               : 'border-line'
           "
           :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
+          @click="openSlot"
         >
           <div
             v-for="hour in hours"
@@ -669,6 +813,7 @@ function trackHover(event: PointerEvent) {
             v-for="band in bands"
             :key="band.key"
             :to="`/block-time/${band.blockId}`"
+            data-occupied
             class="absolute inset-x-0 bg-accent/70 px-2 py-1"
             :style="{ top: `${band.top}px`, height: `${band.height}px`, ...band.style }"
           >
@@ -687,15 +832,44 @@ function trackHover(event: PointerEvent) {
             :style="{ top: `${hoverTime * pixelsPerMinute}px` }"
           />
 
+          <!--
+            Where the card came from, held open while it is in the air.
+            Without it the day closes up behind the finger and there is no way to tell what
+            has been picked up, or to put it back where it was.
+          -->
+          <div
+            v-if="liftedFrom"
+            class="pointer-events-none absolute inset-x-1 rounded-cell border border-dashed border-line-strong"
+            :style="{
+              top: `${liftedFrom.start * pixelsPerMinute}px`,
+              height: `${liftedFrom.durationMinutes * pixelsPerMinute}px`,
+            }"
+            aria-hidden="true"
+          />
+
+          <!-- An hour claimed before anything has been decided to fill it. -->
+          <div
+            v-if="slot"
+            data-empty-slot
+            data-occupied
+            class="absolute inset-x-1 z-20 flex items-center justify-center rounded-cell border-2 border-dashed border-ink bg-accent/40"
+            :style="{
+              top: `${slot.start * pixelsPerMinute}px`,
+              height: `${slot.duration * pixelsPerMinute}px`,
+            }"
+          >
+            <span class="tabular text-[0.625rem] font-medium text-ink">
+              {{ preferences.formatClock(slot.start) }} · pick a habit
+            </span>
+          </div>
+
           <DraggableItem
             v-for="entry in timed"
             :key="entry.key"
             v-bind="pressState(entry.key)"
+            data-occupied
             class="absolute inset-x-1"
-            :style="{
-              top: `${entry.top}px`,
-              height: `${(previewDuration(entry.duty.instance?.id) ?? 0) * pixelsPerMinute || entry.height}px`,
-            }"
+            :style="{ top: `${cardTop(entry)}px`, height: `${cardHeight(entry)}px` }"
             @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
             @move="trackHover($event)"
             @release="drag.release($event)"
@@ -709,39 +883,85 @@ function trackHover(event: PointerEvent) {
               @click="openOccurrence(entry.duty.instance?.id, $event)"
             >
               <!--
-                The grip sits on the card's bottom edge and is deliberately taller than it
-                looks: a five pixel target is unhittable with a thumb, so it reaches upward
-                into the card while only its line is drawn.
+                Two contact points, at the corners a right hand reaches first, with the whole
+                middle of the card left to move it. One grip could only ever change the
+                length; moving the start without moving the finish needs its own edge.
+
+                Each is deliberately larger than it is drawn: a nine pixel dot is unhittable
+                with a thumb, so the touchable square reaches into the card while only the
+                dot is painted.
               -->
               <span
-                v-if="entry.duty.instance"
+                v-for="edge in entry.duty.instance ? (['start', 'end'] as const) : []"
+                :key="edge"
                 data-resize-grip
-                class="absolute inset-x-0 bottom-0 z-10 flex h-5 cursor-ns-resize touch-none items-end justify-center pb-1"
+                :data-edge="edge"
+                class="absolute z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
+                :class="edge === 'start' ? '-top-1 -left-1' : '-right-1 -bottom-1'"
                 aria-hidden="true"
-                @pointerdown="startResize(entry.duty.instance, $event)"
+                @pointerdown="startResize(entry.duty.instance, edge, $event)"
                 @pointermove="moveResize($event)"
                 @pointerup="endResize($event)"
                 @pointercancel="resizing = null"
                 @click.stop
               >
-                <span class="h-1 w-8 rounded-full bg-current opacity-40" />
+                <span class="size-2.5 rounded-full border-2 border-current bg-surface" />
               </span>
               <p class="flex items-center gap-1 truncate text-xs font-medium">
                 <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />
                 {{ entry.habit.name }}
               </p>
               <p class="tabular truncate text-[0.625rem] opacity-75">
-                {{
-                  previewDuration(entry.duty.instance?.id) !== undefined
-                    ? `${previewDuration(entry.duty.instance?.id)} min`
-                    : entry.label
-                }}
+                {{ previewLabel(entry.duty.instance?.id) ?? entry.label }}
               </p>
             </div>
           </DraggableItem>
         </div>
       </div>
     </template>
+
+    <!--
+      Cancelled by tapping anywhere outside it, which is the gesture everyone tries first on
+      something provisional. A slot is a question, not a record: nothing is written until a
+      habit is chosen for it, so backing out has to cost nothing.
+    -->
+    <AppDialog
+      :open="slot !== null"
+      :label="slot ? `What happens at ${preferences.formatClock(slot.start)}?` : ''"
+      @dismiss="slot = null"
+    >
+      <h2 class="text-base font-semibold text-ink">
+        {{ slot ? preferences.formatClock(slot.start) : '' }}
+      </h2>
+      <p class="mb-3 text-xs text-ink-muted">
+        {{ DEFAULT_DURATION_MINUTES }} minutes, adjustable once it is there.
+      </p>
+
+      <ul v-if="untimed.length" class="space-y-1.5">
+        <li v-for="entry in untimed" :key="entry.key">
+          <button
+            type="button"
+            class="w-full rounded-cell border border-line-strong bg-surface px-3.5 py-3 text-left text-sm font-medium text-ink"
+            :style="surfaceStyle(entry.habit)"
+            @click="fillSlot(entry.duty)"
+          >
+            {{ entry.habit.name }}
+          </button>
+        </li>
+      </ul>
+      <p v-else class="rounded-cell border border-dashed border-line p-4 text-xs text-ink-muted">
+        Everything the day owes already has a time. Loosen one back to the tray to put it somewhere
+        else.
+      </p>
+
+      <button
+        type="button"
+        class="mt-4 w-full rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
+        @click="slot = null"
+      >
+        Cancel
+      </button>
+    </AppDialog>
 
     <AppDialog :open="editing !== null" label="Adjust this occurrence" @dismiss="editing = null">
       <h2 class="text-base font-semibold text-ink">
@@ -860,6 +1080,8 @@ function trackHover(event: PointerEvent) {
       v-if="drag.isDragging.value"
       :position="drag.position.value"
       :label="drag.payload.value?.habit.name ?? ''"
+      :height="ghostHeight"
+      :detail="hoverTime === null ? undefined : preferences.formatClock(hoverTime)"
     />
   </div>
 </template>

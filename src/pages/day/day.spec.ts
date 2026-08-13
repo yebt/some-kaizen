@@ -34,6 +34,9 @@ let databaseCounter = 0
 
 beforeEach(async () => {
   databaseCounter += 1
+  // Preferences live in localStorage and outlive a test. A zoom level left behind by one
+  // case silently rescales every pixel assertion in the next one.
+  globalThis.localStorage?.clear()
   persistence = await createPersistence(`day-spec-${databaseCounter}`)
 })
 
@@ -287,6 +290,11 @@ describe('adjusting an occurrence', () => {
     return { habit, instance }
   }
 
+  /** Named, because the slot sheet and the amount dialog are `<dialog>` elements too. */
+  function sheet(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.find('dialog[aria-label="Adjust this occurrence"]')
+  }
+
   async function openSheet() {
     const { habit, instance } = scheduledMeditation()
 
@@ -302,14 +310,14 @@ describe('adjusting an occurrence', () => {
 
   async function press(wrapper: Awaited<ReturnType<typeof renderDay>>, label: string) {
     await wrapper
-      .findAll('dialog button')
+      .findAll('dialog[aria-label="Adjust this occurrence"] button')
       .find((node) => node.text() === label)
       ?.trigger('click')
     await settle()
   }
 
   it('offers the time, the length and the reminder, which is all an occurrence has', async () => {
-    const text = (await openSheet()).find('dialog').text()
+    const text = sheet(await openSheet()).text()
 
     expect(text).toContain('Starts')
     expect(text).toContain('For how long')
@@ -409,7 +417,7 @@ describe('dragging the grip on a card', () => {
   }
 
   function grip(wrapper: Awaited<ReturnType<typeof renderDay>>) {
-    return wrapper.find('[data-resize-grip]').element
+    return wrapper.find('[data-edge="end"]').element
   }
 
   async function dragGripTo(wrapper: Awaited<ReturnType<typeof renderDay>>, clientY: number) {
@@ -421,8 +429,11 @@ describe('dragging the grip on a card', () => {
     await settle()
   }
 
-  it('is there to be grabbed, since a length cannot be dragged out of a card body', async () => {
-    expect((await renderScheduled()).find('[data-resize-grip]').exists()).toBe(true)
+  it('offers a contact point on each edge, so a start moves without the finish', async () => {
+    const wrapper = await renderScheduled()
+
+    expect(wrapper.find('[data-edge="start"]').exists()).toBe(true)
+    expect(wrapper.find('[data-edge="end"]').exists()).toBe(true)
   })
 
   it('makes the occurrence last until where the finger let go', async () => {
@@ -467,7 +478,7 @@ describe('dragging the grip on a card', () => {
     handle.dispatchEvent(pointer('pointermove', 9 * 60))
     await flushPromises()
 
-    expect(wrapper.find('[aria-label="Adjust Meditate"]').text()).toContain('120 min')
+    expect(wrapper.find('[aria-label="Adjust Meditate"]').text()).toContain('07:00 – 09:00')
     expect((await persistence.instances.all())[0]?.durationMinutes).toBe(30)
   })
 
@@ -476,7 +487,9 @@ describe('dragging the grip on a card', () => {
 
     await dragGripTo(wrapper, 8 * 60)
 
-    expect(wrapper.find('dialog').attributes('open')).toBeUndefined()
+    expect(
+      wrapper.find('dialog[aria-label="Adjust this occurrence"]').attributes('open'),
+    ).toBeUndefined()
   })
 })
 
@@ -527,8 +540,10 @@ describe('the time marker in the hour column', () => {
     await marker(wrapper).trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('dialog').attributes('open')).toBeDefined()
-    expect(wrapper.find('dialog').text()).toContain('Meditate')
+    const editor = wrapper.find('dialog[aria-label="Adjust this occurrence"]')
+
+    expect(editor.attributes('open')).toBeDefined()
+    expect(editor.text()).toContain('Meditate')
   })
 
   it('shows nothing live until a gesture is actually happening', async () => {
@@ -537,7 +552,7 @@ describe('the time marker in the hour column', () => {
 
   it('calls out where a resize currently ends, while the finger is still down', async () => {
     const wrapper = await renderScheduled()
-    const handle = wrapper.find('[data-resize-grip]').element
+    const handle = wrapper.find('[data-edge="end"]').element
 
     handle.dispatchEvent(new MouseEvent('pointerdown', { clientY: 7 * 60 + 30, bubbles: true }))
     handle.dispatchEvent(new MouseEvent('pointermove', { clientY: 8 * 60 + 30, bubbles: true }))
@@ -593,7 +608,7 @@ describe('typing an exact time', () => {
   }
 
   function timeFields(wrapper: Awaited<ReturnType<typeof renderDay>>) {
-    return wrapper.findAll('dialog input[type="time"]')
+    return wrapper.findAll('dialog[aria-label="Adjust this occurrence"] input[type="time"]')
   }
 
   /** What the field currently shows, which is not the same as what the store holds. */
@@ -603,7 +618,7 @@ describe('typing an exact time', () => {
 
   async function chooseMode(wrapper: Awaited<ReturnType<typeof renderDay>>, label: string) {
     await wrapper
-      .findAll('dialog [role="tab"]')
+      .findAll('dialog[aria-label="Adjust this occurrence"] [role="tab"]')
       .find((node) => node.text() === label)
       ?.trigger('click')
     await flushPromises()
@@ -659,7 +674,10 @@ describe('typing an exact time', () => {
   it('takes a length in minutes directly', async () => {
     const wrapper = await openEditor()
 
-    await fill(wrapper.find('dialog input[type="number"]'), '37')
+    await fill(
+      wrapper.find('dialog[aria-label="Adjust this occurrence"] input[type="number"]'),
+      '37',
+    )
 
     expect((await persistence.instances.all())[0]?.durationMinutes).toBe(37)
   })
@@ -667,7 +685,10 @@ describe('typing an exact time', () => {
   it('refuses a length of nothing', async () => {
     const wrapper = await openEditor(7 * 60, 30)
 
-    await fill(wrapper.find('dialog input[type="number"]'), '0')
+    await fill(
+      wrapper.find('dialog[aria-label="Adjust this occurrence"] input[type="number"]'),
+      '0',
+    )
 
     expect((await persistence.instances.all())[0]?.durationMinutes).toBe(30)
   })
@@ -682,10 +703,6 @@ describe('typing an exact time', () => {
 })
 
 describe('stretching the day', () => {
-  beforeEach(() => {
-    globalThis.localStorage?.clear()
-  })
-
   async function renderScheduled() {
     const habit = meditate()
     const instance = scheduleAt(
@@ -757,7 +774,7 @@ describe('stretching the day', () => {
     await flushPromises()
 
     // On a doubled ruler 1210px is 10:05, a time the quarter hour step cannot express.
-    const handle = wrapper.find('[data-resize-grip]').element
+    const handle = wrapper.find('[data-edge="end"]').element
 
     handle.dispatchEvent(new MouseEvent('pointerdown', { clientY: 1080, bubbles: true }))
     handle.dispatchEvent(new MouseEvent('pointermove', { clientY: 1210, bubbles: true }))
@@ -782,5 +799,208 @@ describe('stretching the day', () => {
     await flushPromises()
 
     expect((await renderDay()).text()).toContain('5 min')
+  })
+})
+
+describe('dragging the top edge', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  /** A card from 09:00 to 10:00, so the top edge has room to move in both directions. */
+  async function renderScheduled() {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({
+        id: newIdentifier(),
+        habitId: habit.id,
+        date: DAY,
+        period: 'daily',
+        durationMinutes: 60,
+      }),
+      timeOfDay(9 * 60),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    return await renderDay()
+  }
+
+  function pointer(type: string, clientY: number) {
+    return new MouseEvent(type, { clientY, bubbles: true })
+  }
+
+  async function dragTopTo(wrapper: Awaited<ReturnType<typeof renderDay>>, clientY: number) {
+    const handle = wrapper.find('[data-edge="start"]').element
+
+    handle.dispatchEvent(pointer('pointerdown', 9 * 60))
+    handle.dispatchEvent(pointer('pointermove', clientY))
+    handle.dispatchEvent(pointer('pointerup', clientY))
+    await settle()
+  }
+
+  it('moves the start earlier', async () => {
+    const wrapper = await renderScheduled()
+
+    await dragTopTo(wrapper, 8 * 60)
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(8 * 60)
+  })
+
+  it('leaves the finish exactly where it was', async () => {
+    // The whole reason a second grip exists. One grip can only ever change the length; a
+    // start that drags its own end along with it has not moved anything.
+    const wrapper = await renderScheduled()
+
+    await dragTopTo(wrapper, 8 * 60)
+
+    const stored = (await persistence.instances.all())[0]
+
+    expect((stored?.startsAt ?? 0) + (stored?.durationMinutes ?? 0)).toBe(10 * 60)
+  })
+
+  it('grows the card when the start moves earlier', async () => {
+    const wrapper = await renderScheduled()
+
+    await dragTopTo(wrapper, 8 * 60)
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(120)
+  })
+
+  it('shrinks it when the start moves later', async () => {
+    const wrapper = await renderScheduled()
+
+    await dragTopTo(wrapper, 9 * 60 + 30)
+
+    expect((await persistence.instances.all())[0]?.durationMinutes).toBe(30)
+  })
+
+  it('refuses to drag the start past its own finish', async () => {
+    // Otherwise the card inverts and reads as ending before it began.
+    const wrapper = await renderScheduled()
+
+    await dragTopTo(wrapper, 11 * 60)
+
+    const stored = (await persistence.instances.all())[0]
+
+    expect(stored?.durationMinutes).toBe(15)
+    expect(stored?.startsAt).toBe(10 * 60 - 15)
+  })
+
+  it('calls out the moving edge rather than the still one', async () => {
+    const wrapper = await renderScheduled()
+    const handle = wrapper.find('[data-edge="start"]').element
+
+    handle.dispatchEvent(pointer('pointerdown', 9 * 60))
+    handle.dispatchEvent(pointer('pointermove', 8 * 60))
+    await flushPromises()
+
+    expect(wrapper.find('[data-live-time]').text()).toBe('08:00')
+  })
+})
+
+describe('claiming an empty hour', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  /** A daily habit with no time yet, so the tray has something to offer the slot. */
+  async function renderUnplanned() {
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    return await renderDay()
+  }
+
+  function slotSheet(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.findAll('dialog').find((node) => node.text().includes('adjustable'))
+  }
+
+  async function tapEmptyHourAt(wrapper: Awaited<ReturnType<typeof renderDay>>, clientY: number) {
+    const canvas = wrapper.find('[data-drop-zone="timeline"]')
+
+    await canvas.trigger('click', { clientY })
+    await flushPromises()
+  }
+
+  it('marks the hour before asking what goes in it', async () => {
+    const wrapper = await renderUnplanned()
+
+    await tapEmptyHourAt(wrapper, 15 * 60)
+
+    expect(wrapper.find('[data-empty-slot]').exists()).toBe(true)
+  })
+
+  it('offers what the day still owes', async () => {
+    const wrapper = await renderUnplanned()
+
+    await tapEmptyHourAt(wrapper, 15 * 60)
+
+    expect(slotSheet(wrapper)?.text()).toContain('Meditate')
+  })
+
+  it('schedules the chosen habit at that hour', async () => {
+    const wrapper = await renderUnplanned()
+
+    await tapEmptyHourAt(wrapper, 15 * 60)
+    await slotSheet(wrapper)
+      ?.findAll('button')
+      .find((node) => node.text() === 'Meditate')
+      ?.trigger('click')
+    await settle()
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(15 * 60)
+  })
+
+  it('writes nothing while the slot is only a question', async () => {
+    const wrapper = await renderUnplanned()
+
+    await tapEmptyHourAt(wrapper, 15 * 60)
+
+    expect(await persistence.instances.all()).toEqual([])
+  })
+
+  it('lets go when it is dismissed, since backing out must cost nothing', async () => {
+    const wrapper = await renderUnplanned()
+
+    await tapEmptyHourAt(wrapper, 15 * 60)
+    await slotSheet(wrapper)
+      ?.findAll('button')
+      .find((node) => node.text() === 'Cancel')
+      ?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-empty-slot]').exists()).toBe(false)
+    expect(await persistence.instances.all()).toEqual([])
+  })
+
+  it('ignores a tap that landed on something already there', async () => {
+    // A card, a block band or a grip is not an empty hour, and claiming one under a card
+    // would bury the card the tap was aimed at.
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({ id: newIdentifier(), habitId: habit.id, date: DAY, period: 'daily' }),
+      timeOfDay(9 * 60),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const wrapper = await renderDay()
+
+    await wrapper.find('[aria-label="Adjust Meditate"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-empty-slot]').exists()).toBe(false)
   })
 })
