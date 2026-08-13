@@ -1,7 +1,10 @@
 # UI audit — 2026-08-13
 
-Technical quality audit of the app's interface, at commit `a7b3e63`. Findings only; nothing
-here was fixed as part of the audit.
+Technical quality audit of the app's interface, at commit `a7b3e63`.
+
+**Status: every finding below has been fixed**, except the one marked as a false positive and
+the P3, which was a deliberate decision rather than a defect. `src/shared/assets/tokens.spec.ts`
+now measures the palette on every run, so the contrast findings cannot come back silently.
 
 ## Health score
 
@@ -106,17 +109,21 @@ tokens that escaped the system.
   pseudo-element, the way the timeline's resize grip already does.
 - **Suggested command**: `/impeccable adapt`
 
-### [P2] No visible focus style is authored anywhere
+### ~~[P2] No visible focus style is authored anywhere~~ — FALSE POSITIVE
 
-- **Location**: no `focus-visible` or `focus:` rule in `src/shared/ui` or `src/pages`.
-- **Category**: Accessibility
-- **Impact**: Nothing suppresses the browser default, so keyboard focus is not lost — but
-  the UA ring is tuned for white pages, and on this warm canvas with `rounded-full` controls
-  it reads poorly and clips against the pill shapes.
-- **Standard**: WCAG 2.2 §2.4.7 Focus Visible (met by default), §2.4.13 Focus Appearance.
-- **Recommendation**: One authored ring on `:focus-visible` in `main.css`, using `ink` with
-  an offset so it works on both themes.
-- **Suggested command**: `/impeccable polish`
+**Withdrawn.** The original scan looked for `focus-visible` in `.vue` files only. The rule
+exists, and has all along, in `main.css` under `@layer base`:
+
+```css
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+```
+
+A 2px ring in the primary ink at 14.7:1, offset clear of the pill shapes, on both themes.
+Nothing to fix. Recorded rather than deleted because an audit that quietly removes its own
+mistakes is an audit nobody can check.
 
 ### [P3] Two gutter markers overlap when occurrences share a start minute
 
@@ -152,10 +159,33 @@ missing rather than wrong — they were never added, as opposed to being added b
   31 kB gzipped and routes are split.
 - **Zero horizontal overflow** and a mobile-first layout with real safe-area handling.
 
-## Recommended order
+## What was done
 
-1. **[P1] `/impeccable colorize`** — lift `ink-subtle`, `ink-muted` and the control border to
-   AA. One token change, 244 sites.
-2. **[P2] `/impeccable animate`** — a real reduced-motion alternative that keeps feedback.
-3. **[P2] `/impeccable adapt`** — extend the hit areas of the icon buttons.
-4. **[P2] `/impeccable polish`** — author the focus ring and re-verify.
+**Contrast.** `ink-muted` 58% → 46%, `ink-subtle` 72% → 53% in light; 68% → 72% and 50% → 62%
+in dark. `line-strong` became the control boundary at 63% / 52%, clearing 3:1 on every
+surface, and it now carries every input, select and outlined button. `line` stays soft: a
+divider separates things already distinguishable and is exempt.
+
+Passing the floor was not enough on its own. At exactly 4.5:1 both secondary tones solve to
+the *same* lightness, so the obvious fix would have deleted a tier of hierarchy while
+satisfying the checker. The gap between them is smaller than it wants to be, and everything
+below muted now leans on size and weight instead of more grey.
+
+**A drift caught in the act.** The dark palette is declared twice — once under
+`prefers-color-scheme`, once under `[data-theme='dark']` — because CSS cannot share a block
+across that boundary. The first edit updated only one of them, which would have left anyone
+with dark explicitly chosen on the old failing values. `tokens.spec.ts` now fails when the
+two disagree.
+
+**Motion.** Rows still fade in and out; they no longer slide. The fade is the only thing
+telling you which row was just created or deleted, so removing it would have answered a
+request for calm by removing the feedback rather than the discomfort. Gated per transition
+rather than globally, because `translate` is also how the drag ghost is centred and how the
+timeline's hour markers are aligned — a blanket rule would have broken the layout for exactly
+the people least able to tolerate it.
+
+**Targets.** A `hit-area` utility gives fourteen icon controls a 44px reachable area without
+changing what is drawn. Four containers had their gaps widened from 4–8px to 12px first:
+two 44px areas four pixels apart overlap, and in the overlap the later element wins — the
+right edge of "previous day" would have quietly triggered "next day". That would have been a
+worse bug than the small target it fixed.

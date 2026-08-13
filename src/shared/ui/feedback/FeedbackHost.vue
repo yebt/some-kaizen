@@ -29,7 +29,7 @@ const TOAST_TONE_CLASS = {
     <div class="mt-5 flex gap-2">
       <button
         type="button"
-        class="flex-1 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
+        class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
         @click="feedback.resolve(false)"
       >
         {{ request?.cancelLabel ?? 'Cancel' }}
@@ -53,9 +53,9 @@ const TOAST_TONE_CLASS = {
   >
     <TransitionGroup
       enter-active-class="transition duration-200 ease-out"
-      enter-from-class="translate-y-2 opacity-0"
+      enter-from-class="translate-y-2 opacity-0 motion-reduce:translate-y-0"
       leave-active-class="transition duration-150 ease-in"
-      leave-to-class="translate-y-2 opacity-0"
+      leave-to-class="translate-y-2 opacity-0 motion-reduce:translate-y-0"
     >
       <button
         v-for="toast in feedback.toasts"

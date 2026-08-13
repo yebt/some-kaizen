@@ -130,7 +130,7 @@ const lastRelapse = computed(() => {
         </div>
         <RouterLink
           :to="`/habits/${habit.id}/edit`"
-          class="shrink-0 rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted"
+          class="shrink-0 rounded-full border border-line-strong px-3 py-1.5 text-xs font-medium text-ink-muted"
         >
           Edit
         </RouterLink>

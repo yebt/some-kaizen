@@ -19,10 +19,21 @@
   --color-surface: oklch(100% 0 0);
   --color-surface-sunken: oklch(97% 0.004 85);
 
-  /* Text, from primary reading weight down to hints. */
+  /*
+   * Text, from primary reading weight down to hints.
+   *
+   * Every tier clears 4.5:1 against the lightest surface it is ever used on, including the
+   * two secondary ones. The tempting palette — a soft grey for labels, a softer one for
+   * hints — measures 3.7:1 and 2.2:1 on this canvas, which reads as tasteful on a desktop
+   * monitor indoors and as blank on a phone in daylight, where this app is actually used.
+   *
+   * The gap between muted and subtle is therefore smaller than it wants to be. A third
+   * visible tier of grey does not exist above the contrast floor, so hierarchy below muted
+   * is carried by size and weight instead of by more lightness.
+   */
   --color-ink: oklch(23% 0.004 85);
-  --color-ink-muted: oklch(58% 0.008 85);
-  --color-ink-subtle: oklch(72% 0.006 85);
+  --color-ink-muted: oklch(46% 0.008 85);
+  --color-ink-subtle: oklch(53% 0.006 85);
   --color-ink-inverse: oklch(98% 0.002 85);
 
   /* The beige band that marks a selected range in the reference calendar. */
@@ -30,8 +41,18 @@
   --color-accent-strong: oklch(80% 0.024 82);
   --color-accent-ink: oklch(30% 0.02 82);
 
+  /*
+   * Two borders with different jobs.
+   *
+   * `line` is a hairline: it separates things that are already distinguishable, and a
+   * divider carries no information a reader would lose. `line-strong` is the boundary of a
+   * control — the only thing saying "there is a field here" — so it clears 3:1 against
+   * every surface it can sit on. A control drawn in `line` is a control an eye can miss
+   * entirely, which is worse than faint text: it removes the affordance rather than making
+   * it hard to read.
+   */
   --color-line: oklch(91% 0.005 85);
-  --color-line-strong: oklch(84% 0.006 85);
+  --color-line-strong: oklch(63% 0.006 85);
 
   /* Outcome colours. Muted on purpose: a missed day is information, not an alarm. */
   --color-done: oklch(62% 0.11 155);
@@ -71,8 +92,8 @@
     --color-surface-sunken: oklch(15% 0.005 85);
 
     --color-ink: oklch(95% 0.003 85);
-    --color-ink-muted: oklch(68% 0.007 85);
-    --color-ink-subtle: oklch(50% 0.006 85);
+    --color-ink-muted: oklch(72% 0.007 85);
+    --color-ink-subtle: oklch(62% 0.006 85);
     --color-ink-inverse: oklch(19% 0.005 85);
 
     --color-accent: oklch(34% 0.018 82);
@@ -80,7 +101,7 @@
     --color-accent-ink: oklch(90% 0.02 82);
 
     --color-line: oklch(27% 0.005 85);
-    --color-line-strong: oklch(35% 0.006 85);
+    --color-line-strong: oklch(52% 0.006 85);
 
     --color-done: oklch(70% 0.12 155);
     --color-done-soft: oklch(30% 0.05 155);
@@ -96,14 +117,22 @@
   }
 }
 
+/*
+ * The same palette again, for an explicit choice rather than the system's.
+ *
+ * CSS has no way to share one declaration block between a media query and a plain selector,
+ * so this is a copy — and a copy that has already drifted once, when only the media query
+ * half was updated and a stored dark theme kept the old, failing contrast. Anything changed
+ * above must be changed here in the same edit. `dark-theme.spec.ts` fails when they differ.
+ */
 :root[data-theme='dark'] {
   --color-canvas: oklch(17.5% 0.005 85);
   --color-surface: oklch(21.5% 0.006 85);
   --color-surface-sunken: oklch(15% 0.005 85);
 
   --color-ink: oklch(95% 0.003 85);
-  --color-ink-muted: oklch(68% 0.007 85);
-  --color-ink-subtle: oklch(50% 0.006 85);
+  --color-ink-muted: oklch(72% 0.007 85);
+  --color-ink-subtle: oklch(62% 0.006 85);
   --color-ink-inverse: oklch(19% 0.005 85);
 
   --color-accent: oklch(34% 0.018 82);
@@ -111,7 +140,7 @@
   --color-accent-ink: oklch(90% 0.02 82);
 
   --color-line: oklch(27% 0.005 85);
-  --color-line-strong: oklch(35% 0.006 85);
+  --color-line-strong: oklch(52% 0.006 85);
 
   --color-done: oklch(70% 0.12 155);
   --color-done-soft: oklch(30% 0.05 155);
@@ -152,6 +181,49 @@
     /* Removes the 300ms tap delay and the grey flash on Android WebView. */
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * Motion, for someone who has asked for less of it.
+   *
+   * Deliberately not a blanket `animation: none`. Rows still fade as they arrive and leave,
+   * because that fade is the only thing telling you which row was just created or deleted;
+   * removing it would answer a request for calm by removing the feedback instead of the
+   * discomfort. What goes is the travel — the sliding and the reordering — which is the part
+   * that actually provokes it.
+   *
+   * The entrance classes carry `motion-reduce:` variants of their own rather than being
+   * neutralised from here: `translate` is also how the drag ghost is centred and how the
+   * timeline's hour markers are aligned, so a global rule would silently break the layout
+   * for exactly the users least able to tolerate a broken layout.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    /* A press still responds; it simply stops flexing. */
+    button:active,
+    [role='button']:active {
+      scale: 1 !important;
+    }
+  }
+}
+
+/*
+ * A comfortable target around a small control.
+ *
+ * The drawn size stays: an icon button that grows to 44px to satisfy a guideline turns a
+ * quiet row into a row of buttons. The reachable area grows instead, centred on the icon and
+ * invisible, which is what the guideline is actually about.
+ */
+@utility hit-area {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 2.75rem);
+    height: max(100%, 2.75rem);
+    translate: -50% -50%;
   }
 }
 

@@ -523,7 +523,7 @@ const OUTCOME_CLASS = {
             class="flex items-center gap-3 rounded-card border border-line bg-surface p-3 shadow-card"
           >
             <span
-              class="grid size-8 shrink-0 place-items-center rounded-full bg-relapse-soft text-relapse"
+              class="hit-area grid size-8 shrink-0 place-items-center rounded-full bg-relapse-soft text-relapse"
             >
               <AppIcon name="ban" :size="16" />
             </span>
@@ -541,7 +541,7 @@ const OUTCOME_CLASS = {
               </button>
               <button
                 type="button"
-                class="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-relapse"
+                class="rounded-full border border-line-strong px-3 py-1.5 text-xs font-medium text-ink-muted hover:text-relapse"
                 @click="answerNegative(check.habit, check.day, false)"
               >
                 No
@@ -560,9 +560,9 @@ const OUTCOME_CLASS = {
           tag="ul"
           class="space-y-1.5"
           enter-active-class="transition duration-200 ease-out"
-          enter-from-class="-translate-x-3 opacity-0"
+          enter-from-class="-translate-x-3 opacity-0 motion-reduce:translate-x-0"
           leave-active-class="absolute transition duration-150 ease-in"
-          leave-to-class="translate-x-3 opacity-0"
+          leave-to-class="translate-x-3 opacity-0 motion-reduce:translate-x-0"
           move-class="transition-transform duration-200"
         >
           <li v-for="row in duties" :key="row.key" class="relative overflow-hidden rounded-card">
@@ -640,7 +640,7 @@ const OUTCOME_CLASS = {
               <button
                 v-else
                 type="button"
-                class="grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
+                class="hit-area grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
                 :class="OUTCOME_CLASS[row.outcome ?? 'missed']"
                 :aria-label="`Mark ${row.habit.name}`"
                 :aria-pressed="row.outcome === 'done'"
@@ -677,7 +677,7 @@ const OUTCOME_CLASS = {
               class="flex items-center gap-3 rounded-card border border-line bg-surface p-3 shadow-card"
             >
               <span
-                class="grid size-7 shrink-0 place-items-center rounded-full"
+                class="hit-area grid size-7 shrink-0 place-items-center rounded-full"
                 :style="surfaceStyle(row.habit)"
                 :class="row.habit.colour ? '' : 'bg-surface-sunken text-ink-subtle'"
               >
@@ -744,7 +744,7 @@ const OUTCOME_CLASS = {
 
         <RouterLink
           :to="`/day/${selectedDay}`"
-          class="mt-3 flex items-center justify-center gap-1.5 rounded-full border border-line px-4 py-2.5 text-xs font-medium text-ink-muted"
+          class="mt-3 flex items-center justify-center gap-1.5 rounded-full border border-line-strong px-4 py-2.5 text-xs font-medium text-ink-muted"
         >
           Open the timeline
           <AppIcon name="chevron-right" :size="14" />
@@ -768,13 +768,13 @@ const OUTCOME_CLASS = {
           step="any"
           autofocus
           :aria-label="`Amount in ${logging.habit.measure.unit}`"
-          class="tabular w-full rounded-cell border border-line bg-surface px-3.5 py-3 text-lg text-ink"
+          class="tabular w-full rounded-cell border border-line-strong bg-surface px-3.5 py-3 text-lg text-ink"
         />
 
         <div class="mt-4 flex gap-2">
           <button
             type="button"
-            class="flex-1 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted"
+            class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
             @click="logging = null"
           >
             Cancel

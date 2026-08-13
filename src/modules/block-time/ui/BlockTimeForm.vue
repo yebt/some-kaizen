@@ -92,7 +92,7 @@ defineExpose({ reject })
         type="text"
         required
         placeholder="Sleep"
-        class="w-full rounded-cell border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
+        class="w-full rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
       />
     </div>
 
@@ -103,7 +103,7 @@ defineExpose({ reject })
           v-model="start"
           type="time"
           required
-          class="tabular mt-1.5 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
         />
       </label>
       <label class="flex-1 text-xs font-medium text-ink-muted">
@@ -112,7 +112,7 @@ defineExpose({ reject })
           v-model="end"
           type="time"
           required
-          class="tabular mt-1.5 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
         />
       </label>
       <span class="tabular pb-3 text-xs text-ink-subtle">{{ durationLabel }}</span>
@@ -158,7 +158,7 @@ defineExpose({ reject })
     <div class="flex gap-2 pt-1">
       <RouterLink
         to="/block-time"
-        class="flex-1 rounded-full border border-line px-4 py-2.5 text-center text-sm font-medium text-ink-muted"
+        class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-center text-sm font-medium text-ink-muted"
       >
         Cancel
       </RouterLink>

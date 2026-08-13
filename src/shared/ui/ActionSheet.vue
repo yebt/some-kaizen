@@ -39,7 +39,7 @@ const emit = defineEmits<{ select: [key: string]; dismiss: [] }>()
 
     <button
       type="button"
-      class="mt-3 w-full rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted"
+      class="mt-3 w-full rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
       @click="emit('dismiss')"
     >
       Cancel

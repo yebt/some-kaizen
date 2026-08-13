@@ -172,10 +172,10 @@ function shiftWeek(offset: number) {
         <h1 class="text-2xl font-semibold tracking-tight text-ink">Plan</h1>
         <p class="text-sm text-ink-muted">{{ rangeLabel }}</p>
       </div>
-      <div class="flex gap-1">
+      <div class="flex gap-3">
         <button
           type="button"
-          class="grid size-8 place-items-center rounded-full border border-line text-ink-muted transition-colors hover:text-ink"
+          class="hit-area grid size-8 place-items-center rounded-full border border-line-strong text-ink-muted transition-colors hover:text-ink"
           aria-label="Previous week"
           @click="shiftWeek(-1)"
         >
@@ -183,7 +183,7 @@ function shiftWeek(offset: number) {
         </button>
         <button
           type="button"
-          class="grid size-8 place-items-center rounded-full border border-line text-ink-muted transition-colors hover:text-ink"
+          class="hit-area grid size-8 place-items-center rounded-full border border-line-strong text-ink-muted transition-colors hover:text-ink"
           aria-label="Next week"
           @click="shiftWeek(1)"
         >
@@ -218,7 +218,7 @@ function shiftWeek(offset: number) {
               @cancel="drag.cancel()"
             >
               <span
-                class="flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card transition-transform active:scale-95"
+                class="flex items-center gap-2 rounded-full border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card transition-transform active:scale-95"
                 :style="surfaceStyle(entry.habit)"
               >
                 {{ entry.habit.name }}

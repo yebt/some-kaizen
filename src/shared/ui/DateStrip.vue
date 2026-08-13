@@ -28,10 +28,10 @@ const cells = computed(() =>
 </script>
 
 <template>
-  <div class="flex items-center gap-1">
+  <div class="flex items-center gap-3">
     <button
       type="button"
-      class="grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:text-ink"
+      class="hit-area grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:text-ink"
       aria-label="Previous week"
       @click="$emit('previous')"
     >
@@ -67,7 +67,7 @@ const cells = computed(() =>
 
     <button
       type="button"
-      class="grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:text-ink"
+      class="hit-area grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:text-ink"
       aria-label="Next week"
       @click="$emit('next')"
     >

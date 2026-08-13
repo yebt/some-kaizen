@@ -222,7 +222,7 @@ function submit() {
         required
         :maxlength="MAX_HABIT_NAME_LENGTH"
         :placeholder="namePlaceholder"
-        class="w-full rounded-cell border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
+        class="w-full rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
       />
     </div>
 
@@ -242,13 +242,13 @@ function submit() {
           min="1"
           step="1"
           aria-label="Times per period"
-          class="tabular w-20 rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          class="tabular w-20 rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
         />
         <span class="text-sm text-ink-muted">time(s) per</span>
         <select
           v-model="period"
           aria-label="Period"
-          class="flex-1 rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          class="flex-1 rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
         >
           <option v-for="option in PERIODS" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -286,7 +286,7 @@ function submit() {
         type="text"
         placeholder="litres"
         aria-label="Unit"
-        class="w-full rounded-cell border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
+        class="w-full rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
       />
       <div class="flex gap-2">
         <label class="flex-1 text-xs text-ink-muted">
@@ -296,7 +296,7 @@ function submit() {
             type="number"
             min="0"
             step="any"
-            class="tabular mt-1 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+            class="tabular mt-1 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
           />
         </label>
         <label class="flex-1 text-xs text-ink-muted">
@@ -306,7 +306,7 @@ function submit() {
             type="number"
             min="0"
             step="any"
-            class="tabular mt-1 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+            class="tabular mt-1 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
           />
         </label>
       </div>
@@ -329,7 +329,7 @@ function submit() {
     <div class="flex gap-2 pt-1">
       <RouterLink
         to="/habits"
-        class="flex-1 rounded-full border border-line px-4 py-2.5 text-center text-sm font-medium text-ink-muted"
+        class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-center text-sm font-medium text-ink-muted"
       >
         Cancel
       </RouterLink>

@@ -147,9 +147,9 @@ function isPressed(id: Identifier) {
       tag="ul"
       class="space-y-2"
       enter-active-class="transition duration-200 ease-out"
-      enter-from-class="-translate-y-2 scale-98 opacity-0"
+      enter-from-class="-translate-y-2 scale-98 opacity-0 motion-reduce:translate-y-0 motion-reduce:scale-100"
       leave-active-class="absolute inset-x-0 transition duration-150 ease-in"
-      leave-to-class="translate-x-4 opacity-0"
+      leave-to-class="translate-x-4 opacity-0 motion-reduce:translate-x-0"
       move-class="transition-transform duration-200"
     >
       <li
@@ -175,7 +175,7 @@ function isPressed(id: Identifier) {
         </div>
         <button
           type="button"
-          class="grid size-8 shrink-0 place-items-center rounded-full border border-line text-ink-muted"
+          class="hit-area grid size-8 shrink-0 place-items-center rounded-full border border-line-strong text-ink-muted"
           :aria-label="`Actions for ${block.name}`"
           @click="menuFor = block"
         >

@@ -493,17 +493,17 @@ function trackHover(event: PointerEvent) {
         <h1 class="text-2xl font-semibold tracking-tight text-ink">Day</h1>
         <p class="text-sm text-ink-muted">{{ dayLabel }}</p>
       </div>
-      <div class="flex gap-1">
+      <div class="flex gap-3">
         <RouterLink
           :to="`/day/${addDays(day, -1)}`"
-          class="grid size-8 place-items-center rounded-full border border-line text-ink-muted"
+          class="hit-area grid size-8 place-items-center rounded-full border border-line-strong text-ink-muted"
           aria-label="Previous day"
         >
           <AppIcon name="chevron-left" :size="16" />
         </RouterLink>
         <RouterLink
           :to="`/day/${addDays(day, 1)}`"
-          class="grid size-8 place-items-center rounded-full border border-line text-ink-muted"
+          class="hit-area grid size-8 place-items-center rounded-full border border-line-strong text-ink-muted"
           aria-label="Next day"
         >
           <AppIcon name="chevron-right" :size="16" />
@@ -546,7 +546,7 @@ function trackHover(event: PointerEvent) {
               @cancel="drag.cancel()"
             >
               <span
-                class="block rounded-full border border-line bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
+                class="block rounded-full border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
                 :style="surfaceStyle(entry.habit)"
               >
                 {{ entry.habit.name }}
@@ -572,13 +572,13 @@ function trackHover(event: PointerEvent) {
           glass would only have promised a better view.
         -->
         <div
-          class="flex shrink-0 items-center gap-1 rounded-full border border-line p-1"
+          class="flex shrink-0 items-center gap-1 rounded-full border border-line-strong p-1"
           role="group"
           :aria-label="ZOOM_LABEL"
         >
           <button
             type="button"
-            class="grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
+            class="hit-area grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
             aria-label="Wider view, coarser steps"
             :disabled="preferences.preferences.timeline === 'coarse'"
             @click="preferences.zoomTimeline(-1)"
@@ -590,7 +590,7 @@ function trackHover(event: PointerEvent) {
           </span>
           <button
             type="button"
-            class="grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
+            class="hit-area grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
             aria-label="Closer view, finer steps"
             :disabled="preferences.preferences.timeline === 'fine'"
             @click="preferences.zoomTimeline(1)"
@@ -756,7 +756,7 @@ function trackHover(event: PointerEvent) {
         Starts
         <input
           type="time"
-          class="tabular mt-1.5 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm font-normal tracking-normal text-ink normal-case"
+          class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm font-normal tracking-normal text-ink normal-case"
           :value="startValue"
           @change="setStart"
         />
@@ -774,7 +774,7 @@ function trackHover(event: PointerEvent) {
         Ends
         <input
           type="time"
-          class="tabular mt-1.5 w-full rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
           :value="endValue"
           @change="setEnd"
         />
@@ -787,7 +787,7 @@ function trackHover(event: PointerEvent) {
             min="1"
             step="5"
             aria-label="Minutes"
-            class="tabular w-24 rounded-cell border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+            class="tabular w-24 rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
             :value="editingInstance?.durationMinutes"
             @change="setDuration"
           />
@@ -849,7 +849,7 @@ function trackHover(event: PointerEvent) {
 
       <button
         type="button"
-        class="mt-5 w-full rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted"
+        class="mt-5 w-full rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
         @click="editing = null"
       >
         Done

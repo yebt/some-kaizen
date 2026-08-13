@@ -16,7 +16,7 @@ const TABS: ReadonlyArray<{ to: string; icon: IconName; label: string }> = [
     aria-label="Main"
   >
     <div
-      class="pointer-events-auto flex items-center gap-1 rounded-full border border-line bg-surface/90 p-1.5 shadow-float backdrop-blur-xl"
+      class="pointer-events-auto flex items-center gap-1 rounded-full border border-line-strong bg-surface/90 p-1.5 shadow-float backdrop-blur-xl"
     >
       <RouterLink
         v-for="tab in TABS.slice(0, 2)"

@@ -291,7 +291,7 @@ async function clearEverything() {
           </button>
           <button
             type="button"
-            class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-xs font-medium text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
+            class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-line-strong px-4 py-2.5 text-xs font-medium text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
             :disabled="isWorking"
             @click="importData"
           >
@@ -422,7 +422,7 @@ async function clearEverything() {
       <div class="mt-5 flex gap-2">
         <button
           type="button"
-          class="flex-1 rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-muted"
+          class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
           @click="pending = null"
         >
           Cancel

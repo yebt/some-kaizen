@@ -17,7 +17,7 @@ const model = defineModel<string>({ required: true })
     a busy day pushed the timeline entirely off screen.
   -->
   <div
-    class="flex gap-1 rounded-full border border-line bg-surface-sunken p-1"
+    class="flex gap-1 rounded-full border border-line-strong bg-surface-sunken p-1"
     role="tablist"
     :aria-label="label"
   >
