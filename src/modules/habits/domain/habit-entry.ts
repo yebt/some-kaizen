@@ -231,16 +231,27 @@ export function latestEntryForInstance(
 }
 
 /**
- * The finished days still waiting for a verdict.
+ * The finished days still waiting for a verdict, most recent first.
  *
- * Today is never included, because today is not over. This is what feeds the "yesterday,
- * did you?" prompt on the home screen, and it deliberately keeps asking about older days
- * so a few skipped mornings do not quietly erase a week of history.
+ * Today is never included, because today is not over.
+ *
+ * Newest first because that is the order the answers exist in. Yesterday you remember; a
+ * Tuesday in June you do not, and a prompt that puts it first buries the only question
+ * anyone can actually answer behind three hundred they cannot.
+ *
+ * Bounded for the same reason. A day nobody judged inside the window is not clean and not a
+ * relapse — it is unanswered, and it stays that way. Inventing a verdict for it months later
+ * would put a guess into the same column as a measurement, and the heatmap already draws an
+ * unanswered day apart from a failed one.
  */
+/** How far back a verdict is still worth asking for. Beyond this, an answer is a guess. */
+export const JUDGEABLE_DAYS = 7
+
 export function pendingNegativeChecks(
   habit: NegativeHabit,
   entries: readonly HabitEntry[],
   today: CalendarDate,
+  within: number = JUDGEABLE_DAYS,
 ): CalendarDate[] {
   const lastJudgeableDay = earliest(addDays(today, -1), habit.archivedOn)
 
@@ -250,7 +261,11 @@ export function pendingNegativeChecks(
     entries.filter((entry) => entry.habitId === habit.id).map((entry) => entry.date),
   )
 
-  return eachDayBetween(habit.createdOn, lastJudgeableDay).filter((day) => !answered.has(day))
+  const oldest = latest(addDays(lastJudgeableDay, -(within - 1)), habit.createdOn)
+
+  return eachDayBetween(oldest, lastJudgeableDay)
+    .filter((day) => !answered.has(day))
+    .reverse()
 }
 
 /** Groups entries by the day they describe, for a calendar or heatmap to read directly. */
@@ -296,6 +311,10 @@ function assertNotBeforeCreation(createdOn: CalendarDate, date: CalendarDate): v
   if (isBefore(date, createdOn)) {
     throw new EntryTooEarlyError(`Cannot record ${date}, before the habit was created.`)
   }
+}
+
+function latest(day: CalendarDate, other: CalendarDate): CalendarDate {
+  return isBefore(day, other) ? other : day
 }
 
 function earliest(date: CalendarDate, other: CalendarDate | undefined): CalendarDate {

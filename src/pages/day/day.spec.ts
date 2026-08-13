@@ -101,7 +101,7 @@ function meditate() {
 }
 
 describe('the timeline', () => {
-  it('renders a drop zone for the ruler and one for the tray', async () => {
+  it('renders a drop zone for the ruler', async () => {
     await replaceDataset(persistence, EMPTY_DATASET)
 
     const zones = (await renderDay())
@@ -109,7 +109,6 @@ describe('the timeline', () => {
       .map((node) => node.attributes('data-drop-zone'))
 
     expect(zones).toContain('timeline')
-    expect(zones).toContain('tray')
   })
 
   it('places a scheduled occurrence at its own minute', async () => {
@@ -198,7 +197,9 @@ describe('the tray', () => {
     expect(tray.text()).toContain('Meditate')
   })
 
-  it('is empty once everything has a time', async () => {
+  it('gets out of the way entirely once everything has a time', async () => {
+    // A drawer with nothing in it is a drawer taking up a screen for no reason. The place to
+    // drop a card back appears while one is in the air, not while the day sits still.
     const habit = meditate()
     const instance = scheduleAt(
       planInstance({ id: newIdentifier(), habitId: habit.id, date: DAY, period: 'daily' }),
@@ -207,9 +208,7 @@ describe('the tray', () => {
 
     await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
 
-    expect((await renderDay()).find('[data-drop-zone="tray"]').text()).toContain(
-      'Everything has a time',
-    )
+    expect((await renderDay()).find('[data-drop-zone="tray"]').exists()).toBe(false)
   })
 
   it('ignores occurrences belonging to another day', async () => {
@@ -230,9 +229,7 @@ describe('the tray', () => {
 
     await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
 
-    expect((await renderDay()).find('[data-drop-zone="tray"]').text()).toContain(
-      'Everything has a time',
-    )
+    expect((await renderDay()).find('[data-drop-zone="tray"]').exists()).toBe(false)
   })
 
   it('offers a daily habit that was never placed, so it can be given an hour', async () => {

@@ -118,7 +118,10 @@ const onThisDay = computed(() =>
   dutiesFor(habits.value, instances.value, day.value).map((duty, index) => ({
     duty,
     habit: duty.habit,
-    key: duty.instance?.id ?? `${duty.habit.id}-slot-${duty.slot ?? index}`,
+    // The day is part of the identity. Without it Monday's unplanned meditation and
+    // Tuesday's share a key, so moving between days makes the list animate a row out
+    // and an identical one in — which reads on screen as a duplicate that then vanishes.
+    key: duty.instance?.id ?? `${duty.habit.id}-${day.value}-slot-${duty.slot ?? index}`,
     span: duty.instance ? spanOf(duty.instance) : undefined,
   })),
 )
@@ -670,74 +673,99 @@ function trackHover(event: PointerEvent) {
 
     <template v-else>
       <!--
-        The tray folds away the moment a card leaves it.
+        A drawer over the day rather than a panel above it.
 
-        It is a staging area, not a permanent feature of the day: while something is in the
-        air the only thing worth looking at is the hours it can land on, and on a phone the
-        tray was eating the top third of them. Collapsed rather than hidden, so it is still
-        a target to drop back onto.
+        As part of the layout it was doing two things wrong at once: it spent the top third
+        of a phone on a staging area, and collapsing it on pick-up shifted the whole timeline
+        upward — moving the target out from under the finger at the exact moment the finger
+        was aiming. Floating, it takes no layout space at all, so opening and closing it
+        moves nothing behind it.
       -->
-      <section
+      <div
+        v-if="untimed.length"
         :data-drop-zone="TRAY_ZONE"
-        class="overflow-hidden rounded-card border border-dashed transition-all duration-200"
-        :class="[
-          drag.isDragging.value && drag.activeZone.value === TRAY_ZONE
-            ? 'border-ink bg-accent'
-            : 'border-line',
-          drag.isDragging.value ? 'max-h-14 p-2 opacity-70' : 'max-h-64 p-3',
-        ]"
-        aria-labelledby="untimed-heading"
+        class="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-24 transition-transform duration-200"
+        :class="drag.isDragging.value ? 'translate-y-full' : 'translate-y-0'"
       >
-        <h2
-          id="untimed-heading"
-          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        <div
+          class="rounded-card border border-dashed p-3 shadow-float backdrop-blur-sm transition-colors"
+          :class="
+            drag.isDragging.value && drag.activeZone.value === TRAY_ZONE
+              ? 'border-ink bg-accent'
+              : 'border-line-strong bg-surface/95'
+          "
         >
-          {{ drag.isDragging.value ? 'Drop here to loosen it' : 'Anytime today' }}
-        </h2>
+          <div class="mb-2 flex items-baseline justify-between">
+            <h2 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
+              Anytime today
+            </h2>
+            <p class="text-[0.625rem] text-ink-subtle">hold one to place it</p>
+          </div>
 
-        <ul v-if="untimed.length" class="flex snap-x gap-2 overflow-x-auto pb-1">
-          <li v-for="entry in untimed" :key="entry.key" class="shrink-0 snap-start">
-            <DraggableItem
-              v-bind="pressState(entry.key)"
-              @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
-              @move="trackHover($event)"
-              @release="drag.release($event)"
-              @cancel="drag.cancel()"
-            >
-              <span
-                class="block rounded-full border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
-                :style="surfaceStyle(entry.habit)"
+          <ul class="flex snap-x gap-2 overflow-x-auto pb-1">
+            <li v-for="entry in untimed" :key="entry.key" class="shrink-0 snap-start">
+              <DraggableItem
+                v-bind="pressState(entry.key)"
+                @press="
+                  drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)
+                "
+                @move="trackHover($event)"
+                @release="drag.release($event)"
+                @cancel="drag.cancel()"
               >
-                {{ entry.habit.name }}
-              </span>
-            </DraggableItem>
-          </li>
-        </ul>
-        <p v-else class="text-xs text-ink-subtle">
-          Everything has a time. Drag a card back here to loosen it.
-        </p>
-      </section>
+                <span
+                  class="block rounded-cell border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
+                  :style="surfaceStyle(entry.habit)"
+                >
+                  {{ entry.habit.name }}
+                </span>
+              </DraggableItem>
+            </li>
+          </ul>
+        </div>
+      </div>
 
-      <div class="mt-4 mb-2 flex items-end justify-between gap-3">
-        <p class="text-xs text-ink-subtle">
-          Hold a card to move it, drag a corner to change when it starts or ends, or tap an empty
-          hour to claim it. Everything snaps to {{ snapMinutes }} minutes — tap the time beside a
-          card to set it to the minute.
+      <!--
+        Where a lifted card goes back to. The drawer itself has slid off screen by then, so
+        the whole strip above the tab bar becomes the target instead.
+
+        Shown whenever something is in the air, including when the drawer is empty: an empty
+        drawer is exactly the situation where the only card you can loosen is one already on
+        the ruler, and it was the one case with nowhere to drop it.
+      -->
+      <div
+        v-if="drag.isDragging.value"
+        :data-drop-zone="TRAY_ZONE"
+        class="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center justify-center px-4 pb-24 text-xs font-medium transition-colors"
+        :class="drag.activeZone.value === TRAY_ZONE ? 'text-ink' : 'text-ink-subtle'"
+      >
+        <span class="rounded-full border border-dashed border-line-strong bg-surface/95 px-4 py-2">
+          Drop here to loosen it
+        </span>
+      </div>
+
+      <!--
+        One line, not five. The instructions were spending a fifth of a phone screen
+        explaining gestures to someone who has already used them once, above the surface the
+        gestures are for.
+      -->
+      <div class="mt-3 mb-2 flex items-center justify-between gap-3">
+        <p class="min-w-0 flex-1 truncate text-xs text-ink-subtle">
+          Hold to move · drag a corner · tap an empty hour
         </p>
 
         <!--
           Stretching the day is how a step gets smaller, so the readout names the step rather
-          than the zoom: what changes here is what you can actually save, and a magnifying
-          glass would only have promised a better view.
+          than the zoom: what changes here is what you can actually save.
         -->
         <div
-          class="flex shrink-0 items-center gap-1 rounded-full border border-line-strong p-1"
+          class="flex shrink-0 items-center gap-1 rounded-full border border-line p-1"
           role="group"
           :aria-label="ZOOM_LABEL"
         >
           <button
             type="button"
-            class="hit-area grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
+            class="grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
             aria-label="Wider view, coarser steps"
             :disabled="preferences.preferences.timeline === 'coarse'"
             @click="preferences.zoomTimeline(-1)"
@@ -749,7 +777,7 @@ function trackHover(event: PointerEvent) {
           </span>
           <button
             type="button"
-            class="hit-area grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
+            class="grid size-7 place-items-center rounded-full text-ink-muted disabled:opacity-30"
             aria-label="Closer view, finer steps"
             :disabled="preferences.preferences.timeline === 'fine'"
             @click="preferences.zoomTimeline(1)"
@@ -810,10 +838,10 @@ function trackHover(event: PointerEvent) {
         <div
           ref="timeline"
           :data-drop-zone="TIMELINE_ZONE"
-          class="relative mr-2 flex-1 rounded-card border transition-colors"
+          class="relative mr-2 flex-1 rounded-md border transition-colors"
           :class="
             drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
-              ? 'border-ink'
+              ? 'border-line-strong'
               : 'border-line'
           "
           :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
@@ -864,7 +892,7 @@ function trackHover(event: PointerEvent) {
           -->
           <div
             v-if="liftedFrom"
-            class="pointer-events-none absolute inset-x-1 rounded-cell border border-dashed border-line-strong"
+            class="pointer-events-none absolute inset-x-1 rounded-md border border-dashed border-line-strong"
             :style="{
               top: `${liftedFrom.start * pixelsPerMinute}px`,
               height: `${liftedFrom.durationMinutes * pixelsPerMinute}px`,
@@ -877,7 +905,7 @@ function trackHover(event: PointerEvent) {
             v-if="slot"
             data-empty-slot
             data-occupied
-            class="absolute inset-x-1 z-20 flex items-center justify-center rounded-cell border-2 border-dashed border-ink bg-accent/40"
+            class="absolute inset-x-1 z-20 flex items-center justify-center rounded-md border-2 border-dashed border-line-strong bg-accent/40"
             :style="{
               top: `${slot.start * pixelsPerMinute}px`,
               height: `${slot.duration * pixelsPerMinute}px`,
@@ -901,7 +929,7 @@ function trackHover(event: PointerEvent) {
             @cancel="drag.cancel()"
           >
             <div
-              class="relative h-full overflow-hidden rounded-cell border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
+              class="relative h-full overflow-hidden rounded-md border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
               :style="surfaceStyle(entry.habit)"
               role="button"
               :aria-label="`Adjust ${entry.habit.name}`"

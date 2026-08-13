@@ -6,6 +6,7 @@ import {
   DEFAULT_PREFERENCES,
   type Preferences,
   readPreferences,
+  type DoneDisplay,
   type ThemeChoice,
   type TimelineDetail,
   timelineScale,
@@ -90,6 +91,14 @@ export const usePreferences = defineStore('preferences', () => {
     preferences.value = { ...preferences.value, timeline: detail }
   }
 
+  function setDone(done: DoneDisplay) {
+    preferences.value = { ...preferences.value, done }
+  }
+
+  function setAllowRedo(allowRedo: boolean) {
+    preferences.value = { ...preferences.value, allowRedo }
+  }
+
   function zoomTimeline(steps: number) {
     setTimeline(zoomedTimeline(preferences.value, steps))
   }
@@ -102,6 +111,8 @@ export const usePreferences = defineStore('preferences', () => {
     setClock,
     setTheme,
     setTimeline,
+    setDone,
+    setAllowRedo,
     zoomTimeline,
   }
 })

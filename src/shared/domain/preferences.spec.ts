@@ -12,6 +12,7 @@ import {
 describe('readPreferences', () => {
   it('reads stored choices back', () => {
     expect(readPreferences({ clock: '12h', theme: 'dark', timeline: 'fine' })).toEqual({
+      ...DEFAULT_PREFERENCES,
       clock: '12h',
       theme: 'dark',
       timeline: 'fine',
@@ -33,7 +34,7 @@ describe('readPreferences', () => {
 
   it('replaces only the field it cannot understand', () => {
     expect(readPreferences({ clock: 'sundial', theme: 'dark', timeline: 'fine' })).toEqual({
-      clock: DEFAULT_PREFERENCES.clock,
+      ...DEFAULT_PREFERENCES,
       theme: 'dark',
       timeline: 'fine',
     })
@@ -41,14 +42,30 @@ describe('readPreferences', () => {
 
   it('ignores unknown extra fields, so an older build reading a newer file still works', () => {
     expect(readPreferences({ clock: '12h', theme: 'light', future: true })).toEqual({
+      ...DEFAULT_PREFERENCES,
       clock: '12h',
       theme: 'light',
-      timeline: DEFAULT_PREFERENCES.timeline,
     })
   })
 
   it('fills in a timeline detail an older stored value never had', () => {
     expect(readPreferences({ clock: '24h', theme: 'dark' }).timeline).toBe('normal')
+  })
+
+  it('fills in the newer display choices the same way', () => {
+    const restored = readPreferences({ clock: '24h', theme: 'dark' })
+
+    expect(restored.done).toBe(DEFAULT_PREFERENCES.done)
+    expect(restored.allowRedo).toBe(false)
+  })
+
+  it('refuses a redo flag that is not a boolean', () => {
+    expect(readPreferences({ allowRedo: 'yes' }).allowRedo).toBe(false)
+  })
+
+  it('folds a habit already done out of the way by default', () => {
+    // The top of the list should be the work left, not a record of the work finished.
+    expect(DEFAULT_PREFERENCES.done).toBe('compact')
   })
 })
 
@@ -95,7 +112,7 @@ describe('zooming', () => {
 
 describe('usesHour12', () => {
   it('is true only for the twelve hour clock', () => {
-    expect(usesHour12({ clock: '12h', theme: 'system', timeline: 'normal' })).toBe(true)
-    expect(usesHour12({ clock: '24h', theme: 'system', timeline: 'normal' })).toBe(false)
+    expect(usesHour12({ ...DEFAULT_PREFERENCES, clock: '12h' })).toBe(true)
+    expect(usesHour12({ ...DEFAULT_PREFERENCES, clock: '24h' })).toBe(false)
   })
 })

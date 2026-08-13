@@ -18,6 +18,16 @@ fourteen rows.
 - [ ] Decide: does a routine **own** its habits, or **tag** them? Owning is simpler; tagging
       lets one habit sit in both *Morning* and *Health* and costs a join everywhere
 
+### A habit's usual hour
+The question this answers: today every occurrence is placed on its own day, so a habit that
+happens at 07:00 every morning has to be dropped onto 07:00 every morning.
+
+- [ ] An optional `usualTime` on a habit, used as the start whenever an occurrence is created
+      for it — so placing it is a correction rather than a chore
+- [ ] Dragging a card on one day changes that day only; changing the usual hour is a separate,
+      explicit act on the habit itself. Editing every future day from a gesture meant for one
+      of them is how a planner starts lying about the past
+
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is
 `scheduleAt` + `resize` applied down a list, so it is not a new feature — it is a **third way

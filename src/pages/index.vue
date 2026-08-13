@@ -48,6 +48,7 @@ import {
   useHabitEntries,
   useHabits,
   useRecordEntry,
+  useRemoveEntry,
 } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
@@ -69,6 +70,7 @@ const { data: entriesData } = useHabitEntries()
 const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
 const recordEntry = useRecordEntry()
+const removeEntry = useRemoveEntry()
 const saveInstance = useSaveInstance()
 const archive = useArchiveHabit()
 const feedback = useFeedback()
@@ -132,7 +134,10 @@ const duties = computed(() =>
     const measured = isMeasured(duty.habit) ? duty.habit : undefined
 
     return {
-      key: duty.instance?.id ?? `${duty.habit.id}-slot-${duty.slot ?? index}`,
+      // The day is part of the identity. Without it Monday's unplanned meditation and
+      // Tuesday's share a key, so moving between days makes the list animate a row out
+      // and an identical one in — which reads on screen as a duplicate that then vanishes.
+      key: duty.instance?.id ?? `${duty.habit.id}-${selectedDay.value}-slot-${duty.slot ?? index}`,
       duty,
       habit: duty.habit,
       measured,
@@ -148,6 +153,26 @@ const duties = computed(() =>
 )
 
 const doneCount = computed(() => duties.value.filter((row) => row.outcome === 'done').length)
+
+/**
+ * The list as the reader asked to see it.
+ *
+ * Order is information here: with `compact`, the top of the screen is always what is still
+ * owed, and what is finished sinks below it rather than disappearing — so the count still
+ * adds up and a mistake is still reachable. `hide` is for someone who reads the day as a
+ * queue and wants it to shorten.
+ */
+const visibleDuties = computed(() => {
+  const setting = preferences.preferences.done
+
+  if (setting === 'show') return duties.value
+
+  const outstanding = duties.value.filter((row) => row.outcome !== 'done')
+
+  if (setting === 'hide') return outstanding
+
+  return [...outstanding, ...duties.value.filter((row) => row.outcome === 'done')]
+})
 
 /** Block time and timed duties merged into one ribbon, as the day is lived. */
 const schedule = computed(() => {
@@ -199,15 +224,13 @@ const quitting = computed(() =>
 )
 
 /**
- * Finished days still waiting for a verdict, oldest first.
+ * Finished days still waiting for a verdict, yesterday first.
  *
- * Only the most recent used to be shown, which meant a weekend away left Friday and Saturday
- * permanently unanswerable: the screen asked about Sunday, and answering it revealed Saturday
- * only to bury Friday again. The domain has always returned every unanswered day; the screen
- * was the part throwing them away.
- *
- * Capped, because a habit created a year ago and never judged would otherwise open the app
- * on three hundred questions.
+ * Two mistakes lived here in turn. The screen used to show only the newest day, so a weekend
+ * away left Friday and Saturday permanently unanswerable. Showing the oldest three instead
+ * was worse: a habit created last year buried yesterday behind three hundred days nobody
+ * could remember. The domain now bounds the window and answers newest first, and the screen
+ * simply shows what it is given.
  */
 const MAX_PENDING_SHOWN = 3
 
@@ -349,7 +372,21 @@ const swipe = useSwipeAction({
 
     if (!row) return
 
+    // Marking something done twice is almost always a thumb catching a row that was already
+    // finished. The correction it actually wants is "not yet", which is the other direction.
+    if (direction === 'right' && row.outcome === 'done' && !preferences.preferences.allowRedo) {
+      feedback.notify(`${row.habit.name} is already done today`)
+
+      return
+    }
+
     if (row.measured) {
+      if (direction === 'left') {
+        await clearAmount(row.measured, row.value, row.entryId)
+
+        return
+      }
+
       startLogging(row.habit, row.duty, row.value, row.entryId)
 
       return
@@ -358,6 +395,29 @@ const swipe = useSwipeAction({
     await setCompleted(row.habit, row.duty, direction === 'right', row.entryId)
   },
 })
+
+/**
+ * Takes back an amount that was already recorded, once, after asking.
+ *
+ * A measured habit's "not yet" is a deletion rather than a state change: there is no amount
+ * that means "not started" other than none at all, so swiping it back throws away a number
+ * someone typed. That deserves a question, and the question has to name the figure being
+ * discarded rather than asking whether you are sure.
+ */
+async function clearAmount(habit: MeasuredHabit, value: number, entryId: Identifier | undefined) {
+  if (!entryId || value === 0) return
+
+  const accepted = await feedback.confirm({
+    title: `Take back ${value} ${habit.measure.unit}?`,
+    message: 'The amount recorded for today is removed and the habit goes back to nothing yet.',
+    confirmLabel: 'Take it back',
+  })
+
+  if (!accepted) return
+
+  await removeEntry.mutateAsync(entryId)
+  feedback.notify(`${habit.name} back to nothing yet`)
+}
 
 /**
  * Holding a row opens what to do with the habit behind it.
@@ -685,7 +745,11 @@ const OUTCOME_CLASS = {
           leave-to-class="translate-x-3 opacity-0 motion-reduce:translate-x-0"
           move-class="transition-transform duration-200"
         >
-          <li v-for="row in duties" :key="row.key" class="relative overflow-hidden rounded-card">
+          <li
+            v-for="row in visibleDuties"
+            :key="row.key"
+            class="relative overflow-hidden rounded-card"
+          >
             <!-- Revealed as the row slides, so the gesture says what it will do. -->
             <div
               class="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-medium"

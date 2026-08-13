@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
-import { calendarDate, todayIn } from '@shared/domain/calendar-date'
+import { addDays, calendarDate, todayIn } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
@@ -519,11 +519,19 @@ describe('finished days still waiting for a verdict', () => {
     expect(wrapper.text()).toContain('still')
   })
 
-  it('asks the oldest first, since that is the one about to be forgotten', async () => {
+  it('stops asking about days too old to remember', async () => {
+    const wrapper = await renderWithUnanswered()
+    const asked = wrapper.findAll('[aria-labelledby="pending-heading"] li')
+
+    expect(asked.every((row) => !row.text().includes('2020-'))).toBe(true)
+  })
+
+  it('asks about yesterday first, since it is the one anyone can answer', async () => {
+    // The opposite order buried the only answerable day behind months of guesses.
     const wrapper = await renderWithUnanswered()
     const first = wrapper.find('[aria-labelledby="pending-heading"] li')
 
-    expect(first.text()).toContain(CREATED)
+    expect(first.text()).toContain(addDays(todayIn(), -1))
   })
 })
 

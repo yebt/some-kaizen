@@ -9,6 +9,7 @@ import SegmentedControl from '@shared/ui/SegmentedControl.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePersistence } from '@core/persistence-context'
 import { usePlatform } from '@core/platform-context'
+import type { DoneDisplay } from '@shared/domain/preferences'
 import { usePreferences } from '@core/preferences-store'
 import { useHabits } from '@modules/habits/application/habit-queries'
 import { readDataset, useReplaceDataset } from '@modules/data/application/dataset-queries'
@@ -30,6 +31,12 @@ const THEMES = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ] as const
+
+const DONE_DISPLAYS = [
+  { value: 'show', label: 'In place' },
+  { value: 'compact', label: 'At the end' },
+  { value: 'hide', label: 'Hidden' },
+]
 
 const CLOCKS = [
   { value: '24h', label: '24 hour' },
@@ -78,6 +85,22 @@ const pendingIsEmpty = computed(
 const theme = computed({
   get: () => preferences.preferences.theme,
   set: (value) => preferences.setTheme(value as (typeof THEMES)[number]['value']),
+})
+
+const DONE_HINT: Record<DoneDisplay, string> = {
+  show: 'A finished habit stays where it was.',
+  compact: 'A finished habit sinks below whatever is still owed, so the top is the work left.',
+  hide: 'A finished habit leaves the list entirely.',
+}
+
+const allowRedo = computed({
+  get: () => preferences.preferences.allowRedo,
+  set: (value: boolean) => preferences.setAllowRedo(value),
+})
+
+const done = computed({
+  get: () => preferences.preferences.done as string,
+  set: (value: string) => preferences.setDone(value as DoneDisplay),
 })
 
 const clock = computed({
@@ -239,6 +262,25 @@ async function clearEverything() {
             Times read like {{ preferences.formatClock(1110) }}.
           </p>
         </div>
+
+        <div class="border-t border-line pt-4">
+          <p class="mb-2 text-sm font-medium text-ink">Finished habits</p>
+          <SegmentedControl v-model="done" :segments="DONE_DISPLAYS" label="Finished habits" />
+          <p class="mt-1.5 text-xs text-ink-subtle">
+            {{ DONE_HINT[preferences.preferences.done] }}
+          </p>
+        </div>
+
+        <label class="flex items-start gap-3 border-t border-line pt-4">
+          <input v-model="allowRedo" type="checkbox" class="mt-0.5 size-5 shrink-0 accent-ink" />
+          <span>
+            <span class="block text-sm font-medium text-ink">Let a done habit be done again</span>
+            <span class="mt-0.5 block text-xs text-ink-subtle">
+              Off, a second swipe on something already finished does nothing. It is almost always a
+              thumb catching a row that was done, and the fix it wants is "not yet".
+            </span>
+          </span>
+        </label>
       </div>
     </section>
 

@@ -21,6 +21,7 @@ import {
   recordMeasured,
   recordNegative,
   InvalidNoteError,
+  JUDGEABLE_DAYS,
   MAX_NOTE_LENGTH,
 } from './habit-entry'
 
@@ -152,13 +153,33 @@ describe('recordNegative', () => {
 describe('pendingNegativeChecks', () => {
   const today = calendarDate('2026-03-05')
 
-  it('asks about every finished day since the habit was created', () => {
+  it('asks about every finished day inside the window, newest first', () => {
+    // Yesterday is the one that can actually be answered, so it comes first.
     expect(pendingNegativeChecks(smoking, [], today)).toEqual([
-      '2026-03-01',
-      '2026-03-02',
-      '2026-03-03',
       '2026-03-04',
+      '2026-03-03',
+      '2026-03-02',
+      '2026-03-01',
     ])
+  })
+
+  it('stops asking about days too old to remember', () => {
+    // A verdict invented months later is a guess sitting in the same column as a
+    // measurement. The heatmap already draws an unanswered day apart from a failed one.
+    const ancient = createNegativeHabit({
+      id: newIdentifier(),
+      name: 'Smoking',
+      createdOn: calendarDate('2025-01-01'),
+    })
+
+    const asked = pendingNegativeChecks(ancient, [], today)
+
+    expect(asked).toHaveLength(JUDGEABLE_DAYS)
+    expect(asked[0]).toBe('2026-03-04')
+  })
+
+  it('honours a narrower window when one is asked for', () => {
+    expect(pendingNegativeChecks(smoking, [], today, 2)).toEqual(['2026-03-04', '2026-03-03'])
   })
 
   it('never asks about today, because today is not over yet', () => {
@@ -177,9 +198,9 @@ describe('pendingNegativeChecks', () => {
     ]
 
     expect(pendingNegativeChecks(smoking, answered, today)).toEqual([
-      '2026-03-01',
-      '2026-03-03',
       '2026-03-04',
+      '2026-03-03',
+      '2026-03-01',
     ])
   })
 
@@ -190,7 +211,7 @@ describe('pendingNegativeChecks', () => {
   it('stops asking after the habit was archived', () => {
     const archived = { ...smoking, archivedOn: calendarDate('2026-03-02') }
 
-    expect(pendingNegativeChecks(archived, [], today)).toEqual(['2026-03-01', '2026-03-02'])
+    expect(pendingNegativeChecks(archived, [], today)).toEqual(['2026-03-02', '2026-03-01'])
   })
 })
 

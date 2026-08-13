@@ -80,3 +80,20 @@ export function useRecordEntry() {
     onSettled: () => cache.invalidateQueries({ key: ENTRIES_KEY }, true),
   })
 }
+
+/**
+ * Removes a recorded answer, leaving the day genuinely unanswered again.
+ *
+ * Not a state change to "missed": a day nobody has answered and a day answered badly are
+ * different things, and the heatmap already draws them apart. Taking an amount back has to
+ * restore the first, not record the second.
+ */
+export function useRemoveEntry() {
+  const persistence = usePersistence()
+  const cache = useQueryCache()
+
+  return useMutation({
+    mutation: (id: Identifier) => persistence.entries.remove(id),
+    onSettled: () => cache.invalidateQueries({ key: ENTRIES_KEY }, true),
+  })
+}

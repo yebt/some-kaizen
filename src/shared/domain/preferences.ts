@@ -41,17 +41,39 @@ export const TIMELINE_SCALES: Readonly<Record<TimelineDetail, TimelineScale>> = 
 /** Widest view of the day first, which is the order a zoom control walks along. */
 export const TIMELINE_DETAILS: readonly TimelineDetail[] = ['coarse', 'normal', 'fine']
 
+/**
+ * What a finished habit does with the space it is holding.
+ *
+ * `show` keeps it in place, which is reassuring on a short list and useless on a long one.
+ * `compact` moves it below whatever is still owed, so the top of the screen is always the
+ * work left. `hide` takes it away entirely, for someone who reads the list as a queue.
+ */
+export type DoneDisplay = 'show' | 'compact' | 'hide'
+
 export interface Preferences {
   readonly clock: ClockFormat
   readonly theme: ThemeChoice
   readonly timeline: TimelineDetail
+  readonly done: DoneDisplay
+  /**
+   * Whether a habit already marked done can be marked again.
+   *
+   * Off by default. A second completion of the same occurrence is almost always a thumb
+   * catching a row that was already finished, and the correction it needs is "not yet",
+   * which is a different gesture entirely.
+   */
+  readonly allowRedo: boolean
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   clock: '24h',
   theme: 'system',
   timeline: 'normal',
+  done: 'compact',
+  allowRedo: false,
 }
+
+const DONE_DISPLAYS: readonly DoneDisplay[] = ['show', 'compact', 'hide']
 
 const CLOCKS: readonly ClockFormat[] = ['24h', '12h']
 const THEMES: readonly ThemeChoice[] = ['system', 'light', 'dark']
@@ -79,6 +101,11 @@ export function readPreferences(raw: unknown): Preferences {
     timeline: TIMELINE_DETAILS.includes(value.timeline as TimelineDetail)
       ? (value.timeline as TimelineDetail)
       : DEFAULT_PREFERENCES.timeline,
+    done: DONE_DISPLAYS.includes(value.done as DoneDisplay)
+      ? (value.done as DoneDisplay)
+      : DEFAULT_PREFERENCES.done,
+    allowRedo:
+      typeof value.allowRedo === 'boolean' ? value.allowRedo : DEFAULT_PREFERENCES.allowRedo,
   }
 }
 

@@ -26,7 +26,7 @@ withDefaults(
   -->
   <div
     v-if="position && height !== undefined"
-    class="pointer-events-none fixed z-50 flex w-40 -translate-x-1/2 flex-col justify-center overflow-hidden rounded-cell border-2 border-ink bg-surface px-2.5 py-1 opacity-90 shadow-float"
+    class="pointer-events-none fixed z-50 flex w-40 -translate-x-1/2 flex-col justify-center overflow-hidden rounded-md border-2 border-line-strong bg-surface px-2.5 py-1 opacity-90 shadow-float"
     :style="{ left: `${position.x}px`, top: `${position.y}px`, height: `${height}px` }"
     aria-hidden="true"
   >
