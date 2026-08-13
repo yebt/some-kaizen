@@ -208,6 +208,11 @@ function liftCard(entry: Liftable, event: PointerEvent) {
 function liftChip(entry: Liftable, event: PointerEvent) {
   drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key, grabbedAt: 0 }, event)
   measureGhost(entry.duty)
+
+  // The drawer's whole purpose was handing this over, and it has. Leaving it open left the
+  // dimmed backdrop across the ruler the chip is being carried to — the one surface that has
+  // to be readable while a chip is in the air.
+  trayOpen.value = false
 }
 
 function abandonLift() {
@@ -992,154 +997,165 @@ function trackHover(event: PointerEvent) {
       </div>
 
       <!--
+        The ruler ends above the system's own navigation bar, not underneath it.
+
+        The page's own padding is not enough here: the day is 1440 pixels of scrollable
+        content whose last hour lands exactly where the phone draws its back button, and the
+        drawer's pill floats over the same strip. Both have to be cleared or 23:00 is a row
+        you can see and never reach.
+      -->
+      <div class="pb-28">
+        <!--
         Bled to the edges of the screen. The timeline is the one surface here whose value is
         proportional to its area, and the page's reading margins were spending a tenth of
         every hour on whitespace beside a ruler.
       -->
-      <div class="-mx-4 flex">
-        <!-- Hour gutter, outside the drop zone so a label never swallows a drop. -->
-        <div
-          class="relative w-11 shrink-0"
-          :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
-        >
+        <div class="-mx-4 flex">
+          <!-- Hour gutter, outside the drop zone so a label never swallows a drop. -->
           <div
-            v-for="hour in hours"
-            :key="hour"
-            class="tabular relative text-[0.625rem] text-ink-subtle"
-            :style="{ height: `${60 * pixelsPerMinute}px` }"
+            class="relative w-11 shrink-0"
+            :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
           >
-            <span class="absolute -top-1.5 right-2">{{ preferences.formatClock(hour * 60) }}</span>
-          </div>
+            <div
+              v-for="hour in hours"
+              :key="hour"
+              class="tabular relative text-[0.625rem] text-ink-subtle"
+              :style="{ height: `${60 * pixelsPerMinute}px` }"
+            >
+              <span class="absolute -top-1.5 right-2">{{
+                preferences.formatClock(hour * 60)
+              }}</span>
+            </div>
 
-          <!--
+            <!--
             A marker per placed occurrence, level with the top edge of its card.
             It is the precise counterpart to the two gestures: the ruler snaps to a quarter
             hour, and a plan that does not fall on a quarter hour is entered from here.
           -->
-          <button
-            v-for="entry in timed"
-            :key="`marker-${entry.key}`"
-            type="button"
-            class="tabular absolute right-1 z-20 -translate-y-1/2 rounded-full bg-ink px-1.5 py-0.5 text-[0.5625rem] font-medium text-ink-inverse shadow-card"
-            :style="{ top: `${entry.top}px` }"
-            :aria-label="`Set the exact time of ${entry.habit.name}`"
-            @click="editing = entry.duty.instance?.id ?? null"
-          >
-            {{ entry.startLabel }}
-          </button>
+            <button
+              v-for="entry in timed"
+              :key="`marker-${entry.key}`"
+              type="button"
+              class="tabular absolute right-1 z-20 -translate-y-1/2 rounded-full bg-ink px-1.5 py-0.5 text-[0.5625rem] font-medium text-ink-inverse shadow-card"
+              :style="{ top: `${entry.top}px` }"
+              :aria-label="`Set the exact time of ${entry.habit.name}`"
+              @click="editing = entry.duty.instance?.id ?? null"
+            >
+              {{ entry.startLabel }}
+            </button>
 
-          <!-- Where the finger is right now: the landing time, or the end being dragged out. -->
-          <span
-            v-if="liveMinutes !== null"
-            data-live-time
-            class="tabular pointer-events-none absolute right-1 z-30 -translate-y-1/2 rounded-full bg-accent px-1.5 py-0.5 text-[0.5625rem] font-semibold text-ink shadow-card"
-            :style="{ top: `${liveMinutes * pixelsPerMinute}px` }"
-          >
-            {{ preferences.formatClock(liveMinutes) }}
-          </span>
-        </div>
+            <!-- Where the finger is right now: the landing time, or the end being dragged out. -->
+            <span
+              v-if="liveMinutes !== null"
+              data-live-time
+              class="tabular pointer-events-none absolute right-1 z-30 -translate-y-1/2 rounded-full bg-accent px-1.5 py-0.5 text-[0.5625rem] font-semibold text-ink shadow-card"
+              :style="{ top: `${liveMinutes * pixelsPerMinute}px` }"
+            >
+              {{ preferences.formatClock(liveMinutes) }}
+            </span>
+          </div>
 
-        <div
-          ref="timeline"
-          :data-drop-zone="TIMELINE_ZONE"
-          class="grippable relative mr-2 flex-1 rounded-md border transition-colors"
-          :class="
-            drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
-              ? 'border-line-strong'
-              : 'border-line'
-          "
-          :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
-          @click="openSlot"
-          @pointerdown="startPageSwipe"
-          @pointermove="pageSwipe.move($event)"
-          @pointerup="pageSwipe.release($event)"
-          @pointercancel="pageSwipe.cancel()"
-        >
           <div
-            v-for="hour in hours"
-            :key="hour"
-            class="absolute inset-x-0 border-t border-line/60"
-            :style="{ top: `${hour * 60 * pixelsPerMinute}px` }"
-          />
+            ref="timeline"
+            :data-drop-zone="TIMELINE_ZONE"
+            class="grippable relative mr-2 flex-1 rounded-md border transition-colors"
+            :class="
+              drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
+                ? 'border-line-strong'
+                : 'border-line'
+            "
+            :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
+            @click="openSlot"
+            @pointerdown="startPageSwipe"
+            @pointermove="pageSwipe.move($event)"
+            @pointerup="pageSwipe.release($event)"
+            @pointercancel="pageSwipe.cancel()"
+          >
+            <div
+              v-for="hour in hours"
+              :key="hour"
+              class="absolute inset-x-0 border-t border-line/60"
+              :style="{ top: `${hour * 60 * pixelsPerMinute}px` }"
+            />
 
-          <!--
+            <!--
             A block's length is its hours, and those belong to the block itself rather than
             to this one day, so tapping a band goes to the block instead of editing it here.
           -->
-          <RouterLink
-            v-for="band in bands"
-            :key="band.key"
-            :to="`/block-time/${band.blockId}`"
-            data-occupied
-            class="absolute inset-x-0 bg-accent/70 px-2 py-1"
-            :style="{ top: `${band.top}px`, height: `${band.height}px`, ...band.style }"
-          >
-            <p class="text-[0.625rem] font-medium">
-              {{ band.name }}<span v-if="band.continues"> ·</span>
-            </p>
-          </RouterLink>
+            <RouterLink
+              v-for="band in bands"
+              :key="band.key"
+              :to="`/block-time/${band.blockId}`"
+              data-occupied
+              class="absolute inset-x-0 bg-accent/70 px-2 py-1"
+              :style="{ top: `${band.top}px`, height: `${band.height}px`, ...band.style }"
+            >
+              <p class="text-[0.625rem] font-medium">
+                {{ band.name }}<span v-if="band.continues"> ·</span>
+              </p>
+            </RouterLink>
 
-          <!--
+            <!--
             The line the card will land on. The time itself is read off the hour column, so
             the badge that used to sit here no longer covers the card it is describing.
           -->
-          <div
-            v-if="hoverTime !== null"
-            class="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-ink"
-            :style="{ top: `${hoverTime * pixelsPerMinute}px` }"
-          />
+            <div
+              v-if="hoverTime !== null"
+              class="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-ink"
+              :style="{ top: `${hoverTime * pixelsPerMinute}px` }"
+            />
 
-          <!--
+            <!--
             Where the card came from, held open while it is in the air.
             Without it the day closes up behind the finger and there is no way to tell what
             has been picked up, or to put it back where it was.
           -->
-          <div
-            v-if="liftedFrom"
-            class="pointer-events-none absolute inset-x-1 rounded-md border border-dashed border-line-strong"
-            :style="{
-              top: `${liftedFrom.start * pixelsPerMinute}px`,
-              height: `${liftedFrom.durationMinutes * pixelsPerMinute}px`,
-            }"
-            aria-hidden="true"
-          />
-
-          <!-- An hour claimed before anything has been decided to fill it. -->
-          <div
-            v-if="slot"
-            data-empty-slot
-            data-occupied
-            class="absolute inset-x-1 z-20 flex items-center justify-center rounded-md border-2 border-dashed border-line-strong bg-accent/40"
-            :style="{
-              top: `${slot.start * pixelsPerMinute}px`,
-              height: `${slot.duration * pixelsPerMinute}px`,
-            }"
-          >
-            <span class="tabular text-[0.625rem] font-medium text-ink">
-              {{ preferences.formatClock(slot.start) }} · pick a habit
-            </span>
-          </div>
-
-          <DraggableItem
-            v-for="entry in timed"
-            :key="entry.key"
-            v-bind="pressState(entry.key)"
-            data-occupied
-            class="absolute inset-x-1"
-            :style="{ top: `${cardTop(entry)}px`, height: `${cardHeight(entry)}px` }"
-            @press="liftCard(entry, $event)"
-            @move="trackHover($event)"
-            @release="drag.release($event)"
-            @cancel="abandonLift"
-          >
             <div
-              class="relative h-full overflow-hidden rounded-md border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
-              :style="surfaceStyle(entry.habit)"
-              role="button"
-              :aria-label="`Adjust ${entry.habit.name}`"
-              @click="openOccurrence(entry.duty.instance?.id, $event)"
+              v-if="liftedFrom"
+              class="pointer-events-none absolute inset-x-1 rounded-md border border-dashed border-line-strong"
+              :style="{
+                top: `${liftedFrom.start * pixelsPerMinute}px`,
+                height: `${liftedFrom.durationMinutes * pixelsPerMinute}px`,
+              }"
+              aria-hidden="true"
+            />
+
+            <!-- An hour claimed before anything has been decided to fill it. -->
+            <div
+              v-if="slot"
+              data-empty-slot
+              data-occupied
+              class="absolute inset-x-1 z-20 flex items-center justify-center rounded-md border-2 border-dashed border-line-strong bg-accent/40"
+              :style="{
+                top: `${slot.start * pixelsPerMinute}px`,
+                height: `${slot.duration * pixelsPerMinute}px`,
+              }"
             >
-              <!--
+              <span class="tabular text-[0.625rem] font-medium text-ink">
+                {{ preferences.formatClock(slot.start) }} · pick a habit
+              </span>
+            </div>
+
+            <DraggableItem
+              v-for="entry in timed"
+              :key="entry.key"
+              v-bind="pressState(entry.key)"
+              data-occupied
+              class="absolute inset-x-1"
+              :style="{ top: `${cardTop(entry)}px`, height: `${cardHeight(entry)}px` }"
+              @press="liftCard(entry, $event)"
+              @move="trackHover($event)"
+              @release="drag.release($event)"
+              @cancel="abandonLift"
+            >
+              <div
+                class="relative h-full overflow-hidden rounded-md border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
+                :style="surfaceStyle(entry.habit)"
+                role="button"
+                :aria-label="`Adjust ${entry.habit.name}`"
+                @click="openOccurrence(entry.duty.instance?.id, $event)"
+              >
+                <!--
                 Two contact points, stacked on the edge a right hand reaches first, with the
                 whole middle of the card left to move it. One grip could only ever change the
                 length; moving the start without moving the finish needs its own edge.
@@ -1152,31 +1168,32 @@ function trackHover(event: PointerEvent) {
                 with a thumb, so the touchable square reaches into the card while only the
                 dot is painted.
               -->
-              <span
-                v-for="edge in entry.duty.instance ? (['start', 'end'] as const) : []"
-                :key="edge"
-                data-resize-grip
-                :data-edge="edge"
-                class="grippable absolute right-0 z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
-                :class="edge === 'start' ? '-top-1' : '-bottom-1'"
-                aria-hidden="true"
-                @pointerdown="startResize(entry.duty.instance, edge, $event)"
-                @pointermove="moveResize($event)"
-                @pointerup="endResize($event)"
-                @pointercancel="resizing = null"
-                @click.stop
-              >
-                <span class="size-2.5 rounded-full border-2 border-current bg-surface" />
-              </span>
-              <p class="flex items-center gap-1 truncate pr-6 text-xs font-medium">
-                <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />
-                {{ entry.habit.name }}
-              </p>
-              <p class="tabular truncate text-[0.625rem] opacity-75">
-                {{ previewLabel(entry.duty.instance?.id) ?? entry.label }}
-              </p>
-            </div>
-          </DraggableItem>
+                <span
+                  v-for="edge in entry.duty.instance ? (['start', 'end'] as const) : []"
+                  :key="edge"
+                  data-resize-grip
+                  :data-edge="edge"
+                  class="grippable absolute right-0 z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
+                  :class="edge === 'start' ? '-top-1' : '-bottom-1'"
+                  aria-hidden="true"
+                  @pointerdown="startResize(entry.duty.instance, edge, $event)"
+                  @pointermove="moveResize($event)"
+                  @pointerup="endResize($event)"
+                  @pointercancel="resizing = null"
+                  @click.stop
+                >
+                  <span class="size-2.5 rounded-full border-2 border-current bg-surface" />
+                </span>
+                <p class="flex items-center gap-1 truncate pr-6 text-xs font-medium">
+                  <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />
+                  {{ entry.habit.name }}
+                </p>
+                <p class="tabular truncate text-[0.625rem] opacity-75">
+                  {{ previewLabel(entry.duty.instance?.id) ?? entry.label }}
+                </p>
+              </div>
+            </DraggableItem>
+          </div>
         </div>
       </div>
     </template>

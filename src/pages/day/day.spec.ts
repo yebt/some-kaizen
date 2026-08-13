@@ -1246,3 +1246,41 @@ describe('taking an hour back', () => {
     expect((await persistence.instances.all())[0]?.startsAt).toBeUndefined()
   })
 })
+
+describe('the drawer gets out of the way of its own chip', () => {
+  it('closes the moment one is lifted, so the ruler is readable again', async () => {
+    // The dimmed backdrop was staying across the very surface the chip is being carried to.
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('needs an hour'))
+      ?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.backdrop-blur-sm').exists()).toBe(true)
+
+    const chip = wrapper.find('[data-drop-zone="tray"] .grippable').element
+
+    chip.dispatchEvent(new MouseEvent('pointerdown', { clientY: 100, bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    await flushPromises()
+
+    expect(wrapper.find('.backdrop-blur-sm').exists()).toBe(false)
+  })
+
+  it('leaves the last hour of the day reachable above the system bar', async () => {
+    // A ruler that ends flush with the viewport puts 23:00 exactly where a phone draws its
+    // own back button.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderDay()
+    const ruler = wrapper.find('[data-drop-zone="timeline"]').element.closest('.pb-28')
+
+    expect(ruler).not.toBeNull()
+  })
+})
