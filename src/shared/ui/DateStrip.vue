@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { type CalendarDate, toDate, weekday } from '@shared/domain/calendar-date'
 
+import { useSwipePage } from './press/use-swipe-page'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{
@@ -12,7 +13,20 @@ const props = defineProps<{
   marked?: readonly CalendarDate[]
 }>()
 
-defineEmits<{ select: [day: CalendarDate]; previous: []; next: [] }>()
+const emit = defineEmits<{ select: [day: CalendarDate]; previous: []; next: [] }>()
+
+/**
+ * Dragging the strip sideways moves the week, which is what a row of days looks like it does.
+ *
+ * The arrows stay. A gesture nobody can see is a gesture most people never find, and this one
+ * is worth finding rather than depending on.
+ */
+const swipe = useSwipePage({
+  onSwipe: (direction) => {
+    if (direction === 'right') emit('previous')
+    else emit('next')
+  },
+})
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
@@ -28,7 +42,13 @@ const cells = computed(() =>
 </script>
 
 <template>
-  <div class="flex items-center gap-3">
+  <div
+    class="flex touch-pan-y items-center gap-3"
+    @pointerdown="swipe.press($event)"
+    @pointermove="swipe.move($event)"
+    @pointerup="swipe.release($event)"
+    @pointercancel="swipe.cancel()"
+  >
     <button
       type="button"
       class="hit-area grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:text-ink"

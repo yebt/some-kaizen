@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   addDays,
@@ -30,6 +30,7 @@ import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { type DropPoint, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { useSwipePage } from '@shared/ui/press/use-swipe-page'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
 import { useHabits } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
@@ -58,6 +59,7 @@ const TIMELINE_ZONE = 'timeline'
 const TRAY_ZONE = 'tray'
 
 const route = useRoute()
+const router = useRouter()
 
 /** A hand edited or stale URL should land on today rather than crash the screen. */
 const day = computed<CalendarDate>(() => {
@@ -199,6 +201,25 @@ function pressState(key: string) {
     pending: drag.isPending.value && drag.pressedKey.value === key,
     dragging: drag.isDragging.value && drag.pressedKey.value === key,
   }
+}
+
+/**
+ * Dragging the day sideways moves to the next or previous one.
+ *
+ * Only from empty canvas. A gesture that started on a card belongs to the card, which is
+ * already carrying a drag and two resize edges — three gestures on one press is how a
+ * timeline stops being predictable.
+ */
+const pageSwipe = useSwipePage({
+  onSwipe: (direction) => {
+    void router.push(`/day/${addDays(day.value, direction === 'right' ? -1 : 1)}`)
+  },
+})
+
+function startPageSwipe(event: PointerEvent) {
+  if ((event.target as Element).closest('[data-occupied]')) return
+
+  pageSwipe.press(event)
 }
 
 /** Previewed while dragging so the time is visible before committing to it. */
@@ -797,6 +818,10 @@ function trackHover(event: PointerEvent) {
           "
           :style="{ height: `${MINUTES_IN_DAY * pixelsPerMinute}px` }"
           @click="openSlot"
+          @pointerdown="startPageSwipe"
+          @pointermove="pageSwipe.move($event)"
+          @pointerup="pageSwipe.release($event)"
+          @pointercancel="pageSwipe.cancel()"
         >
           <div
             v-for="hour in hours"

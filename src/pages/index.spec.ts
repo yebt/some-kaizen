@@ -11,7 +11,7 @@ import { calendarDate, todayIn } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
-import { createCompletedHabit, frequency } from '@modules/habits/domain/habit'
+import { createCompletedHabit, createNegativeHabit, frequency } from '@modules/habits/domain/habit'
 import { latestEntryFor } from '@modules/habits/domain/habit-entry'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -96,10 +96,10 @@ describe('with a populated day', () => {
     expect(text).toContain('Judged tomorrow morning')
   })
 
-  it('asks about the most recent unanswered negative habit', async () => {
+  it('asks about the unanswered negative habits, each naming its own day', async () => {
     const text = (await renderToday()).text()
 
-    expect(text).toContain('Did you avoid it?')
+    expect(text).toContain('did you avoid it?')
     expect(text).toContain('Smoking')
   })
 
@@ -407,8 +407,19 @@ describe('holding a row', () => {
     })
   })
 
+  /**
+   * The habit's own row, found through the button inside it.
+   *
+   * Not the first `.touch-pan-y` on the page: the week strip carries that class too, and
+   * pressing it was quietly testing the wrong element.
+   */
   function row(wrapper: Awaited<ReturnType<typeof renderToday>>) {
-    return wrapper.find('.touch-pan-y')
+    const inner = wrapper.find('[aria-label="Open Meditate"]').element
+    const found = inner.closest('.touch-pan-y')
+
+    if (!found) throw new Error('No habit row found')
+
+    return { element: found }
   }
 
   /**
@@ -477,5 +488,53 @@ describe('holding a row', () => {
     await flushPromises()
 
     expect(menu(wrapper).exists()).toBe(false)
+  })
+})
+
+describe('finished days still waiting for a verdict', () => {
+  const CREATED = calendarDate('2020-01-01')
+
+  async function renderWithUnanswered() {
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [createNegativeHabit({ id: newIdentifier(), name: 'Smoking', createdOn: CREATED })],
+    })
+
+    return await renderToday()
+  }
+
+  it('asks about more than the most recent one', async () => {
+    // A weekend away used to leave Friday and Saturday permanently unanswerable: the screen
+    // asked about Sunday, and answering it revealed Saturday only to bury Friday again.
+    const wrapper = await renderWithUnanswered()
+
+    expect(
+      wrapper.findAll('button').filter((node) => node.text() === 'Yes').length,
+    ).toBeGreaterThan(1)
+  })
+
+  it('says how many more are behind them', async () => {
+    const wrapper = await renderWithUnanswered()
+
+    expect(wrapper.text()).toContain('still')
+  })
+
+  it('asks the oldest first, since that is the one about to be forgotten', async () => {
+    const wrapper = await renderWithUnanswered()
+    const first = wrapper.find('[aria-labelledby="pending-heading"] li')
+
+    expect(first.text()).toContain(CREATED)
+  })
+})
+
+describe('reaching the timeline', () => {
+  it('offers it beside the date rather than at the foot of the schedule', async () => {
+    // Looking at the shape of a day is something you do instead of reading the list, not
+    // after scrolling past all of it.
+    await replaceDataset(persistence, buildPreviewDataset())
+
+    const wrapper = await renderToday()
+
+    expect(wrapper.find('[aria-label^="Open the timeline"]').exists()).toBe(true)
   })
 })

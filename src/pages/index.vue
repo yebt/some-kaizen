@@ -28,6 +28,7 @@ import {
   type Achievement,
   achievementFor,
   archiveHabit,
+  type Habit,
   isMeasured,
   isNegative,
   type MeasuredHabit,
@@ -153,6 +154,8 @@ const schedule = computed(() => {
   const fixed = blocksOnDate(blocks.value, selectedDay.value).map((occurrence) => ({
     kind: 'block' as const,
     key: `${occurrence.block.id}-${occurrence.segment.from}`,
+    /** What a hold is about: the block itself, not this one appearance of it. */
+    holdKey: occurrence.block.id,
     name: occurrence.block.name,
     from: occurrence.segment.from,
     to: occurrence.segment.to,
@@ -165,6 +168,7 @@ const schedule = computed(() => {
     .map((row) => ({
       kind: 'habit' as const,
       key: row.key,
+      holdKey: row.habit.id,
       name: row.habit.name,
       from: row.span?.start ?? 0,
       to: (row.span?.start ?? 0) + (row.duty.instance?.durationMinutes ?? 0),
@@ -194,13 +198,37 @@ const quitting = computed(() =>
   }),
 )
 
-/** Yesterday's unanswered negative habits, which is the first thing to greet you. */
+/**
+ * Finished days still waiting for a verdict, oldest first.
+ *
+ * Only the most recent used to be shown, which meant a weekend away left Friday and Saturday
+ * permanently unanswerable: the screen asked about Sunday, and answering it revealed Saturday
+ * only to bury Friday again. The domain has always returned every unanswered day; the screen
+ * was the part throwing them away.
+ *
+ * Capped, because a habit created a year ago and never judged would otherwise open the app
+ * on three hundred questions.
+ */
+const MAX_PENDING_SHOWN = 3
+
 const pendingChecks = computed(() =>
   habits.value.filter(isNegative).flatMap((habit) =>
     pendingNegativeChecks(habit, entries.value, today)
-      .slice(-1)
+      .slice(0, MAX_PENDING_SHOWN)
       .map((day) => ({ key: `${habit.id}-${day}`, habit, day })),
   ),
+)
+
+/** How many finished days are still unanswered beyond the ones being shown. */
+const pendingBeyond = computed(() =>
+  habits.value
+    .filter(isNegative)
+    .reduce(
+      (total, habit) =>
+        total +
+        Math.max(pendingNegativeChecks(habit, entries.value, today).length - MAX_PENDING_SHOWN, 0),
+      0,
+    ),
 )
 
 const segments = computed<Segment[]>(() => [
@@ -345,7 +373,12 @@ const swipe = useSwipeAction({
  */
 const HOLD_MS = 380
 
-const menuFor = ref<{ habit: PositiveHabit; duty: DayDuty } | null>(null)
+type MenuTarget =
+  | { kind: 'duty'; habit: PositiveHabit; duty: DayDuty }
+  | { kind: 'habit'; habit: Habit }
+  | { kind: 'block'; blockId: Identifier; name: string }
+
+const menuFor = ref<MenuTarget | null>(null)
 
 /** A hold ends with a click when the finger lifts, which would open the habit behind it. */
 const swallowNextClick = ref(false)
@@ -360,7 +393,7 @@ const hold = usePressHold({
     // The row is being taken over by the menu, so the half finished swipe underneath it has
     // to let go, or the row stays translated with nothing driving it.
     swipe.cancel()
-    menuFor.value = { habit: row.habit, duty: row.duty }
+    menuFor.value = { kind: 'duty', habit: row.habit, duty: row.duty }
     swallowNextClick.value = true
   },
 })
@@ -373,10 +406,30 @@ function onRowClick(event: MouseEvent) {
   event.stopPropagation()
 }
 
+const EDIT_ACTION: SheetAction = {
+  key: 'edit',
+  label: 'Edit',
+  description: 'Name, frequency, colour',
+}
+
+const ARCHIVE_ACTION: SheetAction = {
+  key: 'archive',
+  label: 'Archive',
+  description: 'Stop planning it and keep every record',
+}
+
 const menuActions = computed<SheetAction[]>(() => {
   const current = menuFor.value
 
   if (!current) return []
+
+  // A block's hours belong to the block rather than to this day, and a habit you are
+  // quitting is never given a time at all, so neither offers the timeline shortcut.
+  if (current.kind === 'block') {
+    return [{ key: 'edit-block', label: 'Edit block', description: 'Its hours and its days' }]
+  }
+
+  if (current.kind === 'habit') return [EDIT_ACTION, ARCHIVE_ACTION]
 
   return [
     {
@@ -384,12 +437,8 @@ const menuActions = computed<SheetAction[]>(() => {
       label: current.duty.instance?.startsAt === undefined ? 'Give it a time' : 'Change its time',
       description: 'Open the day timeline',
     },
-    { key: 'edit', label: 'Edit', description: 'Name, frequency, colour' },
-    {
-      key: 'archive',
-      label: 'Archive',
-      description: 'Stop planning it and keep every record',
-    },
+    EDIT_ACTION,
+    ARCHIVE_ACTION,
   ]
 })
 
@@ -399,6 +448,12 @@ async function runMenuAction(key: string) {
   menuFor.value = null
 
   if (!current) return
+
+  if (current.kind === 'block') {
+    await router.push(`/block-time/${current.blockId}`)
+
+    return
+  }
 
   if (key === 'time') {
     await router.push(`/day/${selectedDay.value}`)
@@ -415,7 +470,33 @@ async function runMenuAction(key: string) {
   if (key === 'archive') await onArchive(current.habit)
 }
 
-async function onArchive(habit: PositiveHabit) {
+/** Held on a row that is not a duty: a habit being quit, or an item on the schedule. */
+const plainHold = usePressHold({
+  holdMs: HOLD_MS,
+  onHold: (key) => {
+    const block = blocks.value.find((candidate) => candidate.id === key)
+
+    if (block) {
+      menuFor.value = { kind: 'block', blockId: block.id, name: block.name }
+      swallowNextClick.value = true
+
+      return
+    }
+
+    // Preferred over the plain habit menu when the day actually owes this habit something:
+    // from the schedule, "change its time" is the reason you held the row in the first place.
+    const owed = duties.value.find((row) => row.habit.id === key)
+    const found = habits.value.find((candidate) => candidate.id === key)
+
+    if (owed) menuFor.value = { kind: 'duty', habit: owed.habit, duty: owed.duty }
+    else if (found) menuFor.value = { kind: 'habit', habit: found }
+    else return
+
+    swallowNextClick.value = true
+  },
+})
+
+async function onArchive(habit: Habit) {
   const accepted = await feedback.confirm({
     title: `Archive ${habit.name}?`,
     message:
@@ -457,6 +538,14 @@ function onRowCancel() {
   hold.cancel()
 }
 
+const menuTitle = computed(() => {
+  const current = menuFor.value
+
+  if (!current) return ''
+
+  return current.kind === 'block' ? current.name : current.habit.name
+})
+
 function swipeStyle(key: string) {
   if (swipe.activeKey.value !== key || swipe.offset.value === 0) return {}
 
@@ -485,10 +574,25 @@ const OUTCOME_CLASS = {
         <h1 class="text-2xl font-semibold tracking-tight text-ink">Today</h1>
         <p class="text-sm text-ink-muted">{{ dayLabel }}</p>
       </div>
-      <p v-if="duties.length" class="tabular text-xs text-ink-muted">
-        <span class="text-base font-semibold text-ink">{{ doneCount }}</span>
-        / {{ duties.length }} done
-      </p>
+      <div class="flex items-center gap-3">
+        <p v-if="duties.length" class="tabular text-xs text-ink-muted">
+          <span class="text-base font-semibold text-ink">{{ doneCount }}</span>
+          / {{ duties.length }} done
+        </p>
+
+        <!--
+          Beside the date rather than at the foot of the schedule. Looking at the shape of a
+          day is a thing you do instead of reading the list, not after finishing it, and the
+          old route there was to switch panes and scroll past everything.
+        -->
+        <RouterLink
+          :to="`/day/${selectedDay}`"
+          class="hit-area grid size-9 place-items-center rounded-full border border-line-strong text-ink-muted"
+          :aria-label="`Open the timeline for ${dayLabel}`"
+        >
+          <AppIcon name="clock" :size="16" />
+        </RouterLink>
+      </div>
     </header>
 
     <DateStrip
@@ -518,7 +622,7 @@ const OUTCOME_CLASS = {
           id="pending-heading"
           class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
         >
-          Yesterday
+          Still to answer
         </h2>
         <ul class="space-y-2">
           <li
@@ -533,7 +637,14 @@ const OUTCOME_CLASS = {
             </span>
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium text-ink">{{ check.habit.name }}</p>
-              <p class="text-xs text-ink-muted">Did you avoid it?</p>
+              <!--
+                Which day is being answered, not just that one is. With a single question the
+                answer was always "yesterday" and could be left unsaid; with several on screen
+                an unlabelled Yes is a verdict about a day the reader has to guess.
+              -->
+              <p class="text-xs text-ink-muted">
+                <span class="tabular">{{ check.day }}</span> · did you avoid it?
+              </p>
             </div>
             <div class="flex gap-1.5">
               <button
@@ -553,6 +664,11 @@ const OUTCOME_CLASS = {
             </div>
           </li>
         </ul>
+
+        <p v-if="pendingBeyond" class="mt-2 text-xs text-ink-subtle">
+          {{ pendingBeyond }} older {{ pendingBeyond === 1 ? 'day is' : 'days are' }} still waiting.
+          They appear as these are answered.
+        </p>
       </section>
 
       <div class="mt-4">
@@ -679,6 +795,11 @@ const OUTCOME_CLASS = {
               v-for="row in quitting"
               :key="row.habit.id"
               class="flex items-center gap-3 rounded-card border border-line bg-surface p-3 shadow-card"
+              @pointerdown="plainHold.press(row.habit.id, $event)"
+              @pointermove="plainHold.move($event)"
+              @pointerup="plainHold.release($event)"
+              @pointercancel="plainHold.cancel()"
+              @click="onRowClick"
             >
               <span
                 class="hit-area grid size-7 shrink-0 place-items-center rounded-full"
@@ -715,7 +836,16 @@ const OUTCOME_CLASS = {
 
       <section v-show="pane === 'schedule'" class="mt-3" aria-label="Schedule">
         <ol v-if="schedule.length" class="space-y-1.5">
-          <li v-for="item in schedule" :key="item.key" class="flex gap-3">
+          <li
+            v-for="item in schedule"
+            :key="item.key"
+            class="flex gap-3"
+            @pointerdown="plainHold.press(item.holdKey, $event)"
+            @pointermove="plainHold.move($event)"
+            @pointerup="plainHold.release($event)"
+            @pointercancel="plainHold.cancel()"
+            @click="onRowClick"
+          >
             <span
               class="tabular w-12 shrink-0 pt-2.5 text-right text-xs font-medium text-ink-subtle"
             >
@@ -811,7 +941,7 @@ const OUTCOME_CLASS = {
     </AppDialog>
     <ActionSheet
       :open="menuFor !== null"
-      :title="menuFor?.habit.name ?? ''"
+      :title="menuTitle"
       :actions="menuActions"
       @select="runMenuAction"
       @dismiss="menuFor = null"

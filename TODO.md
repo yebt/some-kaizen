@@ -56,6 +56,7 @@ For a morning routine it is by far the fastest of the three.
       swipe, which exists so that marking a day costs nothing
 - [x] Read back on the habit's own page, newest first
 - [ ] A way in for a "did it" habit, which today has no dialog to hang it off
+- [ ] A way in for a negative habit's verdict, same reason
 
 ### Challenges
 - [ ] A programme container: fixed length, fixed daily task set, all-or-nothing days

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The mark as geometry rather than as pixels.
+
+    Android 12 draws the launch icon at 288dp, and the launcher mipmap it was pointed at is
+    192px at its largest density — upscaled nearly four times, which is exactly as blurry as
+    it sounds. A vector has no density to be wrong about.
+
+    The 108 viewport with the mark inside the middle two thirds matches what the platform
+    masks away, so nothing is clipped whichever shape the system decides to use.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group android:translateX="21.6" android:translateY="21.6" android:scaleX="1.0125" android:scaleY="1.0125">
+        <!-- The track: a ring that never closes. -->
+        <path
+            android:strokeColor="#4a4944"
+            android:strokeWidth="7"
+            android:pathData="M17,32 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0" />
+        <!-- The run in progress. -->
+        <path
+            android:strokeColor="#c9a227"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:pathData="M32,17 a15,15 0 0,1 12.99,22.5" />
+        <!-- Today. -->
+        <path
+            android:fillColor="#fbfaf8"
+            android:pathData="M28,32 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    </group>
+</vector>

@@ -122,10 +122,15 @@ onBeforeUnmount(() => {
 /*
  * Bottom sheet on a phone, centred card on anything wider. Reaching for the bottom of the
  * screen is the only comfortable one handed gesture, and this is a mobile first app.
+ *
+ * The bottom inset is not decoration: a sheet pinned to the bottom of the viewport ends
+ * underneath the system's own navigation bar, and the control it hides is always the last
+ * one — which on these sheets is Save, Done or Cancel.
  */
 dialog {
   margin: auto auto 0;
   width: 100%;
+  padding-bottom: env(safe-area-inset-bottom);
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -133,6 +138,7 @@ dialog {
 @media (min-width: 640px) {
   dialog {
     margin: auto;
+    padding-bottom: 0;
     border-radius: var(--radius-sheet);
   }
 }
