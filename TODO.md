@@ -42,11 +42,55 @@ day's". The automatic pick has a priority order:
 - [ ] Pulling a plan is an explicit act with a preview, never a silent copy — a planner that
       fills a day on its own is one you stop trusting about the past
 
-### Still open on the timeline
-- [ ] Tapping a chip in the drawer to remove it outright
-- [ ] Swiping a card off the ruler right to left to unschedule it, with a confirm
-- [ ] Constrain a drag to the vertical axis: a card can only move in time, so sideways travel
-      is noise the ghost currently follows
+### On a gesture library
+
+Raised as a preference and worth answering rather than filing. The repeated timeline
+breakages were not gesture recognition — press, axis lock, cancellation and the edge scroll
+have thirty-two passing tests and none of them regressed. Every one of the failures was
+**geometry**: where the ghost is drawn, and which of two expressions decides where a card
+lands. `interact.js` does not know what a minute is on our ruler, so it would not have
+decided either of those.
+
+What was actually missing was a test comparing what the screen promises with what is written.
+There is one now, and it fails on exactly the reported bug when the fix is undone.
+
+- [ ] Revisit if the next round of gesture defects is recognition rather than geometry —
+      multi-touch, momentum, or nested scrollers would each be a real argument for a library
+
+### Reported and not yet fixed
+
+Raised in one session and deliberately not attempted in it, because several of them were
+introduced by fixing something else in the same sitting.
+
+**Refusing an impossible swipe does not work.** Marking done twice and taking back a day
+nobody recorded both still go through, and the shake is never seen. The condition reads
+`row.outcome`, which is not `undefined` as often as the code assumes.
+
+**The drawer pill is invisible.** "3 habits need an hour" sits at `z-30`, the tab bar at
+`z-40`. It is behind it.
+
+**Finished habits want an accordion, not a counter.** A row below the outstanding ones —
+"4 done" — that opens them in place, rather than a number in the header that toggles the whole
+list. The list should be the work left, with the finished ones reachable directly underneath.
+
+**The sheet on a timeline card has no way to remove the occurrence.** Tapping a card offers
+length and reminder and no way to take it off the day.
+
+**Tapping a chip in the drawer should remove it outright.**
+
+**Swiping a card off the ruler, right to left, should unschedule it** with a confirm.
+
+**Feel.** A detent that can be felt: a short haptic tick as the day strip passes each valid
+day, and on the timeline as a card crosses each snap step. Capacitor's Haptics plugin covers
+it; the open question is how much of the app should speak that language rather than just this
+one control.
+
+### The day strip should scroll, not step
+- [ ] Follow the finger continuously rather than committing a whole day per swipe, and settle
+      onto a valid day when released — the camera zoom wheel, not a pager. Half a day must
+      never be left sitting at either edge
+- [ ] The current version commits one day per gesture, which is a detent without the travel:
+      the strip does not move while the finger does
 
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is

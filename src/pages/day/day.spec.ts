@@ -6,6 +6,7 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
+import { LONG_PRESS_MS } from '@shared/ui/drag/use-drag-and-drop'
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { PLATFORM_KEY, type PlatformServices } from '@core/platform-context'
@@ -1027,5 +1028,107 @@ describe('claiming an empty hour', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-empty-slot]').exists()).toBe(false)
+  })
+})
+
+describe('the indicator and the drop agree', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  /** A card from 04:15 to 06:00, so grabbing it anywhere but its top edge is possible. */
+  async function renderScheduled() {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({
+        id: newIdentifier(),
+        habitId: habit.id,
+        date: DAY,
+        period: 'daily',
+        durationMinutes: 105,
+      }),
+      timeOfDay(4 * 60 + 15),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    return await renderDay()
+  }
+
+  function pointer(type: string, clientY: number) {
+    return new MouseEvent(type, { clientY, bubbles: true })
+  }
+
+  /**
+   * Carries the card by a point partway down it and reads what the gutter promises before
+   * letting go, then what was actually stored.
+   *
+   * This is the test that was missing. The gutter read the finger's own time while the drop
+   * subtracted where the card had been grabbed, so the indicator said one hour and the card
+   * landed at another — and every existing test passed, because each half was correct on its
+   * own and nothing compared them.
+   */
+  async function carry(
+    wrapper: Awaited<ReturnType<typeof renderDay>>,
+    grabAt: number,
+    releaseAt: number,
+  ) {
+    const card = wrapper.find('[aria-label="Adjust Meditate"]').element.parentElement
+
+    if (!card) throw new Error('No card found')
+
+    // jsdom has no hit testing, and hit testing is how the gesture knows which zone the
+    // finger is over. Supplying it is the one browser capability this test has to fake;
+    // everything else — the geometry, the snapping, the write — is the real thing.
+    const canvas = wrapper.find('[data-drop-zone="timeline"]').element
+
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => canvas,
+    })
+
+    card.dispatchEvent(pointer('pointerdown', grabAt))
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    card.dispatchEvent(pointer('pointermove', releaseAt))
+    await flushPromises()
+
+    const promised = wrapper.find('[data-live-time]').text()
+
+    card.dispatchEvent(pointer('pointerup', releaseAt))
+    await settle()
+
+    const stored = (await persistence.instances.all())[0]?.startsAt ?? -1
+
+    return { promised, stored }
+  }
+
+  it('lands the card exactly where the gutter said it would', async () => {
+    const wrapper = await renderScheduled()
+    // Grabbed 45 minutes down the card, released with the finger at 06:45.
+    const { promised, stored } = await carry(wrapper, 5 * 60, 6 * 60 + 45)
+
+    expect(promised).toBe('06:00')
+    expect(stored).toBe(6 * 60)
+  })
+
+  it('keeps the grabbed point under the finger rather than moving the top edge there', async () => {
+    const wrapper = await renderScheduled()
+    const { stored } = await carry(wrapper, 5 * 60, 6 * 60 + 45)
+
+    // The finger was 45 minutes down the card; the card starts 45 minutes above the finger.
+    expect(stored).toBe(6 * 60 + 45 - 45)
+  })
+
+  it('agrees whichever part of the card was grabbed', async () => {
+    const wrapper = await renderScheduled()
+    const { promised, stored } = await carry(wrapper, 4 * 60 + 15, 9 * 60)
+
+    expect(promised).toBe('09:00')
+    expect(stored).toBe(9 * 60)
   })
 })

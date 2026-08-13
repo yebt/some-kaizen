@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, ref, shallowRef, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -181,6 +181,37 @@ interface DragPayload {
   readonly grabbedAt: number
 }
 
+interface Liftable {
+  readonly duty: DayDuty
+  readonly habit: PositiveHabit
+  readonly key: string
+}
+
+/** Picks a card up off the ruler, keeping the finger's place on it and its measured box. */
+function liftCard(entry: Liftable, event: PointerEvent) {
+  drag.press(
+    {
+      duty: entry.duty,
+      habit: entry.habit,
+      key: entry.key,
+      grabbedAt: grabOffset(entry.duty, event),
+    },
+    event,
+  )
+  measureGhost(entry.duty)
+}
+
+/** A chip in the drawer has no position on the ruler yet, so there is nothing to keep hold of. */
+function liftChip(entry: Liftable, event: PointerEvent) {
+  drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key, grabbedAt: 0 }, event)
+  measureGhost(entry.duty)
+}
+
+function abandonLift() {
+  drag.cancel()
+  ghostBox.value = null
+}
+
 /** Where inside its own card a press landed, so the card can be carried rather than reset. */
 function grabOffset(duty: DayDuty, event: PointerLike): number {
   const span = duty.instance ? spanOf(duty.instance) : undefined
@@ -257,8 +288,33 @@ function startPageSwipe(event: PointerEvent) {
  */
 const trayOpen = ref(false)
 
-/** Previewed while dragging so the time is visible before committing to it. */
+/**
+ * Where the card being carried would start, if it were let go now.
+ *
+ * The single answer to that question. It used to be asked twice — the gutter read the
+ * finger's own time while the drop subtracted where the card had been grabbed — so the
+ * indicator said six o'clock and the card landed at five. Two expressions for one fact will
+ * always drift; the only fix that holds is that there is one expression.
+ */
 const hoverTime = ref<number | null>(null)
+
+/**
+ * The start a drop at this height would produce, with the finger keeping its place on the
+ * card it picked up.
+ *
+ * `grabbedAt` is how far down the card the press landed. Subtracting it is what stops a card
+ * grabbed by its middle from jumping so that its top edge sits under the finger.
+ */
+function landingTime(clientY: number, grabbedAt: number): TimeOfDay | null {
+  const element = timeline.value
+
+  if (!element) return null
+
+  const offset = (clientY - element.getBoundingClientRect().top) / pixelsPerMinute.value
+  const step = snapMinutes.value
+
+  return snapToStep(Math.min(Math.max(offset - grabbedAt, 0), MINUTES_IN_DAY - step), step)
+}
 
 function minutesAt(y: number): TimeOfDay | null {
   const element = timeline.value
@@ -275,6 +331,7 @@ function minutesAt(y: number): TimeOfDay | null {
 
 async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   hoverTime.value = null
+  ghostBox.value = null
   slot.value = null
   swallowNextClick.value = true
   editing.value = null
@@ -291,16 +348,11 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
     return
   }
 
-  const dropped = minutesAt(at.y)
+  // Exactly what the gutter has been showing. Anything computed a second time here is a
+  // second opinion, and the one on screen is the one that was agreed to.
+  const minutes = landingTime(at.y, payload.grabbedAt)
 
-  if (dropped === null) return
-
-  // The finger keeps its place on the card, so what lands under it is the part that was
-  // picked up rather than the card's top edge.
-  const minutes = snapToStep(
-    Math.min(Math.max(dropped - payload.grabbedAt, 0), MINUTES_IN_DAY - snapMinutes.value),
-    snapMinutes.value,
-  )
+  if (minutes === null) return
 
   const instance = await occurrenceFor(payload.duty)
 
@@ -473,13 +525,34 @@ const liftedFrom = computed(() => {
   return instance ? spanOf(instance) : undefined
 })
 
-/** The footprint the card will take when it lands, drawn under the finger at real size. */
-const ghostHeight = computed(() => {
-  const instance = drag.payload.value?.duty.instance
-  const minutes = instance?.durationMinutes ?? DEFAULT_DURATION_MINUTES
+/**
+ * The rectangle the carried card occupied, measured from the ruler rather than guessed.
+ *
+ * Read once when the drag begins. Measuring it every frame would let a card that scrolls or
+ * a ruler that rescales change the shape of a thing already in the air.
+ */
+const ghostBox = shallowRef<{ width: number; left: number; height: number } | null>(null)
 
-  return minutes * pixelsPerMinute.value
-})
+function measureGhost(duty: DayDuty) {
+  const element = timeline.value
+
+  if (!element) return
+
+  const rect = element.getBoundingClientRect()
+  const minutes = duty.instance?.durationMinutes ?? DEFAULT_DURATION_MINUTES
+
+  // Inset by the same amount the cards are, so the ghost sits exactly where it will land.
+  const inset = 4
+
+  ghostBox.value = {
+    left: rect.left + inset,
+    width: Math.max(rect.width - inset * 2, 0),
+    height: Math.max(minutes * pixelsPerMinute.value, 22),
+  }
+}
+
+/** Where on the ghost the finger is, in pixels, so its top does not leap upward on pick-up. */
+const grabbedOffset = computed(() => (drag.payload.value?.grabbedAt ?? 0) * pixelsPerMinute.value)
 
 /**
  * An hour claimed before anything has been chosen to fill it.
@@ -671,9 +744,11 @@ async function chooseReminder(key: string) {
 function trackHover(event: PointerEvent) {
   drag.move(event)
 
+  const carried = drag.payload.value
+
   hoverTime.value =
-    drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
-      ? minutesAt(event.clientY)
+    carried && drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
+      ? landingTime(event.clientY, carried.grabbedAt)
       : null
 }
 </script>
@@ -722,7 +797,7 @@ function trackHover(event: PointerEvent) {
       -->
       <div
         v-if="untimed.length"
-        class="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-20 transition-transform duration-200"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-4 pb-20 transition-transform duration-200"
         :class="drag.isDragging.value ? 'translate-y-full' : 'translate-y-0'"
       >
         <div
@@ -748,15 +823,10 @@ function trackHover(event: PointerEvent) {
             <li v-for="entry in untimed" :key="entry.key">
               <DraggableItem
                 v-bind="pressState(entry.key)"
-                @press="
-                  drag.press(
-                    { duty: entry.duty, habit: entry.habit, key: entry.key, grabbedAt: 0 },
-                    $event,
-                  )
-                "
+                @press="liftChip(entry, $event)"
                 @move="trackHover($event)"
                 @release="drag.release($event)"
-                @cancel="drag.cancel()"
+                @cancel="abandonLift"
               >
                 <span
                   class="block rounded-md border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
@@ -792,7 +862,7 @@ function trackHover(event: PointerEvent) {
       <div
         v-if="drag.isDragging.value"
         :data-drop-zone="TRAY_ZONE"
-        class="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center justify-center px-4 pb-20 text-xs font-medium transition-colors"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md items-center justify-center px-4 pb-20 text-xs font-medium transition-colors"
         :class="drag.activeZone.value === TRAY_ZONE ? 'text-ink' : 'text-ink-subtle'"
       >
         <span class="rounded-full border border-dashed border-line-strong bg-surface/95 px-4 py-2">
@@ -979,20 +1049,10 @@ function trackHover(event: PointerEvent) {
             data-occupied
             class="absolute inset-x-1"
             :style="{ top: `${cardTop(entry)}px`, height: `${cardHeight(entry)}px` }"
-            @press="
-              drag.press(
-                {
-                  duty: entry.duty,
-                  habit: entry.habit,
-                  key: entry.key,
-                  grabbedAt: grabOffset(entry.duty, $event),
-                },
-                $event,
-              )
-            "
+            @press="liftCard(entry, $event)"
             @move="trackHover($event)"
             @release="drag.release($event)"
-            @cancel="drag.cancel()"
+            @cancel="abandonLift"
           >
             <div
               class="relative h-full overflow-hidden rounded-md border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
@@ -1203,7 +1263,8 @@ function trackHover(event: PointerEvent) {
       v-if="drag.isDragging.value"
       :position="drag.position.value"
       :label="drag.payload.value?.habit.name ?? ''"
-      :height="ghostHeight"
+      :box="ghostBox ?? undefined"
+      :grabbed-offset="grabbedOffset"
       :detail="hoverTime === null ? undefined : preferences.formatClock(hoverTime)"
     />
   </div>

@@ -4,17 +4,23 @@ withDefaults(
     position: { x: number; y: number } | null
     label: string
     /**
-     * The footprint the thing will occupy when it lands.
+     * The exact rectangle the thing occupied before it was lifted.
      *
-     * A pill under the finger says what is being carried and nothing about what will happen
-     * when it is dropped. On a timeline the answer is mostly a shape: a card that turns out
-     * to be twice as tall as expected has already overlapped the next hour by the time you
-     * find out.
+     * A ghost that changes width, height or horizontal position is not the same object being
+     * carried — it is a new one that appeared, and the eye has to work out what happened to
+     * the old one. Passing the real box means the card in the air is the card on the ruler.
      */
-    height?: number
+    box?: { readonly width: number; readonly left: number; readonly height: number }
+    /**
+     * How far below the box's own top the finger is holding it, in pixels.
+     *
+     * Without it the box's top edge snaps to the finger the instant the card is picked up,
+     * which reads as the card having been moved before the drag has moved anything.
+     */
+    grabbedOffset?: number
     detail?: string
   }>(),
-  { height: undefined, detail: undefined },
+  { box: undefined, grabbedOffset: 0, detail: undefined },
 )
 </script>
 
@@ -25,12 +31,18 @@ withDefaults(
     aimed at, and nothing would ever drop.
   -->
   <div
-    v-if="position && height !== undefined"
-    class="pointer-events-none fixed z-50 flex w-40 -translate-x-1/2 flex-col justify-center overflow-hidden rounded-md border-2 border-line-strong bg-surface px-2.5 py-1 opacity-90 shadow-float"
-    :style="{ left: `${position.x}px`, top: `${position.y}px`, height: `${height}px` }"
+    v-if="position && box"
+    class="pointer-events-none fixed z-50 flex flex-col justify-center overflow-hidden rounded-md border-2 border-line-strong bg-surface px-2.5 py-1 opacity-90 shadow-float"
+    :style="{
+      left: `${box.left}px`,
+      width: `${box.width}px`,
+      height: `${box.height}px`,
+      /* Only the vertical position follows the finger: a card can move in time and nowhere else. */
+      top: `${position.y - grabbedOffset}px`,
+    }"
     aria-hidden="true"
   >
-    <p class="truncate text-xs font-medium text-ink">{{ label }}</p>
+    <p class="truncate pr-6 text-xs font-medium text-ink">{{ label }}</p>
     <p v-if="detail" class="tabular truncate text-[0.625rem] text-ink-muted">{{ detail }}</p>
   </div>
 
