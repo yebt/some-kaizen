@@ -16,7 +16,7 @@ import {
   type NegativeOutcome,
   type PositiveOutcome,
 } from '@modules/habits/domain/habit'
-import type { HabitEntry } from '@modules/habits/domain/habit-entry'
+import { type HabitEntry, readNote } from '@modules/habits/domain/habit-entry'
 import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 
 import type { Dataset } from './dataset'
@@ -172,6 +172,11 @@ function readEntry(raw: unknown): HabitEntry {
     id: readId(value.id, 'entry'),
     habitId: readId(value.habitId, 'entry'),
     date: readDate(value.date, 'entry'),
+    // Rebuilt through the domain's own reader, so an over-long note from a hand edited file
+    // is refused here rather than surfacing later as a row that will not render.
+    note: readNote(
+      value.note === undefined ? undefined : asString(value.note, 'An entry note is not text.'),
+    ),
     recordedAt: asNumber(value.recordedAt, 'recordedAt'),
   }
 

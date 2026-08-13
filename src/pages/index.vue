@@ -37,6 +37,7 @@ import {
 import {
   latestEntryForInstance,
   pendingNegativeChecks,
+  MAX_NOTE_LENGTH,
   recordCompleted,
   recordMeasured,
   recordNegative,
@@ -213,6 +214,7 @@ const logging = ref<{
   duty: DayDuty
   entryId: Identifier | undefined
   value: number
+  note: string
 } | null>(null)
 
 /**
@@ -275,7 +277,9 @@ function startLogging(
 ) {
   if (!isMeasured(habit)) return
 
-  logging.value = { habit, duty, entryId, value: current }
+  const existing = entryId ? entries.value.find((entry) => entry.id === entryId)?.note : undefined
+
+  logging.value = { habit, duty, entryId, value: current, note: existing ?? '' }
 }
 
 async function saveAmount() {
@@ -292,7 +296,7 @@ async function saveAmount() {
       pending.habit,
       selectedDay.value,
       Number(pending.value),
-      { instanceId: instance.id },
+      { instanceId: instance.id, note: pending.note },
     )
 
     await recordEntry.mutateAsync(entry)
@@ -770,6 +774,23 @@ const OUTCOME_CLASS = {
           :aria-label="`Amount in ${logging.habit.measure.unit}`"
           class="tabular w-full rounded-cell border border-line-strong bg-surface px-3.5 py-3 text-lg text-ink"
         />
+
+        <!--
+          Optional, and only on the screen that already stopped to ask a question.
+          A tracker that wants a sentence every morning is one nobody opens twice, so the
+          note lives where the app had interrupted you anyway — never behind the swipe,
+          which exists precisely so that marking a day costs nothing.
+        -->
+        <label v-if="logging" class="mt-3 block text-xs text-ink-muted">
+          Note
+          <span class="text-ink-subtle">— optional, for the day you will not remember</span>
+          <textarea
+            v-model="logging.note"
+            rows="2"
+            :maxlength="MAX_NOTE_LENGTH"
+            class="mt-1.5 w-full resize-none rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink"
+          />
+        </label>
 
         <div class="mt-4 flex gap-2">
           <button

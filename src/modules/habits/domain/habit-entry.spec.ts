@@ -20,6 +20,8 @@ import {
   recordCompleted,
   recordMeasured,
   recordNegative,
+  InvalidNoteError,
+  MAX_NOTE_LENGTH,
 } from './habit-entry'
 
 const CREATED_ON = calendarDate('2026-03-01')
@@ -329,5 +331,50 @@ describe('latestEntryFor', () => {
     const entries = [recordCompleted(newIdentifier(), meditate, calendarDate('2026-03-04'), true)]
 
     expect(latestEntryFor(entries, water.id, calendarDate('2026-03-04'))).toBeUndefined()
+  })
+})
+
+describe('a note about the day', () => {
+  const habit = createCompletedHabit({
+    id: newIdentifier(),
+    name: 'Meditate',
+    frequency: frequency('daily', 1),
+    createdOn: calendarDate('2020-01-01'),
+  })
+
+  const DAY = calendarDate('2026-03-11')
+
+  it('is kept alongside the outcome', () => {
+    const entry = recordCompleted(newIdentifier(), habit, DAY, true, { note: 'Before the call' })
+
+    expect(entry.note).toBe('Before the call')
+  })
+
+  it('is absent when nobody wrote one', () => {
+    expect(recordCompleted(newIdentifier(), habit, DAY, true).note).toBeUndefined()
+  })
+
+  it('treats whitespace as no note at all', () => {
+    // An empty string and an absent field mean the same thing and compare as different,
+    // which is exactly the difference a merge reports as a conflict nobody caused.
+    expect(recordCompleted(newIdentifier(), habit, DAY, true, { note: '   ' }).note).toBeUndefined()
+  })
+
+  it('trims what it keeps', () => {
+    const entry = recordCompleted(newIdentifier(), habit, DAY, true, { note: '  late  ' })
+
+    expect(entry.note).toBe('late')
+  })
+
+  it('refuses one longer than a note should be', () => {
+    expect(() =>
+      recordCompleted(newIdentifier(), habit, DAY, true, { note: 'x'.repeat(MAX_NOTE_LENGTH + 1) }),
+    ).toThrow(InvalidNoteError)
+  })
+
+  it('accepts one exactly at the limit', () => {
+    const note = 'x'.repeat(MAX_NOTE_LENGTH)
+
+    expect(recordCompleted(newIdentifier(), habit, DAY, true, { note }).note).toBe(note)
   })
 })

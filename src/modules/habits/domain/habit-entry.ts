@@ -43,6 +43,15 @@ export interface PositiveEntry {
    * Saturday indistinguishable from one, so a habit asking for three could never be met.
    */
   readonly instanceId?: Identifier
+  /**
+   * A line about the day, written by the person who lived it.
+   *
+   * The one thing no statistic can produce. A completion rate says a Tuesday was missed; it
+   * cannot say the flight was delayed, and next February neither can you. Optional and
+   * absent by default, because a tracker that asks for a paragraph every morning is a
+   * tracker nobody opens twice.
+   */
+  readonly note?: string
   readonly recordedAt: RecordedAt
 }
 
@@ -60,6 +69,7 @@ export interface NegativeEntry {
   readonly date: CalendarDate
   readonly outcome: NegativeOutcome
   readonly recordedOn: CalendarDate
+  readonly note?: string
   readonly recordedAt: RecordedAt
 }
 
@@ -75,7 +85,34 @@ export class EntryTooEarlyError extends Error {
 /** The optional details of a recording, grouped so the signatures stop growing positionally. */
 export interface RecordOptions {
   readonly instanceId?: Identifier
+  readonly note?: string
   readonly recordedAt?: RecordedAt
+}
+
+export const MAX_NOTE_LENGTH = 280
+
+export class InvalidNoteError extends Error {
+  constructor() {
+    super(`A note can be at most ${MAX_NOTE_LENGTH} characters.`)
+    this.name = 'InvalidNoteError'
+  }
+}
+
+/**
+ * Trims a note, and treats one that is only whitespace as no note at all.
+ *
+ * An empty string and an absent field would otherwise mean the same thing while comparing as
+ * different, which is exactly the kind of difference a merge reports as a conflict nobody
+ * caused.
+ */
+export function readNote(note: string | undefined): string | undefined {
+  if (note === undefined) return undefined
+
+  const trimmed = note.trim()
+
+  if (trimmed.length > MAX_NOTE_LENGTH) throw new InvalidNoteError()
+
+  return trimmed === '' ? undefined : trimmed
 }
 
 export function recordCompleted(
@@ -94,6 +131,7 @@ export function recordCompleted(
     date,
     outcome: done ? 'done' : 'missed',
     instanceId: options.instanceId,
+    note: readNote(options.note),
     recordedAt: options.recordedAt ?? Date.now(),
   }
 }
@@ -115,6 +153,7 @@ export function recordMeasured(
     outcome: outcomeFor(habit.measure, value),
     value,
     instanceId: options.instanceId,
+    note: readNote(options.note),
     recordedAt: options.recordedAt ?? Date.now(),
   }
 }
@@ -147,6 +186,7 @@ export function recordNegative(
     id,
     habitId: habit.id,
     date,
+    note: readNote(options.note),
     outcome,
     recordedOn,
     recordedAt: options.recordedAt ?? Date.now(),

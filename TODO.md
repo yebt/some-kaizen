@@ -50,11 +50,12 @@ For a morning routine it is by far the fastest of the three.
       actionable number in init.Habits, and we already store everything it needs
 - [ ] Per-habit summary block: schedule, current and best streak, days tracked
 
-### Notes on an entry
-The one outstanding item from the ANOTHER.md review.
-
-- [ ] Optional `note` on a positive entry, written when it is recorded
-- [ ] It is the only datum no statistic can produce: *why* a day went the way it did
+### Notes on an entry — done
+- [x] Optional `note`, trimmed, capped, and absent rather than empty
+- [x] Written from the amount dialog, which had already interrupted you; never behind the
+      swipe, which exists so that marking a day costs nothing
+- [x] Read back on the habit's own page, newest first
+- [ ] A way in for a "did it" habit, which today has no dialog to hang it off
 
 ### Challenges
 - [ ] A programme container: fixed length, fixed daily task set, all-or-nothing days

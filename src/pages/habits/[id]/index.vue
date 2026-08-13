@@ -38,6 +38,26 @@ const habit = computed(() =>
 
 const entries = computed(() => entriesData.value ?? [])
 
+/** Enough to spot a pattern, few enough that the page stays a summary. */
+const MAX_NOTES_SHOWN = 8
+
+/**
+ * The lines this habit's owner wrote about it, newest first.
+ *
+ * The reason the field exists at all. A note that can be written and never read is worse
+ * than no note: it costs something to write and returns nothing, which is how a field ends
+ * up abandoned and then quietly removed.
+ */
+const notes = computed(() =>
+  entries.value
+    .filter((entry) => entry.habitId === habit.value?.id && entry.note !== undefined)
+    // Copied before sorting: the array comes from a query cache and is not ours to reorder.
+    .slice()
+    .sort((left, right) => right.recordedAt - left.recordedAt)
+    .slice(0, MAX_NOTES_SHOWN)
+    .map((entry) => ({ key: entry.id, date: entry.date, note: entry.note ?? '' })),
+)
+
 const marks = computed(() =>
   habit.value ? dailyMarks(habit.value, entries.value, windowStart, today) : new Map(),
 )
@@ -190,6 +210,26 @@ const lastRelapse = computed(() => {
       <p v-if="lastRelapse" class="mt-3 text-xs text-ink-muted">
         Last relapse recorded on {{ lastRelapse }}.
       </p>
+
+      <section v-if="notes.length" class="mt-5" aria-labelledby="notes-heading">
+        <h2
+          id="notes-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        >
+          Notes
+        </h2>
+
+        <ul class="space-y-2">
+          <li
+            v-for="note in notes"
+            :key="note.key"
+            class="rounded-cell border border-line bg-surface p-3"
+          >
+            <p class="tabular text-[0.625rem] text-ink-muted">{{ note.date }}</p>
+            <p class="mt-0.5 text-sm text-ink">{{ note.note }}</p>
+          </li>
+        </ul>
+      </section>
     </template>
   </div>
 </template>
