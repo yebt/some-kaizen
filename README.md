@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg" />
+  <img src="docs/assets/banner-light.svg" alt="Some Kaisen — habits with a place in the day" />
+</picture>
+
 # Some Kaisen
 
 A mobile-first habit tracker that gives habits a place in the day rather than a checkbox in
@@ -137,6 +142,20 @@ surface later as a broken screen far from the import.
 blue and turns invisible on a pale yellow, so the ink with the higher contrast wins. Patterns
 exist alongside colour because colour alone excludes anyone who cannot separate red from
 green, and disappears in greyscale.
+
+## The banner
+
+`docs/assets/banner-*.svg`, written from the brief in `docs/prompts/banner.md`. SVG rather
+than a rendered image because a README header is read at every width from a phone to a wide
+monitor, and because the mark in it is the same handful of shapes as the favicon rather than
+a picture of them.
+
+Two files rather than one, swapped by `<picture>` on colour scheme: a warm off-white banner
+on a dark README is a lit rectangle in the middle of the page.
+
+Nothing in them may reference anything external — no webfont, no embedded image, no script.
+GitHub sanitises SVG it renders, so a banner that reaches outside itself is a banner that
+arrives broken.
 
 ## Licence
 

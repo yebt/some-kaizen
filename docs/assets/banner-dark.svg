@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300">
+  <rect width="1200" height="300" fill="#1f1e1c" />
+
+  <!-- Mark (64x64 scaled 3x, centered at X=110, Y=145, outer diameter 111px) -->
+  <g transform="translate(14, 49) scale(3)">
+    <circle cx="32" cy="32" r="15" fill="none" stroke="#4a4944" stroke-width="7" />
+    <path d="M32 17a15 15 0 0 1 12.99 22.5" fill="none" stroke="#c9a227" stroke-width="7" stroke-linecap="round" />
+    <circle cx="32" cy="32" r="4" fill="#f2f0ec" />
+  </g>
+
+  <!-- Wordmark & Subtitle -->
+  <text x="210" y="145" font-family="ui-sans-serif, -apple-system, &quot;Segoe UI&quot;, Roboto, Helvetica, Arial, sans-serif" font-size="56" font-weight="600" letter-spacing="-0.02em" fill="#f2f0ec">Some Kaisen</text>
+  <text x="210" y="185" font-family="ui-sans-serif, -apple-system, &quot;Segoe UI&quot;, Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="400" fill="#a5a099">Habits with a place in the day</text>
+
+  <!-- Timeline Schedule (Vertical axis & single column day timeline, centered on y=150) -->
+  <g>
+    <!-- Vertical Hour Rule & Ticks -->
+    <line x1="760" y1="30" x2="760" y2="270" stroke="#332f2b" stroke-width="1.5" />
+    <line x1="752" y1="30" x2="760" y2="30" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="60" x2="760" y2="60" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="90" x2="760" y2="90" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="120" x2="760" y2="120" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="150" x2="760" y2="150" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="180" x2="760" y2="180" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="210" x2="760" y2="210" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="240" x2="760" y2="240" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+    <line x1="752" y1="270" x2="760" y2="270" stroke="#332f2b" stroke-width="1.5" stroke-linecap="round" />
+
+    <!-- Day Cards (Single column, width 210) -->
+    <!-- Card 1 (y: 35..69, h=34) -->
+    <rect x="772" y="35" width="210" height="34" rx="6" fill="#332f2b" />
+
+    <!-- Card 2 (y: 73..99, h=26, Accent Card, 2nd shortest) -->
+    <rect x="772" y="73" width="210" height="26" rx="6" fill="#c9a227" />
+
+    <!-- Gap: 99 to 125 (26px wide gap) -->
+
+    <!-- Card 3 (y: 125..179, h=54, Tallest card) -->
+    <rect x="772" y="125" width="210" height="54" rx="6" fill="#332f2b" />
+
+    <!-- Card 4 (y: 183..203, h=20, Shortest card) -->
+    <rect x="772" y="183" width="210" height="20" rx="6" fill="#332f2b" />
+
+    <!-- Gap: 203 to 221 (18px gap) -->
+
+    <!-- Card 5 (y: 221..265, h=44) -->
+    <rect x="772" y="221" width="210" height="44" rx="6" fill="#332f2b" />
+  </g>
+</svg>
