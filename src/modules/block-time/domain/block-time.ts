@@ -5,8 +5,11 @@ import {
   isAfter,
   isBefore,
   type Weekday,
+  weekdaySet,
   weekday,
 } from '@shared/domain/calendar-date'
+export { InvalidWeekdaysError } from '@shared/domain/calendar-date'
+
 import type { Identifier } from '@shared/domain/identifier'
 import { segmentsOf, type TimeInterval, type TimeSegment } from '@shared/domain/time-of-day'
 
@@ -45,13 +48,6 @@ export interface BlockOccurrence {
   readonly continuesIntoNextDay: boolean
 }
 
-export class InvalidWeekdaysError extends Error {
-  constructor(readonly weekdays: readonly number[]) {
-    super('A block must recur on at least one weekday, each between 1 and 7 and listed once.')
-    this.name = 'InvalidWeekdaysError'
-  }
-}
-
 export class BlockTimeOverlapError extends Error {
   constructor(readonly conflicts: readonly BlockTime[]) {
     super(`Block time cannot overlap: conflicts with ${conflicts.map((b) => b.name).join(', ')}.`)
@@ -77,7 +73,7 @@ export function createBlockTime(draft: BlockTimeDraft): BlockTime {
     id: draft.id,
     name: blockName(draft.name),
     span: draft.span,
-    weekdays: normaliseWeekdays(draft.weekdays),
+    weekdays: weekdaySet(draft.weekdays),
     createdOn: draft.createdOn,
     ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
   }
@@ -211,13 +207,4 @@ function isLiveOn(block: BlockTime, date: CalendarDate): boolean {
 
 function nextWeekday(day: Weekday): Weekday {
   return ((day % 7) + 1) as Weekday
-}
-
-function normaliseWeekdays(weekdays: readonly Weekday[]): Weekday[] {
-  const isValid = weekdays.every((day) => Number.isInteger(day) && day >= 1 && day <= 7)
-  const isUnique = new Set(weekdays).size === weekdays.length
-
-  if (weekdays.length === 0 || !isValid || !isUnique) throw new InvalidWeekdaysError(weekdays)
-
-  return [...weekdays].sort((left, right) => left - right)
 }

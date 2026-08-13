@@ -1,5 +1,12 @@
 import type { Appearance } from '@shared/domain/appearance'
-import { type CalendarDate, isAfter, isBefore } from '@shared/domain/calendar-date'
+import {
+  type CalendarDate,
+  isAfter,
+  isBefore,
+  weekday,
+  type Weekday,
+  weekdaySet,
+} from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
 
 /**
@@ -27,6 +34,19 @@ export type FrequencyPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly'
 export interface Frequency {
   readonly period: FrequencyPeriod
   readonly repetitions: number
+  /**
+   * The weekdays it falls on, when the plan names its days instead of counting them.
+   *
+   * "Three times a week" and "Monday, Wednesday and Friday" are genuinely different plans,
+   * not two ways of saying one thing. The first leaves the choice of days open and is what
+   * the planner exists to resolve; the second has already made it, and asking someone to
+   * drag the same three cards onto the same three days every week would be busywork with no
+   * decision in it.
+   *
+   * Absent rather than a full week when the days are not named, so "unspecified" cannot be
+   * confused with "every day".
+   */
+  readonly weekdays?: readonly Weekday[]
 }
 
 /** The quantities that turn a measured habit into a partial day or a finished one. */
@@ -106,6 +126,39 @@ export function frequency(period: FrequencyPeriod, repetitions: number): Frequen
   }
 
   return { period, repetitions }
+}
+
+/**
+ * Builds a recurrence that names its days, such as Monday, Wednesday and Friday.
+ *
+ * The repetition count is derived rather than accepted. It is not independent information —
+ * three named days is three times a week — and storing it twice is storing a disagreement
+ * waiting to happen.
+ */
+export function onWeekdays(days: readonly number[]): Frequency {
+  const weekdays = weekdaySet(days)
+
+  return { period: 'weekly', repetitions: weekdays.length, weekdays }
+}
+
+/** Whether this recurrence names its days rather than counting them. */
+export function namesItsDays(value: Frequency): value is Frequency & {
+  weekdays: readonly Weekday[]
+} {
+  return value.weekdays !== undefined && value.weekdays.length > 0
+}
+
+/**
+ * How many times the habit is owed on a given date without anyone planning it.
+ *
+ * Zero means the day owes nothing on its own, which is the answer for every recurrence
+ * whose landing day is a real decision rather than a given.
+ */
+export function timesDueOn(value: Frequency, date: CalendarDate): number {
+  if (namesItsDays(value)) return value.weekdays.includes(weekday(date)) ? 1 : 0
+
+  // The period is the day itself, so there is nothing left to decide.
+  return value.period === 'daily' ? value.repetitions : 0
 }
 
 export function timesPerPeriod(value: Frequency): number {

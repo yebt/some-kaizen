@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { calendarDate } from '@shared/domain/calendar-date'
+import { calendarDate, InvalidWeekdaysError } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 
 import {
@@ -20,6 +20,9 @@ import {
   measure,
   outcomeFor,
   timesPerPeriod,
+  namesItsDays,
+  onWeekdays,
+  timesDueOn,
 } from './habit'
 
 const CREATED_ON = calendarDate('2026-01-01')
@@ -315,5 +318,60 @@ describe('achievementFor', () => {
 
   it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])('rejects the value %s', (recorded) => {
     expect(() => achievementFor(water, recorded)).toThrow(InvalidMeasureError)
+  })
+})
+
+describe('a recurrence that names its days', () => {
+  it('is a weekly plan, because that is the period a set of weekdays repeats over', () => {
+    expect(onWeekdays([1, 3, 5]).period).toBe('weekly')
+  })
+
+  it('derives how many times it happens rather than being told', () => {
+    // Three named days is three times a week. Storing both is storing a disagreement
+    // waiting to happen.
+    expect(onWeekdays([1, 3, 5]).repetitions).toBe(3)
+  })
+
+  it('sorts the days, so two habits on the same days are written the same way', () => {
+    expect(onWeekdays([5, 1, 3]).weekdays).toEqual([1, 3, 5])
+  })
+
+  it('refuses a plan with no days at all', () => {
+    expect(() => onWeekdays([])).toThrow(InvalidWeekdaysError)
+  })
+
+  it.each([0, 8, -1, 1.5, Number.NaN])('refuses %s as a weekday', (day) => {
+    expect(() => onWeekdays([day])).toThrow(InvalidWeekdaysError)
+  })
+
+  it('refuses the same day twice, which would inflate the count', () => {
+    expect(() => onWeekdays([1, 1])).toThrow(InvalidWeekdaysError)
+  })
+
+  it('knows it names its days, and that a counted one does not', () => {
+    expect(namesItsDays(onWeekdays([1]))).toBe(true)
+    expect(namesItsDays(frequency('weekly', 1))).toBe(false)
+  })
+})
+
+describe('how many times a day owes a habit', () => {
+  const MONDAY = calendarDate('2026-03-09')
+  const TUESDAY = calendarDate('2026-03-10')
+
+  it('owes a named day once', () => {
+    expect(timesDueOn(onWeekdays([1, 3, 5]), MONDAY)).toBe(1)
+  })
+
+  it('owes nothing on a day the plan does not name', () => {
+    expect(timesDueOn(onWeekdays([1, 3, 5]), TUESDAY)).toBe(0)
+  })
+
+  it('owes a daily habit its full repetitions', () => {
+    expect(timesDueOn(frequency('daily', 2), MONDAY)).toBe(2)
+  })
+
+  it('owes nothing for a counted weekly habit, whose day is a decision to be made', () => {
+    // The planner exists to settle which day it lands on; the day cannot assume it.
+    expect(timesDueOn(frequency('weekly', 3), MONDAY)).toBe(0)
   })
 })

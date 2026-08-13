@@ -10,6 +10,7 @@ import {
   createNegativeHabit,
   frequency,
   type FrequencyPeriod,
+  onWeekdays,
   type Habit,
   measure,
   type NegativeOutcome,
@@ -149,6 +150,17 @@ function readFrequency(raw: unknown) {
 
   if (!PERIODS.includes(period as FrequencyPeriod)) {
     throw new InvalidBackupError(`A frequency has an unknown period: ${String(period)}.`)
+  }
+
+  // Named days rebuild through their own constructor, which derives the repetition count
+  // rather than trusting the file's copy of it: a backup that disagreed with itself would
+  // otherwise be imported as a habit that disagrees with itself.
+  if (value.weekdays !== undefined) {
+    if (!Array.isArray(value.weekdays)) {
+      throw new InvalidBackupError('A frequency has weekdays that are not a list.')
+    }
+
+    return onWeekdays(value.weekdays.map((day) => asNumber(day, 'weekday')))
   }
 
   return frequency(period as FrequencyPeriod, asNumber(value.repetitions, 'repetitions'))

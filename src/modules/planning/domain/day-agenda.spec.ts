@@ -7,6 +7,7 @@ import {
   createNegativeHabit,
   frequency,
   type FrequencyPeriod,
+  onWeekdays,
 } from '@modules/habits/domain/habit'
 
 import { dutiesFor, impliedOccurrenceId } from './day-agenda'
@@ -181,5 +182,62 @@ describe('the identity of an unplaced duty', () => {
     })
 
     expect(dutiesFor([habit], [planned], TODAY)).toHaveLength(1)
+  })
+})
+
+describe('a habit that named its own days', () => {
+  const MONDAY = calendarDate('2026-03-09')
+  const TUESDAY = calendarDate('2026-03-10')
+
+  function gym() {
+    return createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Gym',
+      frequency: onWeekdays([1, 3, 5]),
+      createdOn: calendarDate('2020-01-01'),
+    })
+  }
+
+  it('is due on a day it names without anyone planning it', () => {
+    // The decision was made when the habit was created; making it again every week would be
+    // busywork with no choice in it.
+    expect(dutiesFor([gym()], [], MONDAY)).toHaveLength(1)
+  })
+
+  it('is not due on a day it does not name', () => {
+    expect(dutiesFor([gym()], [], TUESDAY)).toEqual([])
+  })
+
+  it('is owed once on the day, not three times for the week', () => {
+    expect(dutiesFor([gym()], [], MONDAY)).toHaveLength(1)
+  })
+
+  it('stops implying a duty once one has been placed on that day', () => {
+    const habit = gym()
+    const instance = planInstance({
+      id: impliedOccurrenceId(habit.id, MONDAY, 0),
+      habitId: habit.id,
+      date: MONDAY,
+      period: 'weekly',
+    })
+
+    expect(dutiesFor([habit], [instance], MONDAY)).toHaveLength(1)
+  })
+
+  it('leaves a counted weekly habit alone, whose day is still a decision', () => {
+    const flexible = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Run',
+      frequency: frequency('weekly', 3),
+      createdOn: calendarDate('2020-01-01'),
+    })
+
+    expect(dutiesFor([flexible], [], MONDAY)).toEqual([])
+  })
+
+  it('stays quiet once archived, whatever days it named', () => {
+    const retired = { ...gym(), archivedOn: calendarDate('2026-03-01') }
+
+    expect(dutiesFor([retired], [], MONDAY)).toEqual([])
   })
 })

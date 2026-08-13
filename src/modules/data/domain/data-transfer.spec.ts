@@ -10,13 +10,16 @@ import {
   frequency,
   InvalidMeasureError,
   measure,
+  isPositive,
+  onWeekdays,
 } from '@modules/habits/domain/habit'
 import { recordMeasured, recordNegative } from '@modules/habits/domain/habit-entry'
-import { createBlockTime, InvalidWeekdaysError } from '@modules/block-time/domain/block-time'
+import { InvalidWeekdaysError } from '@shared/domain/calendar-date'
+import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { planInstance, scheduleAt } from '@modules/planning/domain/planned-instance'
 
 import { BACKUP_FORMAT, InvalidBackupError, parseBackup, serializeDataset } from './data-transfer'
-import type { Dataset } from './dataset'
+import { type Dataset, EMPTY_DATASET } from './dataset'
 
 const CREATED_ON = calendarDate('2026-01-01')
 const EXPORTED_AT = new Date('2026-03-11T10:00:00.000Z')
@@ -266,5 +269,63 @@ describe('refusing a corrupted file', () => {
     })
 
     expect(() => parseBackup(text)).toThrow(InvalidWeekdaysError)
+  })
+})
+
+describe('a habit whose days are named', () => {
+  function gym() {
+    return createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Gym',
+      frequency: onWeekdays([1, 3, 5]),
+      createdOn: calendarDate('2020-01-01'),
+    })
+  }
+
+  /** A real backup, parsed back into something a test can edit before feeding it in. */
+  function tampered() {
+    return JSON.parse(
+      serializeDataset({ ...EMPTY_DATASET, habits: [gym()] }, new Date('2026-03-11T10:00:00Z')),
+    ) as { dataset: { habits: Array<{ frequency: Record<string, unknown> }> } }
+  }
+
+  it('survives a round trip through a file', () => {
+    const restored = parseBackup(
+      serializeDataset({ ...EMPTY_DATASET, habits: [gym()] }, new Date('2026-03-11T10:00:00Z')),
+    )
+
+    const [restoredHabit] = restored.habits
+
+    expect(restoredHabit && isPositive(restoredHabit) && restoredHabit.frequency.weekdays).toEqual([
+      1, 3, 5,
+    ])
+  })
+
+  it('rebuilds the repetition count instead of trusting the file', () => {
+    // A file that disagreed with itself would otherwise import as a habit that disagrees
+    // with itself, and nothing downstream could tell which half was right.
+    const raw = tampered()
+
+    raw.dataset.habits[0]!.frequency.repetitions = 99
+
+    const [restored] = parseBackup(JSON.stringify(raw)).habits
+
+    expect(restored && isPositive(restored) && restored.frequency.repetitions).toBe(3)
+  })
+
+  it('refuses weekdays that are not a list', () => {
+    const raw = tampered()
+
+    raw.dataset.habits[0]!.frequency.weekdays = 'monday'
+
+    expect(() => parseBackup(JSON.stringify(raw))).toThrow(InvalidBackupError)
+  })
+
+  it('refuses a day outside the week', () => {
+    const raw = tampered()
+
+    raw.dataset.habits[0]!.frequency.weekdays = [9]
+
+    expect(() => parseBackup(JSON.stringify(raw))).toThrow(InvalidWeekdaysError)
   })
 })

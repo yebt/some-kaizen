@@ -2,11 +2,12 @@
 import { computed, ref } from 'vue'
 
 import type { PatternName } from '@shared/domain/appearance'
-import { todayIn } from '@shared/domain/calendar-date'
+import { todayIn, type Weekday } from '@shared/domain/calendar-date'
 import type { HexColour } from '@shared/domain/colour'
 import { newIdentifier } from '@shared/domain/identifier'
 import AppearancePicker from '@shared/ui/AppearancePicker.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import SegmentedControl from '@shared/ui/SegmentedControl.vue'
 import {
   createCompletedHabit,
   createMeasuredHabit,
@@ -18,7 +19,10 @@ import {
   isNegative,
   MAX_HABIT_NAME_LENGTH,
   measure,
+  namesItsDays,
+  onWeekdays,
 } from '@modules/habits/domain/habit'
+import { describeFrequency } from '@modules/habits/ui/frequency-label'
 
 const props = defineProps<{ initial?: Habit; submitLabel: string; busy: boolean }>()
 const emit = defineEmits<{ submit: [habit: Habit] }>()
@@ -71,6 +75,56 @@ const period = ref<FrequencyPeriod>(
 const repetitions = ref(
   props.initial && !isNegative(props.initial) ? props.initial.frequency.repetitions : 1,
 )
+/**
+ * Counting the times or naming the days: two genuinely different plans, chosen up front.
+ *
+ * "Three times a week" leaves which days open, and the planner exists to settle that.
+ * "Monday, Wednesday and Friday" has already settled it. Deriving the mode from whether
+ * days happen to be ticked would make clearing the last day silently change what kind of
+ * plan the habit is.
+ */
+const WEEKDAYS: ReadonlyArray<{ value: Weekday; label: string; full: string }> = [
+  { value: 1, label: 'M', full: 'Monday' },
+  { value: 2, label: 'T', full: 'Tuesday' },
+  { value: 3, label: 'W', full: 'Wednesday' },
+  { value: 4, label: 'T', full: 'Thursday' },
+  { value: 5, label: 'F', full: 'Friday' },
+  { value: 6, label: 'S', full: 'Saturday' },
+  { value: 7, label: 'S', full: 'Sunday' },
+]
+
+const SCHEDULE_MODES = [
+  { value: 'count', label: 'How many times' },
+  { value: 'days', label: 'On these days' },
+]
+
+const namedDays =
+  props.initial && !isNegative(props.initial) && namesItsDays(props.initial.frequency)
+    ? [...props.initial.frequency.weekdays]
+    : undefined
+
+const scheduleMode = ref(namedDays ? 'days' : 'count')
+const days = ref<Weekday[]>(namedDays ?? [1, 3, 5])
+
+function toggleDay(day: Weekday) {
+  days.value = days.value.includes(day)
+    ? days.value.filter((candidate) => candidate !== day)
+    : [...days.value, day]
+}
+
+/** Read back before saving, because a row of seven letters is not a sentence. */
+const scheduleSummary = computed(() => {
+  try {
+    return describeFrequency(
+      scheduleMode.value === 'days'
+        ? onWeekdays(days.value)
+        : frequency(period.value, Number(repetitions.value)),
+    )
+  } catch {
+    return 'Pick at least one day'
+  }
+})
+
 const unit = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.unit : '')
 const minimum = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.minimum : 1)
 const goal = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.goal : 2)
@@ -108,7 +162,10 @@ function build(): Habit {
 
   if (kind.value === 'negative') return createNegativeHabit(core)
 
-  const recurrence = frequency(period.value, Number(repetitions.value))
+  const recurrence =
+    scheduleMode.value === 'days'
+      ? onWeekdays(days.value)
+      : frequency(period.value, Number(repetitions.value))
 
   if (kind.value === 'measured') {
     return createMeasuredHabit({
@@ -171,7 +228,14 @@ function submit() {
 
     <fieldset v-if="isPositive">
       <legend class="mb-1.5 text-xs font-medium text-ink-muted">How often</legend>
-      <div class="flex items-center gap-2">
+
+      <SegmentedControl
+        v-model="scheduleMode"
+        :segments="SCHEDULE_MODES"
+        label="How the schedule is set"
+      />
+
+      <div v-if="scheduleMode === 'count'" class="mt-3 flex items-center gap-2">
         <input
           v-model.number="repetitions"
           type="number"
@@ -191,6 +255,28 @@ function submit() {
           </option>
         </select>
       </div>
+
+      <div v-else class="mt-3 flex gap-1.5">
+        <button
+          v-for="day in WEEKDAYS"
+          :key="day.value"
+          type="button"
+          class="h-11 flex-1 rounded-cell border text-sm font-medium transition-colors"
+          :class="
+            days.includes(day.value)
+              ? 'border-ink bg-ink text-ink-inverse'
+              : 'border-line text-ink-muted'
+          "
+          :aria-label="day.full"
+          :aria-pressed="days.includes(day.value)"
+          @click="toggleDay(day.value)"
+        >
+          {{ day.label }}
+        </button>
+      </div>
+
+      <!-- Read back in words, because a row of seven single letters is not a sentence. -->
+      <p class="mt-2 text-xs text-ink-subtle">{{ scheduleSummary }}</p>
     </fieldset>
 
     <fieldset v-if="kind === 'measured'" class="space-y-3">

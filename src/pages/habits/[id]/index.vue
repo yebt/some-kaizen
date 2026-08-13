@@ -13,6 +13,7 @@ import {
   negativeStatistics,
   positiveStatistics,
 } from '@modules/stats/domain/habit-statistics'
+import { describeFrequency } from '@modules/habits/ui/frequency-label'
 import HabitHeatmap from '@modules/stats/ui/HabitHeatmap.vue'
 
 /** Roughly six months: long enough to show a pattern, short enough to stay one screen. */
@@ -49,13 +50,11 @@ const description = computed(() => {
   if (!current) return ''
   if (isNegative(current)) return 'Quitting · judged the morning after'
 
-  const { period, repetitions } = current.frequency
-  const times = repetitions === 1 ? 'Once' : `${repetitions} times`
   const measured = isMeasured(current)
     ? ` · ${current.measure.minimum}–${current.measure.goal} ${current.measure.unit}`
     : ''
 
-  return `${times} a ${PERIOD_NOUN[period]}${measured}`
+  return `${describeFrequency(current.frequency)}${measured}`
 })
 
 /**

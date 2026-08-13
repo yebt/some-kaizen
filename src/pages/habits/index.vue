@@ -10,6 +10,7 @@ import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
+import { describeFrequency } from '@modules/habits/ui/frequency-label'
 import {
   archiveHabit,
   type Habit,
@@ -41,18 +42,14 @@ const windowStart = addDays(today, -SUMMARY_WINDOW_DAYS)
 const habits = computed(() => habitsData.value ?? [])
 const entries = computed(() => entriesData.value ?? [])
 
-const PERIOD_NOUN = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' } as const
-
 function describe(habit: Habit): string {
   if (isNegative(habit)) return 'Quitting · marked the next morning'
 
-  const { period, repetitions } = habit.frequency
-  const times = repetitions === 1 ? 'Once' : `${repetitions} times`
   const measured = isMeasured(habit)
     ? ` · ${habit.measure.minimum}–${habit.measure.goal} ${habit.measure.unit}`
     : ''
 
-  return `${times} a ${PERIOD_NOUN[period]}${measured}`
+  return `${describeFrequency(habit.frequency)}${measured}`
 }
 
 /** One honest headline number per habit, rather than a wall of figures nobody reads. */

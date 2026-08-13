@@ -23,6 +23,13 @@ export class InvalidCalendarDateError extends Error {
   }
 }
 
+export class InvalidWeekdaysError extends Error {
+  constructor(readonly weekdays: readonly number[]) {
+    super('Pick at least one weekday, each between 1 and 7 and listed once.')
+    this.name = 'InvalidWeekdaysError'
+  }
+}
+
 export class InvalidDayOffsetError extends Error {
   constructor(readonly amount: number) {
     super(`A day offset must be a whole number of days, received ${amount}.`)
@@ -105,6 +112,25 @@ export function isBefore(date: CalendarDate, other: CalendarDate): boolean {
 
 export function isAfter(date: CalendarDate, other: CalendarDate): boolean {
   return compareDates(date, other) > 0
+}
+
+/**
+ * A set of weekdays, sorted and checked.
+ *
+ * Shared rather than written once per feature, because two copies of the same three checks
+ * drift: one of them eventually accepts a Sunday numbered zero, and the bug surfaces
+ * somewhere neither copy is being read.
+ *
+ * Sorted so that the same set ticked in a different order is the same stored value, which
+ * is what lets a merge compare two devices' habits without inventing a conflict.
+ */
+export function weekdaySet(days: readonly number[]): Weekday[] {
+  const isValid = days.every((day) => Number.isSafeInteger(day) && day >= 1 && day <= 7)
+  const isUnique = new Set(days).size === days.length
+
+  if (days.length === 0 || !isValid || !isUnique) throw new InvalidWeekdaysError(days)
+
+  return [...days].sort((left, right) => left - right) as Weekday[]
 }
 
 export function weekday(date: CalendarDate): Weekday {

@@ -16,6 +16,10 @@ a list. Fully offline, stored on the device, packaged for Android with Capacitor
   - _Measured_ — carries a unit, a minimum and a goal. Reaching the minimum grades as a
     partial day, because a day where you drank most of your water is not the same as a day
     where you drank none.
+  - Each positive habit either **counts its times** ("3 times a week", leaving which days
+    open for the planner to settle) or **names its days** ("Mon, Wed, Fri", already settled,
+    so those days owe it without anyone dragging a card). The repetition count of a named
+    schedule is derived from the days rather than stored beside them.
   - _Quitting_ — never planned and never performed. Each finished day is judged the
     following morning, which is the only moment the answer is actually known.
 - **Planning in two gestures.** Drag an occurrence onto a day in the weekly board, then drag

@@ -5,6 +5,7 @@ import {
   isActiveOn,
   isPositive,
   type PositiveHabit,
+  timesDueOn,
 } from '@modules/habits/domain/habit'
 
 import type { PlannedInstance } from './planned-instance'
@@ -52,7 +53,9 @@ export function impliedOccurrenceId(
  * be busywork with no choice in it. Those duties therefore appear on their own.
  *
  * A weekly, monthly or yearly habit is different: which day it lands on is a real decision,
- * and the planner exists precisely to make it. Those appear here only once placed.
+ * and the planner exists precisely to make it. Those appear here only once placed — unless
+ * the habit already named its days, in which case the decision was made when it was created
+ * and repeating it every week would be busywork.
  */
 export function dutiesFor(
   habits: readonly Habit[],
@@ -77,10 +80,10 @@ export function dutiesFor(
   }
 
   const implied = [...byId.values()]
-    .filter((habit) => habit.frequency.period === 'daily' && isActiveOn(habit, date))
+    .filter((habit) => isActiveOn(habit, date))
     .flatMap<DayDuty>((habit) => {
       const already = placedPerHabit.get(habit.id) ?? 0
-      const shortfall = habit.frequency.repetitions - already
+      const shortfall = timesDueOn(habit.frequency, date) - already
 
       if (shortfall <= 0) return []
 
