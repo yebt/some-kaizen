@@ -181,6 +181,30 @@ describe('the timeline', () => {
 })
 
 describe('the tray', () => {
+  /** The drawer is shut by default, so a test that wants its contents has to open it. */
+  async function openTray(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('needs an hour') || node.text().includes('need an hour'))
+      ?.trigger('click')
+    await flushPromises()
+
+    return wrapper
+  }
+
+  it('counts what still needs an hour without opening on its own', async () => {
+    // The list of unplaced habits is a tool for the moment you decide to place one, not a
+    // permanent feature of looking at a day.
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay()
+
+    expect(wrapper.find('[data-drop-zone="tray"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('needs an hour')
+  })
+
   it('holds an occurrence that has no time yet', async () => {
     const habit = meditate()
     const instance = planInstance({
@@ -192,7 +216,7 @@ describe('the tray', () => {
 
     await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
 
-    const tray = (await renderDay()).find('[data-drop-zone="tray"]')
+    const tray = (await openTray(await renderDay())).find('[data-drop-zone="tray"]')
 
     expect(tray.text()).toContain('Meditate')
   })
@@ -239,7 +263,9 @@ describe('the tray', () => {
 
     await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
 
-    expect((await renderDay()).find('[data-drop-zone="tray"]').text()).toContain('Meditate')
+    expect((await openTray(await renderDay())).find('[data-drop-zone="tray"]').text()).toContain(
+      'Meditate',
+    )
   })
 
   it('offers a measured habit that was never placed', async () => {
@@ -253,7 +279,9 @@ describe('the tray', () => {
 
     await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [water] })
 
-    expect((await renderDay()).find('[data-drop-zone="tray"]').text()).toContain('Drink water')
+    expect((await openTray(await renderDay())).find('[data-drop-zone="tray"]').text()).toContain(
+      'Drink water',
+    )
   })
 })
 

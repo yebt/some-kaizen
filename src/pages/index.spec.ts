@@ -546,3 +546,44 @@ describe('reaching the timeline', () => {
     expect(wrapper.find('[aria-label^="Open the timeline"]').exists()).toBe(true)
   })
 })
+
+describe('finished habits and the way back to them', () => {
+  async function renderWithOneDone() {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 2),
+      createdOn: calendarDate('2020-01-01'),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderToday()
+
+    // Mark the first of the two occurrences.
+    await wrapper.findAll('[aria-label^="Mark"], [aria-label^="Complete"]').at(0)?.trigger('click')
+    await flushPromises()
+
+    return wrapper
+  }
+
+  it('keeps the count reachable as a control, not just a label', async () => {
+    // Folding finished rows away is only safe if the number saying how many there were is
+    // still a door back to them.
+    const wrapper = await renderWithOneDone()
+
+    expect(wrapper.find('button[aria-label*="done"]').exists()).toBe(true)
+  })
+})
+
+describe('a gesture that cannot do anything', () => {
+  it('answers on the row rather than at the other end of the screen', async () => {
+    // By the time a toast is read the swipe has snapped back with nothing attached to it.
+    await replaceDataset(persistence, buildPreviewDataset())
+
+    const wrapper = await renderToday()
+
+    // The refusal is a class on the row, which is the only part of it a test can see.
+    expect(wrapper.html()).not.toContain('refuse')
+  })
+})

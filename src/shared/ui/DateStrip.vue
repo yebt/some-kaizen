@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { type CalendarDate, toDate, weekday } from '@shared/domain/calendar-date'
+import { addDays, type CalendarDate, toDate, weekday } from '@shared/domain/calendar-date'
 
 import { useSwipePage } from './press/use-swipe-page'
 import AppIcon from './AppIcon.vue'
@@ -13,20 +13,58 @@ const props = defineProps<{
   marked?: readonly CalendarDate[]
 }>()
 
-const emit = defineEmits<{ select: [day: CalendarDate]; previous: []; next: [] }>()
+const emit = defineEmits<{
+  select: [day: CalendarDate]
+  previous: []
+  next: []
+  centre: [day: CalendarDate]
+}>()
+
+/** Shorter than a row swipe: a detent has to be reachable without crossing the screen. */
+const STEP_PX = 44
 
 /**
- * Dragging the strip sideways moves the week, which is what a row of days looks like it does.
+ * Dragging the strip sideways steps one day, not one week.
  *
- * The arrows stay. A gesture nobody can see is a gesture most people never find, and this one
- * is worth finding rather than depending on.
+ * A week per swipe is a jump: the day you were looking at leaves the screen and seven
+ * strangers arrive. One day per swipe is a detent — the strip advances by one and the
+ * selection moves with it, so the gesture reads as a wheel with stops rather than a page
+ * turn. Repeating it is how you get to next week, and it stays legible the whole way.
+ *
+ * The arrows stay, and they still move a whole week. A gesture nobody can see is a gesture
+ * most people never find, and the two are useful at different distances.
  */
 const swipe = useSwipePage({
+  commitPx: STEP_PX,
   onSwipe: (direction) => {
-    if (direction === 'right') emit('previous')
-    else emit('next')
+    emit('select', addDays(props.selected, direction === 'right' ? -1 : 1))
   },
 })
+
+/**
+ * A second tap on a day brings the week around it.
+ *
+ * The first tap selects, which is what a single tap has always meant. The second says "and
+ * put this in the middle", which is the only thing left to ask of a day already selected.
+ */
+let lastTapped: { day: CalendarDate; at: number } | null = null
+
+const DOUBLE_TAP_MS = 320
+
+function tap(day: CalendarDate, now: number) {
+  const previous = lastTapped
+
+  lastTapped = { day, at: now }
+
+  if (previous?.day === day && now - previous.at < DOUBLE_TAP_MS) {
+    lastTapped = null
+    emit('centre', day)
+
+    return
+  }
+
+  emit('select', day)
+}
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
@@ -67,7 +105,7 @@ const cells = computed(() =>
             cell.isSelected ? 'bg-ink text-ink-inverse' : 'text-ink-muted hover:bg-surface-sunken'
           "
           :aria-pressed="cell.isSelected"
-          @click="$emit('select', cell.day)"
+          @click="tap(cell.day, $event.timeStamp)"
         >
           <span class="text-[0.6875rem] font-medium">{{ cell.label }}</span>
           <span class="tabular text-base font-semibold">{{ cell.number }}</span>
@@ -80,7 +118,9 @@ const cells = computed(() =>
                   : 'bg-ink-subtle'
                 : 'bg-transparent'
             "
+            :aria-hidden="true"
           />
+          <span v-if="cell.isMarked" class="sr-only">has something planned</span>
         </button>
       </li>
     </ul>

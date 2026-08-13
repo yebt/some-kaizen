@@ -268,6 +268,8 @@ async function clearEverything() {
           <SegmentedControl v-model="done" :segments="DONE_DISPLAYS" label="Finished habits" />
           <p class="mt-1.5 text-xs text-ink-subtle">
             {{ DONE_HINT[preferences.preferences.done] }}
+            Whatever this says, the count beside the date is always out of everything the day owes,
+            and the habit's own page keeps its whole history.
           </p>
         </div>
 

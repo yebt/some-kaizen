@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 
 import type { PatternName } from '@shared/domain/appearance'
-import { todayIn, type Weekday } from '@shared/domain/calendar-date'
+import { calendarDate, todayIn, type Weekday } from '@shared/domain/calendar-date'
 import type { HexColour } from '@shared/domain/colour'
 import { newIdentifier } from '@shared/domain/identifier'
 import AppearancePicker from '@shared/ui/AppearancePicker.vue'
@@ -125,6 +125,17 @@ const scheduleSummary = computed(() => {
   }
 })
 
+/**
+ * When this started counting, which is not always when it was typed in.
+ *
+ * A habit you are quitting almost never begins on the day you open the app to record it: you
+ * stopped on the first of the month and remembered to track it on the fourth. Without this the
+ * three days in between can never be judged, because an entry before the habit existed is
+ * refused — correctly, since the habit really did not exist. Moving the start is the honest
+ * way to say it did.
+ */
+const startedOn = ref<string>(props.initial?.createdOn ?? todayIn())
+
 const unit = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.unit : '')
 const minimum = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.minimum : 1)
 const goal = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.goal : 2)
@@ -154,7 +165,7 @@ function build(): Habit {
   const core = {
     id: props.initial?.id ?? newIdentifier(),
     name: name.value,
-    createdOn: props.initial?.createdOn ?? todayIn(),
+    createdOn: calendarDate(startedOn.value),
     archivedOn: props.initial?.archivedOn,
     colour: colour.value,
     pattern: pattern.value,
@@ -225,6 +236,19 @@ function submit() {
         class="w-full rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
       />
     </div>
+
+    <label class="block text-xs font-medium text-ink-muted">
+      Started
+      <input
+        v-model="startedOn"
+        type="date"
+        :max="todayIn()"
+        class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm font-normal text-ink"
+      />
+      <span class="mt-1 block text-[0.625rem] text-ink-subtle">
+        Days before this are never asked about, so move it back if you began earlier.
+      </span>
+    </label>
 
     <fieldset v-if="isPositive">
       <legend class="mb-1.5 text-xs font-medium text-ink-muted">How often</legend>

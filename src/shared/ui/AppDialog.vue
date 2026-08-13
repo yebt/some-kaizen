@@ -65,9 +65,27 @@ function releaseBackGesture() {
   releaseBack = undefined
 }
 
+/**
+ * Holds the page still while the sheet is up.
+ *
+ * `showModal` makes the background inert to clicks and to the keyboard, and does nothing
+ * whatsoever about scrolling. On a phone that means a sheet asking a question can be answered
+ * while the screen behind it slides away underneath, which is how a reader loses the thing
+ * the question was about.
+ */
+function lockPage(locked: boolean) {
+  const body = globalThis.document?.body
+
+  if (!body) return
+
+  body.style.overflow = locked ? 'hidden' : ''
+}
+
 watch(
   () => props.open,
   (isOpen) => {
+    lockPage(isOpen)
+
     if (isOpen) {
       show()
       claimBack()
@@ -95,6 +113,8 @@ function onBackdropClick() {
 onBeforeUnmount(() => {
   hide()
   releaseBackGesture()
+  // A sheet unmounted by a route change would otherwise leave the whole app unscrollable.
+  lockPage(false)
 })
 </script>
 

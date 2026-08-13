@@ -28,7 +28,7 @@ import AppDialog from '@shared/ui/AppDialog.vue'
 import SegmentedControl from '@shared/ui/SegmentedControl.vue'
 import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
-import { type DropPoint, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
+import { type DropPoint, type PointerLike, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { useSwipePage } from '@shared/ui/press/use-swipe-page'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
@@ -170,6 +170,30 @@ interface DragPayload {
   readonly duty: DayDuty
   readonly habit: PositiveHabit
   readonly key: string
+  /**
+   * How far down its own card the finger landed, in minutes.
+   *
+   * Without it the drop puts the card's *top* where the finger is, so grabbing a ninety
+   * minute card by its middle threw it forty five minutes later than where it was let go.
+   * The card appeared to jump the moment it was picked up and to have been edited before
+   * anything was dragged.
+   */
+  readonly grabbedAt: number
+}
+
+/** Where inside its own card a press landed, so the card can be carried rather than reset. */
+function grabOffset(duty: DayDuty, event: PointerLike): number {
+  const span = duty.instance ? spanOf(duty.instance) : undefined
+
+  if (!span) return 0
+
+  const at = minutesAt(event.clientY)
+
+  if (at === null) return 0
+
+  // Clamped to the card: a press cannot have landed outside the thing it picked up, and a
+  // stale scroll position must not turn into a wild offset.
+  return Math.min(Math.max(at - span.start, 0), span.durationMinutes)
 }
 
 /**
@@ -225,6 +249,14 @@ function startPageSwipe(event: PointerEvent) {
   pageSwipe.press(event)
 }
 
+/**
+ * Whether the drawer of unplaced habits is open.
+ *
+ * Shut by default. The list of things without an hour is a tool for the moment you decide to
+ * place one, not a permanent feature of looking at a day.
+ */
+const trayOpen = ref(false)
+
 /** Previewed while dragging so the time is visible before committing to it. */
 const hoverTime = ref<number | null>(null)
 
@@ -259,9 +291,16 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
     return
   }
 
-  const minutes = minutesAt(at.y)
+  const dropped = minutesAt(at.y)
 
-  if (minutes === null) return
+  if (dropped === null) return
+
+  // The finger keeps its place on the card, so what lands under it is the part that was
+  // picked up rather than the card's top edge.
+  const minutes = snapToStep(
+    Math.min(Math.max(dropped - payload.grabbedAt, 0), MINUTES_IN_DAY - snapMinutes.value),
+    snapMinutes.value,
+  )
 
   const instance = await occurrenceFor(payload.duty)
 
@@ -673,48 +712,54 @@ function trackHover(event: PointerEvent) {
 
     <template v-else>
       <!--
-        A drawer over the day rather than a panel above it.
+        A drawer that stays shut until it is wanted.
 
-        As part of the layout it was doing two things wrong at once: it spent the top third
-        of a phone on a staging area, and collapsing it on pick-up shifted the whole timeline
-        upward — moving the target out from under the finger at the exact moment the finger
-        was aiming. Floating, it takes no layout space at all, so opening and closing it
-        moves nothing behind it.
+        Open by default it did two things wrong at once: it sat on top of the tab bar, and on
+        a day with eight unplaced habits it covered the hours they were meant to go on. Shut,
+        it is a count you can ignore; open, it is a list you asked for. Either way it takes no
+        layout space, so opening it moves nothing behind it — which is what made the old
+        collapsing panel shift the ruler out from under the finger.
       -->
       <div
         v-if="untimed.length"
-        :data-drop-zone="TRAY_ZONE"
-        class="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-24 transition-transform duration-200"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-20 transition-transform duration-200"
         :class="drag.isDragging.value ? 'translate-y-full' : 'translate-y-0'"
       >
         <div
-          class="rounded-card border border-dashed p-3 shadow-float backdrop-blur-sm transition-colors"
-          :class="
-            drag.isDragging.value && drag.activeZone.value === TRAY_ZONE
-              ? 'border-ink bg-accent'
-              : 'border-line-strong bg-surface/95'
-          "
+          v-if="trayOpen"
+          :data-drop-zone="TRAY_ZONE"
+          class="rounded-card border border-dashed border-line-strong bg-surface/95 p-3 shadow-float backdrop-blur-md"
         >
           <div class="mb-2 flex items-baseline justify-between">
             <h2 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
               Anytime today
             </h2>
-            <p class="text-[0.625rem] text-ink-subtle">hold one to place it</p>
+            <button
+              type="button"
+              class="text-[0.625rem] text-ink-muted underline-offset-2 hover:underline"
+              @click="trayOpen = false"
+            >
+              close
+            </button>
           </div>
 
-          <ul class="flex snap-x gap-2 overflow-x-auto pb-1">
-            <li v-for="entry in untimed" :key="entry.key" class="shrink-0 snap-start">
+          <!-- Scrolls rather than grows: a long list must not swallow the day behind it. -->
+          <ul class="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+            <li v-for="entry in untimed" :key="entry.key">
               <DraggableItem
                 v-bind="pressState(entry.key)"
                 @press="
-                  drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)
+                  drag.press(
+                    { duty: entry.duty, habit: entry.habit, key: entry.key, grabbedAt: 0 },
+                    $event,
+                  )
                 "
                 @move="trackHover($event)"
                 @release="drag.release($event)"
                 @cancel="drag.cancel()"
               >
                 <span
-                  class="block rounded-cell border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
+                  class="block rounded-md border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
                   :style="surfaceStyle(entry.habit)"
                 >
                   {{ entry.habit.name }}
@@ -722,12 +767,23 @@ function trackHover(event: PointerEvent) {
               </DraggableItem>
             </li>
           </ul>
+          <p class="mt-2 text-center text-[0.625rem] text-ink-subtle">hold one to place it</p>
         </div>
+
+        <button
+          v-else
+          type="button"
+          class="mx-auto flex items-center gap-2 rounded-full border border-line-strong bg-surface/95 px-4 py-2 text-xs font-medium text-ink shadow-float backdrop-blur-md"
+          @click="trayOpen = true"
+        >
+          <span class="tabular">{{ untimed.length }}</span>
+          {{ untimed.length === 1 ? 'habit needs an hour' : 'habits need an hour' }}
+        </button>
       </div>
 
       <!--
-        Where a lifted card goes back to. The drawer itself has slid off screen by then, so
-        the whole strip above the tab bar becomes the target instead.
+        Where a lifted card goes back to. The drawer has slid away by then, so the strip above
+        the tab bar becomes the target instead.
 
         Shown whenever something is in the air, including when the drawer is empty: an empty
         drawer is exactly the situation where the only card you can loosen is one already on
@@ -736,7 +792,7 @@ function trackHover(event: PointerEvent) {
       <div
         v-if="drag.isDragging.value"
         :data-drop-zone="TRAY_ZONE"
-        class="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center justify-center px-4 pb-24 text-xs font-medium transition-colors"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center justify-center px-4 pb-20 text-xs font-medium transition-colors"
         :class="drag.activeZone.value === TRAY_ZONE ? 'text-ink' : 'text-ink-subtle'"
       >
         <span class="rounded-full border border-dashed border-line-strong bg-surface/95 px-4 py-2">
@@ -923,7 +979,17 @@ function trackHover(event: PointerEvent) {
             data-occupied
             class="absolute inset-x-1"
             :style="{ top: `${cardTop(entry)}px`, height: `${cardHeight(entry)}px` }"
-            @press="drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key }, $event)"
+            @press="
+              drag.press(
+                {
+                  duty: entry.duty,
+                  habit: entry.habit,
+                  key: entry.key,
+                  grabbedAt: grabOffset(entry.duty, $event),
+                },
+                $event,
+              )
+            "
             @move="trackHover($event)"
             @release="drag.release($event)"
             @cancel="drag.cancel()"
@@ -936,9 +1002,13 @@ function trackHover(event: PointerEvent) {
               @click="openOccurrence(entry.duty.instance?.id, $event)"
             >
               <!--
-                Two contact points, at the corners a right hand reaches first, with the whole
-                middle of the card left to move it. One grip could only ever change the
+                Two contact points, stacked on the edge a right hand reaches first, with the
+                whole middle of the card left to move it. One grip could only ever change the
                 length; moving the start without moving the finish needs its own edge.
+
+                Both on the right rather than diagonally opposite: the top left corner is
+                where the habit's name starts, and a dot sitting on the first letter of
+                "Drink" makes the label unreadable to save a few pixels of travel.
 
                 Each is deliberately larger than it is drawn: a nine pixel dot is unhittable
                 with a thumb, so the touchable square reaches into the card while only the
@@ -949,8 +1019,8 @@ function trackHover(event: PointerEvent) {
                 :key="edge"
                 data-resize-grip
                 :data-edge="edge"
-                class="absolute z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
-                :class="edge === 'start' ? '-top-1 -left-1' : '-right-1 -bottom-1'"
+                class="absolute right-0 z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
+                :class="edge === 'start' ? '-top-1' : '-bottom-1'"
                 aria-hidden="true"
                 @pointerdown="startResize(entry.duty.instance, edge, $event)"
                 @pointermove="moveResize($event)"
@@ -960,7 +1030,7 @@ function trackHover(event: PointerEvent) {
               >
                 <span class="size-2.5 rounded-full border-2 border-current bg-surface" />
               </span>
-              <p class="flex items-center gap-1 truncate text-xs font-medium">
+              <p class="flex items-center gap-1 truncate pr-6 text-xs font-medium">
                 <AppIcon v-if="entry.reminder !== undefined" name="bell" :size="11" />
                 {{ entry.habit.name }}
               </p>

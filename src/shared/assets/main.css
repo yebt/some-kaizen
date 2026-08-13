@@ -213,6 +213,50 @@
  * quiet row into a row of buttons. The reachable area grows instead, centred on the icon and
  * invisible, which is what the guideline is actually about.
  */
+/*
+ * A refusal that feels like one.
+ *
+ * The gesture was already under way, so the answer has to arrive on the same object the
+ * finger is on. A toast at the other end of the screen explains a refusal to somebody who is
+ * still looking at the row, and by the time they read it the swipe has snapped back with no
+ * explanation attached to it.
+ *
+ * Short and small: a wobble says "not this", a lurch says something is broken.
+ */
+@utility refuse {
+  animation: refuse 220ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes refuse {
+  0%,
+  100% {
+    translate: 0;
+  }
+
+  20% {
+    translate: -5px;
+  }
+
+  50% {
+    translate: 4px;
+  }
+
+  80% {
+    translate: -2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @layer base {
+    /* The refusal still has to be felt, so it flattens rather than disappearing. */
+    .refuse {
+      animation: none;
+      outline: 2px solid var(--color-missed);
+      outline-offset: 2px;
+    }
+  }
+}
+
 @utility hit-area {
   position: relative;
 

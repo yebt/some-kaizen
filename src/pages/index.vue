@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -162,8 +162,23 @@ const doneCount = computed(() => duties.value.filter((row) => row.outcome === 'd
  * adds up and a mistake is still reachable. `hide` is for someone who reads the day as a
  * queue and wants it to shorten.
  */
+/**
+ * True for the tick in which the selected day changes.
+ *
+ * Long enough for the list to be replaced without a transition, short enough that a genuine
+ * creation or deletion a moment later still animates.
+ */
+const swappingDay = ref(false)
+
+watch(selectedDay, async () => {
+  revealingDone.value = false
+  swappingDay.value = true
+  await nextTick()
+  swappingDay.value = false
+})
+
 const visibleDuties = computed(() => {
-  const setting = preferences.preferences.done
+  const setting = revealingDone.value ? 'show' : preferences.preferences.done
 
   if (setting === 'show') return duties.value
 
@@ -373,9 +388,12 @@ const swipe = useSwipeAction({
     if (!row) return
 
     // Marking something done twice is almost always a thumb catching a row that was already
-    // finished. The correction it actually wants is "not yet", which is the other direction.
-    if (direction === 'right' && row.outcome === 'done' && !preferences.preferences.allowRedo) {
-      feedback.notify(`${row.habit.name} is already done today`)
+    // finished, and taking back a day nobody recorded is the same mistake mirrored.
+    const alreadyDone = row.outcome === 'done' && !preferences.preferences.allowRedo
+    const nothingToTakeBack = row.outcome === undefined
+
+    if ((direction === 'right' && alreadyDone) || (direction === 'left' && nothingToTakeBack)) {
+      refuse(key)
 
       return
     }
@@ -606,14 +624,63 @@ const menuTitle = computed(() => {
   return current.kind === 'block' ? current.name : current.habit.name
 })
 
+/**
+ * Answers a gesture that cannot do anything, on the row it was made on.
+ *
+ * A toast at the other end of the screen explains a refusal to somebody still looking at the
+ * row, and by the time they read it the swipe has snapped back with nothing attached to it.
+ */
+const refused = ref<string | null>(null)
+
+const REFUSAL_MS = 260
+
+function refuse(key: string) {
+  refused.value = key
+  window.setTimeout(() => {
+    if (refused.value === key) refused.value = null
+  }, REFUSAL_MS)
+}
+
 function swipeStyle(key: string) {
   if (swipe.activeKey.value !== key || swipe.offset.value === 0) return {}
 
   return { transform: `translateX(${swipe.offset.value}px)` }
 }
 
+/**
+ * Puts the finished rows back on screen for as long as they are being looked at.
+ *
+ * Not a change to the setting: someone checking what they already did today has not changed
+ * their mind about how the list should behave tomorrow. It lasts until the day changes, which
+ * is exactly as long as the question does.
+ */
+const revealingDone = ref(false)
+
+function revealDone() {
+  revealingDone.value = !revealingDone.value
+}
+
 function shiftWeek(offset: number) {
   weekAnchor.value = addDays(weekAnchor.value, offset * 7)
+}
+
+/**
+ * Selecting a day the strip cannot show pulls the strip along with it.
+ *
+ * Stepping one day at a time walks off the end of the week, and a selection you cannot see is
+ * worse than no selection: the header changes, the list changes, and the strip still points
+ * somewhere else.
+ */
+function selectDay(day: CalendarDate) {
+  selectedDay.value = day
+
+  if (!weekDays.value.includes(day)) weekAnchor.value = day
+}
+
+/** Puts the chosen day in the middle of the week rather than at whichever end it drifted to. */
+function centreOn(day: CalendarDate) {
+  selectedDay.value = day
+  weekAnchor.value = addDays(day, -3)
 }
 
 function openHabit(habitId: Identifier) {
@@ -635,10 +702,24 @@ const OUTCOME_CLASS = {
         <p class="text-sm text-ink-muted">{{ dayLabel }}</p>
       </div>
       <div class="flex items-center gap-3">
-        <p v-if="duties.length" class="tabular text-xs text-ink-muted">
+        <!--
+          Also the way back to habits the list is hiding. Folding finished rows away is only
+          safe if the number that says how many there were is still a door to them.
+        -->
+        <button
+          v-if="duties.length"
+          type="button"
+          class="tabular text-xs text-ink-muted"
+          :aria-label="
+            preferences.preferences.done === 'show'
+              ? `${doneCount} of ${duties.length} done`
+              : `Show all ${duties.length}, including the ${doneCount} already done`
+          "
+          @click="revealDone"
+        >
           <span class="text-base font-semibold text-ink">{{ doneCount }}</span>
           / {{ duties.length }} done
-        </p>
+        </button>
 
         <!--
           Beside the date rather than at the foot of the schedule. Looking at the shape of a
@@ -659,10 +740,16 @@ const OUTCOME_CLASS = {
       :days="weekDays"
       :selected="selectedDay"
       :marked="markedDays"
-      @select="selectedDay = $event"
+      @select="selectDay"
       @previous="shiftWeek(-1)"
       @next="shiftWeek(1)"
+      @centre="centreOn"
     />
+
+    <!-- The dot has to say what it is, or it is decoration people quietly worry about. -->
+    <p v-if="markedDays.length" class="mt-1.5 text-center text-[0.625rem] text-ink-subtle">
+      A dot marks a day with something already on its timeline.
+    </p>
 
     <div v-if="isFirstLoad" class="mt-6 flex justify-center py-12 text-ink-subtle">
       <AppSpinner :size="24" label="Loading your day" />
@@ -736,19 +823,32 @@ const OUTCOME_CLASS = {
       </div>
 
       <section v-show="pane === 'due'" class="mt-3" aria-label="Due today">
+        <!--
+          Rows animate when one of them changes, and not when all of them do.
+
+          Moving to another day replaces every row at once, and eight simultaneous entrances
+          crossing eight exits is not an animation, it is the list appearing twice. The leaving
+          rows also need to be taken out of flow properly — `absolute` alone, with nothing to
+          be absolute against, let them keep their space and push the new day downward.
+        -->
         <TransitionGroup
           tag="ul"
-          class="space-y-1.5"
-          enter-active-class="transition duration-200 ease-out"
-          enter-from-class="-translate-x-3 opacity-0 motion-reduce:translate-x-0"
-          leave-active-class="absolute transition duration-150 ease-in"
-          leave-to-class="translate-x-3 opacity-0 motion-reduce:translate-x-0"
-          move-class="transition-transform duration-200"
+          class="relative space-y-1.5"
+          :enter-active-class="swappingDay ? '' : 'transition duration-200 ease-out'"
+          :enter-from-class="
+            swappingDay ? '' : '-translate-x-3 opacity-0 motion-reduce:translate-x-0'
+          "
+          :leave-active-class="
+            swappingDay ? '' : 'absolute inset-x-0 transition duration-150 ease-in'
+          "
+          :leave-to-class="swappingDay ? '' : 'translate-x-3 opacity-0 motion-reduce:translate-x-0'"
+          :move-class="swappingDay ? '' : 'transition-transform duration-200'"
         >
           <li
             v-for="row in visibleDuties"
             :key="row.key"
             class="relative overflow-hidden rounded-card"
+            :class="refused === row.key ? 'refuse' : ''"
           >
             <!-- Revealed as the row slides, so the gesture says what it will do. -->
             <div

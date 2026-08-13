@@ -28,6 +28,26 @@ happens at 07:00 every morning has to be dropped onto 07:00 every morning.
       explicit act on the habit itself. Editing every future day from a gesture meant for one
       of them is how a planner starts lying about the past
 
+### Carrying a day's plan forward
+The design, from the session it came out of: a day's arrangement is a state that replicates to
+the next day, and any day can pull one in — "bring the last routine" or "bring a specific
+day's". The automatic pick has a priority order:
+
+1. the same weekday last week (last Tuesday for a Tuesday),
+2. failing that, the previous day,
+3. in both cases filtered to the habits that actually apply to the target day.
+
+- [ ] Habits that name their weekdays make this interesting: pulling Monday's plan onto a
+      Tuesday must drop the Monday-only ones rather than schedule them wrongly
+- [ ] Pulling a plan is an explicit act with a preview, never a silent copy — a planner that
+      fills a day on its own is one you stop trusting about the past
+
+### Still open on the timeline
+- [ ] Tapping a chip in the drawer to remove it outright
+- [ ] Swiping a card off the ruler right to left to unschedule it, with a confirm
+- [ ] Constrain a drag to the vertical axis: a card can only move in time, so sideways travel
+      is noise the ghost currently follows
+
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is
 `scheduleAt` + `resize` applied down a list, so it is not a new feature — it is a **third way
