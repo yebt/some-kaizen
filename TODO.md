@@ -66,9 +66,6 @@ introduced by fixing something else in the same sitting.
 nobody recorded both still go through, and the shake is never seen. The condition reads
 `row.outcome`, which is not `undefined` as often as the code assumes.
 
-**The drawer pill is invisible.** "3 habits need an hour" sits at `z-30`, the tab bar at
-`z-40`. It is behind it.
-
 **Finished habits want an accordion, not a counter.** A row below the outstanding ones —
 "4 done" — that opens them in place, rather than a number in the header that toggles the whole
 list. The list should be the work left, with the finished ones reachable directly underneath.
