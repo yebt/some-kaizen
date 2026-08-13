@@ -116,12 +116,19 @@ function step(days: number) {
     </button>
 
     <!--
+      `min-w-0` is the load bearing class, not the overflow.
+
+      A flex item defaults to `min-width: auto`, which means "at least as wide as my content".
+      The content here is four months of days, so the ribbon pushed its own row past the
+      screen and took the whole page with it — a page that scrolls sideways, with the ribbon
+      never scrolling at all. `overflow-x-auto` cannot help while the box is free to grow.
+
       `overscroll-contain` keeps a flick that runs off the end from turning into the page
       navigating back, which on Android is one rubber band away.
     -->
     <ul
       ref="ribbon"
-      class="grippable flex flex-1 snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain scroll-smooth"
+      class="grippable flex min-w-0 flex-1 snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain scroll-smooth"
       @scroll="onScroll"
     >
       <li

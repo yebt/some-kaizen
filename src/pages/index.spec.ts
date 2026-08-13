@@ -745,6 +745,19 @@ describe('the ribbon of days', () => {
     expect(wrapper.findAll('[data-day]').length).toBeGreaterThan(60)
   })
 
+  it('scrolls inside itself rather than widening the page', async () => {
+    // A flex item defaults to `min-width: auto` — at least as wide as its content — so four
+    // months of days pushed the row past the screen and took the whole page sideways with it.
+    // jsdom has no layout, so the class that prevents it is what can be checked here.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+    const ribbon = wrapper.find('[data-day]').element.parentElement
+
+    expect(ribbon?.className).toContain('min-w-0')
+    expect(ribbon?.className).toContain('overflow-x-auto')
+  })
+
   it('leaves the chosen day alone when the ribbon moves', async () => {
     // Scrolling a calendar to look at next Tuesday is not a decision to work on next Tuesday.
     await replaceDataset(persistence, EMPTY_DATASET)
