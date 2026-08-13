@@ -3,7 +3,9 @@ import { computed } from 'vue'
 
 import { addDays, type CalendarDate, toDate, weekday } from '@shared/domain/calendar-date'
 
-import { useSwipePage } from './press/use-swipe-page'
+import { tick } from '@core/haptics'
+
+import { useDetentDrag } from './press/use-detent-drag'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{
@@ -20,25 +22,30 @@ const emit = defineEmits<{
   centre: [day: CalendarDate]
 }>()
 
-/** Shorter than a row swipe: a detent has to be reachable without crossing the screen. */
-const STEP_PX = 44
+/**
+ * One day's worth of travel.
+ *
+ * Roughly a cell on a phone. It is a constant rather than a measurement because the strip is
+ * seven equal columns of whatever width the screen has, and a value that changed with the
+ * device would make the gesture feel different on each one.
+ */
+const STEP_PX = 46
 
 /**
- * Dragging the strip sideways steps one day, not one week.
+ * The strip follows the finger and settles on a day.
  *
- * A week per swipe is a jump: the day you were looking at leaves the screen and seven
- * strangers arrive. One day per swipe is a detent — the strip advances by one and the
- * selection moves with it, so the gesture reads as a wheel with stops rather than a page
- * turn. Repeating it is how you get to next week, and it stays legible the whole way.
+ * It used to commit a whole day per swipe: a detent with no travel, where nothing moved until
+ * the gesture was over and the day then jumped. Now the row slides under the finger, ticks as
+ * it crosses each day, and lands on the nearest one when released — so half a day is never
+ * left sitting at an edge, and you can see you are between two before choosing.
  *
- * The arrows stay, and they still move a whole week. A gesture nobody can see is a gesture
- * most people never find, and the two are useful at different distances.
+ * The arrows stay, and they still move a whole week. A gesture nobody can see is one most
+ * people never find, and the two are useful at different distances.
  */
-const swipe = useSwipePage({
-  commitPx: STEP_PX,
-  onSwipe: (direction) => {
-    emit('select', addDays(props.selected, direction === 'right' ? -1 : 1))
-  },
+const drag = useDetentDrag({
+  stepPx: STEP_PX,
+  onDetent: tick,
+  onSettle: (steps) => emit('select', addDays(props.selected, steps)),
 })
 
 /**
@@ -81,11 +88,11 @@ const cells = computed(() =>
 
 <template>
   <div
-    class="grippable flex touch-pan-y items-center gap-3"
-    @pointerdown="swipe.press($event)"
-    @pointermove="swipe.move($event)"
-    @pointerup="swipe.release($event)"
-    @pointercancel="swipe.cancel()"
+    class="grippable flex touch-pan-y items-center gap-3 overflow-hidden"
+    @pointerdown="drag.press($event)"
+    @pointermove="drag.move($event)"
+    @pointerup="drag.release($event)"
+    @pointercancel="drag.cancel()"
   >
     <button
       type="button"
@@ -96,7 +103,16 @@ const cells = computed(() =>
       <AppIcon name="chevron-left" :size="18" />
     </button>
 
-    <ul class="flex flex-1 justify-between gap-1">
+    <!--
+      Translated live, and only while a finger is on it. The transition is off during the
+      drag so the row tracks the finger exactly, and on afterwards so it settles rather than
+      snapping back.
+    -->
+    <ul
+      class="flex flex-1 justify-between gap-1"
+      :class="drag.isDragging.value ? '' : 'transition-transform duration-200'"
+      :style="{ transform: `translateX(${drag.offset.value}px)` }"
+    >
       <li v-for="cell in cells" :key="cell.day" class="flex-1">
         <button
           type="button"

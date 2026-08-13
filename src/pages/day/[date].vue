@@ -30,6 +30,7 @@ import SegmentedControl from '@shared/ui/SegmentedControl.vue'
 import DragGhost from '@shared/ui/drag/DragGhost.vue'
 import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { type DropPoint, type PointerLike, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
+import { tick } from '@core/haptics'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { useSwipePage } from '@shared/ui/press/use-swipe-page'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
@@ -117,7 +118,7 @@ const hours = Array.from({ length: 24 }, (_, hour) => hour)
  * thing the timeline exists for, giving a habit an hour, was impossible before doing the
  * habit.
  */
-const onThisDay = computed(() =>
+const liveAgenda = computed(() =>
   dutiesFor(habits.value, instances.value, day.value).map((duty, index) => ({
     duty,
     habit: duty.habit,
@@ -128,6 +129,34 @@ const onThisDay = computed(() =>
     span: duty.instance ? spanOf(duty.instance) : undefined,
   })),
 )
+
+/**
+ * The day, held still while something is being carried.
+ *
+ * Every query in this app refetches on any write, and a refetch hands back `undefined` for a
+ * moment before the rows arrive. That blink empties the list, Vue removes the element the
+ * finger is holding, and the pointer capture dies with it: the drag reports nothing further
+ * and the card is left wherever it was. Rare enough to look random and certain enough to
+ * happen, since a drop is itself a write.
+ *
+ * Freezing is also the truthful behaviour. A list that reorders under a finger already
+ * carrying one of its rows is answering a question nobody asked.
+ *
+ * Deliberately not covered by a test. jsdom has no pointer capture — an event dispatched on a
+ * detached node still runs its listeners — so a test for this passes whether or not the
+ * freeze exists, which is worse than no test at all. It needs a real browser.
+ */
+const frozenAgenda = shallowRef<ReturnType<typeof liveAgenda.value.slice> | null>(null)
+
+const onThisDay = computed(() => frozenAgenda.value ?? liveAgenda.value)
+
+function holdAgendaStill() {
+  frozenAgenda.value = liveAgenda.value
+}
+
+function letAgendaMove() {
+  frozenAgenda.value = null
+}
 
 /** Duties with no time yet. They are what the tray is for. */
 const untimed = computed(() => onThisDay.value.filter((entry) => entry.span === undefined))
@@ -192,6 +221,7 @@ interface Liftable {
 
 /** Picks a card up off the ruler, keeping the finger's place on it and its measured box. */
 function liftCard(entry: Liftable, event: PointerEvent) {
+  holdAgendaStill()
   drag.press(
     {
       duty: entry.duty,
@@ -206,18 +236,21 @@ function liftCard(entry: Liftable, event: PointerEvent) {
 
 /** A chip in the drawer has no position on the ruler yet, so there is nothing to keep hold of. */
 function liftChip(entry: Liftable, event: PointerEvent) {
+  holdAgendaStill()
   drag.press({ duty: entry.duty, habit: entry.habit, key: entry.key, grabbedAt: 0 }, event)
   measureGhost(entry.duty)
+}
 
-  // The drawer's whole purpose was handing this over, and it has. Leaving it open left the
-  // dimmed backdrop across the ruler the chip is being carried to — the one surface that has
-  // to be readable while a chip is in the air.
-  trayOpen.value = false
+/** A release outside any zone never reaches the drop handler, so it thaws the day here. */
+async function releaseCard(event: PointerEvent) {
+  await drag.release(event)
+  letAgendaMove()
 }
 
 function abandonLift() {
   drag.cancel()
   ghostBox.value = null
+  letAgendaMove()
 }
 
 /** Where inside its own card a press landed, so the card can be carried rather than reset. */
@@ -340,6 +373,9 @@ function minutesAt(y: number): TimeOfDay | null {
 async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   hoverTime.value = null
   ghostBox.value = null
+  // Released before the write, so the day shows what was actually saved rather than the
+  // snapshot it was frozen at.
+  letAgendaMove()
   slot.value = null
   swallowNextClick.value = true
   editing.value = null
@@ -796,11 +832,16 @@ function trackHover(event: PointerEvent) {
   drag.move(event)
 
   const carried = drag.payload.value
+  const previous = hoverTime.value
 
   hoverTime.value =
     carried && drag.isDragging.value && drag.activeZone.value === TIMELINE_ZONE
       ? landingTime(event.clientY, carried.grabbedAt)
       : null
+
+  // The same detent language as the day strip: a tick when the card crosses onto a new step,
+  // once per crossing rather than once per frame.
+  if (hoverTime.value !== null && hoverTime.value !== previous) tick()
 }
 </script>
 
@@ -848,8 +889,16 @@ function trackHover(event: PointerEvent) {
         layout space, so opening it moves nothing behind it — which is what made the old
         collapsing panel shift the ruler out from under the finger.
       -->
+      <!--
+        The dim lifts the instant a chip leaves, and the drawer itself stays mounted.
+
+        Closing the drawer on pick-up was the obvious move and it broke the gesture outright:
+        the chip lives inside the drawer and holds the pointer capture, so unmounting it
+        destroyed the element every later move and the release were being reported to. The
+        drawer slides away instead — off screen, still listening.
+      -->
       <div
-        v-if="trayOpen"
+        v-if="trayOpen && !drag.isDragging.value"
         class="fixed inset-0 z-40 bg-canvas/60 backdrop-blur-sm"
         aria-hidden="true"
         @click="trayOpen = false"
@@ -861,7 +910,7 @@ function trackHover(event: PointerEvent) {
         :class="drag.isDragging.value ? 'translate-y-full' : 'translate-y-0'"
       >
         <div
-          v-if="trayOpen"
+          v-show="trayOpen"
           :data-drop-zone="TRAY_ZONE"
           class="rounded-card border border-dashed border-line-strong bg-surface p-3 shadow-float"
         >
@@ -890,7 +939,7 @@ function trackHover(event: PointerEvent) {
                 v-bind="pressState(entry.key)"
                 @press="liftChip(entry, $event)"
                 @move="trackHover($event)"
-                @release="drag.release($event)"
+                @release="releaseCard($event)"
                 @cancel="abandonLift"
               >
                 <span
@@ -914,7 +963,7 @@ function trackHover(event: PointerEvent) {
         </div>
 
         <button
-          v-else
+          v-show="!trayOpen"
           type="button"
           class="mx-auto flex items-center gap-2 rounded-full border border-line-strong bg-surface px-4 py-2 text-xs font-medium text-ink shadow-float"
           @click="trayOpen = true"

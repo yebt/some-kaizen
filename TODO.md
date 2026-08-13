@@ -42,6 +42,17 @@ day's". The automatic pick has a priority order:
 - [ ] Pulling a plan is an explicit act with a preview, never a silent copy — a planner that
       fills a day on its own is one you stop trusting about the past
 
+### Gesture bugs jsdom cannot see
+
+The drawer freeze — holding the day still while a card is carried — guards against a refetch
+removing the element the finger has hold of. It cannot be tested here: jsdom has no pointer
+capture, so an event dispatched on a detached node still runs its listeners and any test for
+it passes either way.
+
+- [ ] A handful of real-browser gesture tests, Playwright against the built app. The cases
+      worth the setup are exactly the ones that keep breaking: carrying a chip out of the
+      drawer, and a card whose list refetches mid-drag
+
 ### On a gesture library
 
 Raised as a preference and worth answering rather than filing. The repeated timeline
@@ -73,18 +84,6 @@ list. The list should be the work left, with the finished ones reachable directl
 **Swiping a card off the ruler, right to left, should unschedule it.** Now reachable two
 other ways — the sheet on the card, and the drop strip that turns red — so this is a shortcut
 rather than the only route, and it can wait until the drag work has settled.
-
-**Feel.** A detent that can be felt: a short haptic tick as the day strip passes each valid
-day, and on the timeline as a card crosses each snap step. Capacitor's Haptics plugin covers
-it; the open question is how much of the app should speak that language rather than just this
-one control.
-
-### The day strip should scroll, not step
-- [ ] Follow the finger continuously rather than committing a whole day per swipe, and settle
-      onto a valid day when released — the camera zoom wheel, not a pager. Half a day must
-      never be left sitting at either edge
-- [ ] The current version commits one day per gesture, which is a detent without the travel:
-      the strip does not move while the finger does
 
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is

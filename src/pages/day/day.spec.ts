@@ -202,7 +202,9 @@ describe('the tray', () => {
 
     const wrapper = await renderDay()
 
-    expect(wrapper.find('[data-drop-zone="tray"]').exists()).toBe(false)
+    // Present but hidden, not removed: the chip inside it holds the pointer capture during
+    // a drag, so the panel has to survive being got out of the way.
+    expect(wrapper.find('[data-drop-zone="tray"]').isVisible()).toBe(false)
     expect(wrapper.text()).toContain('needs an hour')
   })
 
@@ -1195,7 +1197,7 @@ describe('a day with more than a drawer can show', () => {
     await wrapper.find('.backdrop-blur-sm').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-drop-zone="tray"]').exists()).toBe(false)
+    expect(wrapper.find('[data-drop-zone="tray"]').isVisible()).toBe(false)
   })
 
   it('takes a habit off the day from the chip itself', async () => {
@@ -1282,5 +1284,93 @@ describe('the drawer gets out of the way of its own chip', () => {
     const ruler = wrapper.find('[data-drop-zone="timeline"]').element.closest('.pb-28')
 
     expect(ruler).not.toBeNull()
+  })
+})
+
+describe('carrying a chip out of the drawer', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  function pointer(type: string, clientY: number) {
+    return new MouseEvent(type, { clientY, bubbles: true })
+  }
+
+  /**
+   * The whole journey: open the drawer, hold a chip, carry it to an hour, let go.
+   *
+   * Tested end to end rather than in pieces because every failure this flow has had lived in
+   * the seam between two parts that each worked — the drawer and the gesture, the indicator
+   * and the drop.
+   */
+  async function carryChipTo(clientY: number) {
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('needs an hour'))
+      ?.trigger('click')
+    await flushPromises()
+
+    const canvas = wrapper.find('[data-drop-zone="timeline"]').element
+
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => canvas,
+    })
+
+    const chip = wrapper.find('[data-drop-zone="tray"] .grippable').element
+
+    chip.dispatchEvent(pointer('pointerdown', 900))
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    chip.dispatchEvent(pointer('pointermove', clientY))
+    await flushPromises()
+
+    const promised = wrapper.find('[data-live-time]').exists()
+      ? wrapper.find('[data-live-time]').text()
+      : null
+
+    chip.dispatchEvent(pointer('pointerup', clientY))
+    await settle()
+
+    return { wrapper, promised }
+  }
+
+  it('places the habit at the hour it was released on', async () => {
+    const { promised } = await carryChipTo(9 * 60)
+
+    expect(promised).toBe('09:00')
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(9 * 60)
+  })
+
+  it('lifts the dim off the ruler the chip is being carried to', async () => {
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('needs an hour'))
+      ?.trigger('click')
+    await flushPromises()
+
+    const chip = wrapper.find('[data-drop-zone="tray"] .grippable').element
+
+    chip.dispatchEvent(pointer('pointerdown', 900))
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    await flushPromises()
+
+    expect(wrapper.find('.backdrop-blur-sm').exists()).toBe(false)
   })
 })
