@@ -171,3 +171,76 @@ describe('updatedAt', () => {
     expect((await rawRecord('a'))?.updatedAt).toBe(9_000)
   })
 })
+
+describe('what a tombstone keeps', () => {
+  it('does not keep the record it buried', async () => {
+    // Deleting a habit called "quit drinking" has to remove that text from the device.
+    // A tombstone needs the identifier and the moment, and nothing else.
+    await notes.put('a', { title: 'Quit drinking' })
+    await notes.remove('a')
+
+    expect((await rawRecord('a'))?.value).toBeUndefined()
+  })
+
+  it('still says the record existed and when it stopped', async () => {
+    await notes.put('a', { title: 'Meditate' })
+    clock = 2_000
+    await notes.remove('a')
+
+    const stored = await rawRecord('a')
+
+    expect(stored?.id).toBe('a')
+    expect(stored?.deletedAt).toBe(2_000)
+  })
+})
+
+describe('replaceAll', () => {
+  it('makes the store hold exactly what it was given', async () => {
+    await notes.put('a', { title: 'Meditate' })
+    await notes.replaceAll([{ id: 'b', value: { title: 'Run' } }])
+
+    expect(await notes.all()).toEqual([{ title: 'Run' }])
+  })
+
+  it('buries what it removed rather than making it vanish', async () => {
+    // A record that disappears without a tombstone is indistinguishable from one another
+    // device has never seen, so the first sync would hand the whole import straight back.
+    await notes.put('a', { title: 'Meditate' })
+    await notes.replaceAll([{ id: 'b', value: { title: 'Run' } }])
+
+    expect((await rawRecord('a'))?.deletedAt).toBeDefined()
+  })
+
+  it('drops the value of what it buried', async () => {
+    await notes.put('a', { title: 'Quit drinking' })
+    await notes.replaceAll([])
+
+    expect((await rawRecord('a'))?.value).toBeUndefined()
+  })
+
+  it('brings a record back to life when the incoming set still has it', async () => {
+    await notes.put('a', { title: 'Meditate' })
+    await notes.remove('a')
+    await notes.replaceAll([{ id: 'a', value: { title: 'Meditate' } }])
+
+    expect(await notes.get('a')).toEqual({ title: 'Meditate' })
+  })
+
+  it('leaves an existing tombstone alone rather than restamping it', async () => {
+    // Re-dating a deletion nobody touched would make it outrank a later edit elsewhere.
+    await notes.put('a', { title: 'Meditate' })
+    clock = 2_000
+    await notes.remove('a')
+    clock = 3_000
+    await notes.replaceAll([{ id: 'b', value: { title: 'Run' } }])
+
+    expect((await rawRecord('a'))?.deletedAt).toBe(2_000)
+  })
+
+  it('empties the store when given nothing', async () => {
+    await notes.put('a', { title: 'Meditate' })
+    await notes.replaceAll([])
+
+    expect(await notes.all()).toEqual([])
+  })
+})

@@ -18,11 +18,7 @@ export function createIdbRepository<T extends Entity>(collection: Collection<T>)
     saveAll: (entities) =>
       collection.putMany(entities.map((entity) => ({ id: entity.id, value: entity }))),
     remove: (id: Identifier) => collection.remove(id),
-    async replaceAll(entities) {
-      // Cleared rather than merged: an import is a replacement, and leaving tombstones or
-      // stale rows behind would quietly mix two datasets together.
-      await collection.clear()
-      await collection.putMany(entities.map((entity) => ({ id: entity.id, value: entity })))
-    },
+    replaceAll: (entities) =>
+      collection.replaceAll(entities.map((entity) => ({ id: entity.id, value: entity }))),
   }
 }

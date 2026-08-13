@@ -67,9 +67,9 @@ The one outstanding item from the ANOTHER.md review.
 ### Sync
 Fully specified in `docs/proposals/sync.md`; nothing built. Before any of it:
 
-- [ ] Make `updatedAt` locally monotonic. A clock that steps backwards — a timezone change, an
-      NTP correction — currently lets an old write beat a new one. Cheap, invisible, and the
-      longer it waits the more rows carry timestamps nobody can trust
+- [x] Stage 0 is done: `updatedAt` is monotonic and seeded from disk, `replaceAll` buries
+      what it removes instead of wiping it, tombstones no longer carry the value they buried,
+      and `occurrenceFor` already derived its identifier
 - [ ] Then stage 1 onwards from the proposal
 - [ ] The 6-character pairing code from init.Habits is worth stealing as **UX only**. Theirs
       addresses unauthenticated storage directly, so guessing a code reads someone's history

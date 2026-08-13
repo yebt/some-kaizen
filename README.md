@@ -134,9 +134,17 @@ Year as one week instead of two half quotas.
 identifier, which for a UUID is random order, so "the last one in the list" is not "the last
 one written". A correction replaces the answer rather than stacking beside it.
 
-**Deletes leave tombstones.** A deletion that leaves no trace is indistinguishable from a
-record another device has never seen, so the first sync would resurrect everything you ever
-deleted.
+**Deletes leave tombstones, and the tombstone keeps nothing.** A deletion that leaves no
+trace is indistinguishable from a record another device has never seen, so the first sync
+would resurrect everything you ever deleted. What survives is the identifier and the moment,
+never the value: deleting a habit called "quit drinking" has to remove that text from the
+device. Replacing the whole dataset buries what it removes for the same reason.
+
+**Timestamps come from a clock that cannot go backwards.** A wall clock steps back on a
+timezone change or an NTP correction, and when it does, an edit made later gets the smaller
+number and every rule that asks "which is newer" picks the wrong one. The clock is seeded
+above whatever is already on disk, because a counter that resets on launch is undone by
+exactly the event it exists to survive.
 
 **Backups are rebuilt through the domain's own constructors.** An imported file is untrusted
 and is rejected whole rather than trusted into storage, where a single bad field would

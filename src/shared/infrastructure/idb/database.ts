@@ -28,9 +28,17 @@ export type StoreName = (typeof STORE)[keyof typeof STORE]
  * mean a migration over the user's whole history, so they are cheap now and expensive
  * afterwards.
  */
+/**
+ * A record as it sits on disk, alive or buried.
+ *
+ * `value` is absent on a tombstone rather than kept beside it. A tombstone exists to say
+ * "this identifier is gone", and that sentence needs the identifier and the moment — not the
+ * habit's name. Keeping the value meant deleting something never actually removed its text
+ * from the device, which is not what anyone deleting a habit called "quit drinking" expects.
+ */
 export interface StoredRecord<T> {
   readonly id: string
-  readonly value: T
+  readonly value?: T
   readonly updatedAt: number
   readonly deletedAt?: number
 }
@@ -80,4 +88,29 @@ export function openDatabase(name: string = DATABASE_NAME): Promise<IDBDatabase>
     request.onblocked = () =>
       reject(new DatabaseUnavailableError('Another tab is holding an older version open.'))
   })
+}
+
+/**
+ * The newest timestamp anywhere in the database.
+ *
+ * Read once at open so the monotonic clock can start above whatever is already on disk. Every
+ * store carries an index on `updatedAt`, so this is one cursor per store landing on the last
+ * key rather than a scan.
+ */
+export async function latestTimestamp(
+  database: IDBDatabase,
+  stores: readonly StoreName[],
+): Promise<number> {
+  const newest = await Promise.all(
+    stores.map(async (name) => {
+      const index = database.transaction(name, 'readonly').objectStore(name).index('updatedAt')
+      const cursor = await fromRequest<IDBCursorWithValue | null>(
+        index.openCursor(null, 'prev') as IDBRequest<IDBCursorWithValue | null>,
+      )
+
+      return typeof cursor?.key === 'number' ? cursor.key : 0
+    }),
+  )
+
+  return Math.max(0, ...newest)
 }

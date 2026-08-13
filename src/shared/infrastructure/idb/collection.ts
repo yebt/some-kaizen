@@ -15,7 +15,20 @@ export interface Collection<T> {
   putMany(records: ReadonlyArray<{ id: string; value: T }>): Promise<void>
   /** Soft deletes, leaving a tombstone so a future sync cannot resurrect the record. */
   remove(id: string): Promise<void>
-  /** Hard wipes the store, including tombstones. Used when an import replaces everything. */
+  /**
+   * Makes the store hold exactly these records, burying whatever else was there.
+   *
+   * Not a wipe followed by a write. A record that disappears without a tombstone is
+   * indistinguishable from one another device has simply never seen, so the first sync after
+   * an import would hand back everything the import was meant to replace.
+   */
+  replaceAll(records: ReadonlyArray<{ id: string; value: T }>): Promise<void>
+  /**
+   * Hard wipes the store, tombstones included, leaving nothing to say anything was ever here.
+   *
+   * The escape hatch, not the ordinary path: it is the only operation that can lose a
+   * deletion, so it belongs to a device leaving rather than a dataset changing.
+   */
   clear(): Promise<void>
 }
 
@@ -43,9 +56,9 @@ export function createCollection<T>(
         transaction('readonly').getAll() as IDBRequest<StoredRecord<T>[]>,
       )
 
-      return records
-        .filter((record) => record.deletedAt === undefined)
-        .map((record) => record.value)
+      return records.flatMap((record) =>
+        record.deletedAt === undefined && record.value !== undefined ? [record.value] : [],
+      )
     },
 
     async get(id) {
@@ -90,7 +103,32 @@ export function createCollection<T>(
       const timestamp = now()
       const store = transaction('readwrite')
 
-      store.put({ ...existing, updatedAt: timestamp, deletedAt: timestamp })
+      // The value is dropped rather than carried into the tombstone. What survives is that
+      // this identifier existed and when it stopped.
+      store.put({ id, updatedAt: timestamp, deletedAt: timestamp } satisfies StoredRecord<T>)
+
+      return committed(store)
+    },
+
+    async replaceAll(records) {
+      const readStore = transaction('readonly')
+      const existing = await fromRequest<StoredRecord<T>[]>(
+        readStore.getAll() as IDBRequest<StoredRecord<T>[]>,
+      )
+
+      const incoming = new Set(records.map((record) => record.id))
+      const timestamp = now()
+      const store = transaction('readwrite')
+
+      for (const record of existing) {
+        if (incoming.has(record.id) || record.deletedAt !== undefined) continue
+
+        store.put({ id: record.id, updatedAt: timestamp, deletedAt: timestamp })
+      }
+
+      for (const record of records) {
+        store.put({ id: record.id, value: record.value, updatedAt: timestamp })
+      }
 
       return committed(store)
     },
