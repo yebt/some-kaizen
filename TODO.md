@@ -52,6 +52,9 @@ it passes either way.
 - [ ] A handful of real-browser gesture tests, Playwright against the built app. The cases
       worth the setup are exactly the ones that keep breaking: carrying a chip out of the
       drawer, and a card whose list refetches mid-drag
+- [ ] Drive them with real touch, not a mouse. A hold that works with a pointer can still be
+      stolen by a scroller on a finger, and CDP's synthetic touch events proved too unreliable
+      here to tell the difference
 - [ ] Run them in Firefox as well as Chromium. A layout bug reported there could not be
       reproduced in a scripted Chromium *or* Firefox — the difference was in the page around
       the component, which only a real page reproduces

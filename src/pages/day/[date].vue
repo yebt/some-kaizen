@@ -682,7 +682,14 @@ function openOccurrence(instanceId: Identifier | undefined, event: MouseEvent) {
     return
   }
 
-  if (instanceId) editing.value = instanceId
+  if (!instanceId) return
+
+  // A sheet takes over from whatever gesture opened it. The press that produced this tap
+  // froze the day so it could not change under a moving finger, and the release that would
+  // have thawed it never arrives once a modal is up — leaving the day showing a snapshot of
+  // itself, which is the card that stays behind after its hour is taken away.
+  abandonLift()
+  editing.value = instanceId
 }
 
 async function chooseDuration(minutes: number) {
@@ -794,6 +801,8 @@ async function loosenEditing() {
   const existing = editingInstance.value
 
   editing.value = null
+  // Belt as well as braces: whatever the sheet does, the day is free to move again.
+  forgetLift()
 
   if (!existing) return
 
@@ -953,6 +962,7 @@ function trackHover(event: PointerEvent) {
             <li v-for="entry in untimed" :key="entry.key">
               <DraggableItem
                 v-bind="pressState(entry.key)"
+                claim
                 @press="liftChip(entry, $event)"
                 @move="trackHover($event)"
                 @release="releaseCard($event)"

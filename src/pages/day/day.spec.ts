@@ -1480,3 +1480,69 @@ describe('a lift that ends without a drop', () => {
     expect((await persistence.instances.all())[0]?.startsAt).toBe(4 * 60 + 15)
   })
 })
+
+describe('a sheet opened from a card', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  async function renderPlaced() {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({ id: newIdentifier(), habitId: habit.id, date: DAY, period: 'daily' }),
+      timeOfDay(65),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    return await renderDay()
+  }
+
+  it('lets the day move again once its hour is taken away', async () => {
+    // The press that opened the sheet froze the day so it could not change under a moving
+    // finger, and the release that would have thawed it never comes once a modal is up. The
+    // card then stayed on the ruler after the record behind it had already been unscheduled.
+    const wrapper = await renderPlaced()
+
+    expect(wrapper.findAll('[aria-label="Adjust Meditate"]')).toHaveLength(1)
+
+    // The press is the part that matters: it is what freezes the day. A bare click never
+    // produced one, so a test written without it passed whether or not the freeze was
+    // released — which is a test that proves nothing.
+    const card = wrapper.find('[aria-label="Adjust Meditate"]').element.parentElement
+
+    if (!card) throw new Error('No card found')
+
+    card.dispatchEvent(new MouseEvent('pointerdown', { clientY: 65, bubbles: true }))
+    await wrapper.find('[aria-label="Adjust Meditate"]').trigger('click')
+    await flushPromises()
+
+    await wrapper
+      .findAll('dialog[aria-label="Adjust this occurrence"] button')
+      .find((node) => node.text() === 'Take its hour away')
+      ?.trigger('click')
+    await settle()
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBeUndefined()
+    expect(wrapper.findAll('[aria-label="Adjust Meditate"]')).toHaveLength(0)
+  })
+
+  it('offers the habit back in the drawer rather than losing it', async () => {
+    const wrapper = await renderPlaced()
+
+    await wrapper.find('[aria-label="Adjust Meditate"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('dialog[aria-label="Adjust this occurrence"] button')
+      .find((node) => node.text() === 'Take its hour away')
+      ?.trigger('click')
+    await settle()
+
+    expect(wrapper.text()).toContain('needs an hour')
+  })
+})

@@ -3,10 +3,25 @@ import { onBeforeUnmount, useTemplateRef, watch } from 'vue'
 
 import { LONG_PRESS_MS } from './use-drag-and-drop'
 
-const props = withDefaults(defineProps<{ pending?: boolean; dragging?: boolean }>(), {
-  pending: false,
-  dragging: false,
-})
+const props = withDefaults(
+  defineProps<{
+    pending?: boolean
+    dragging?: boolean
+    /**
+     * Whether this surface takes the whole gesture from the moment a finger lands.
+     *
+     * Off by default, which lets a finger scroll the page from a card — the timeline is
+     * covered in them, and a day you cannot scroll from anywhere worth touching is not a day.
+     *
+     * On for anything sitting inside a scroller of its own. A chip in the drawer's list is
+     * one wobble away from the browser deciding the gesture was a pan and cancelling the
+     * hold, and the drawer exists for exactly one action: picking a chip up. There is nothing
+     * to scroll towards that is worth losing that.
+     */
+    claim?: boolean
+  }>(),
+  { pending: false, dragging: false, claim: false },
+)
 
 const emit = defineEmits<{
   press: [event: PointerEvent]
@@ -72,8 +87,12 @@ onBeforeUnmount(() => root.value?.removeEventListener('touchmove', refuseScroll)
   -->
   <div
     ref="root"
-    class="grippable touch-pan-y"
-    :class="[pending && 'is-pending', dragging && 'is-dragging']"
+    class="grippable"
+    :class="[
+      claim ? 'touch-none' : 'touch-pan-y',
+      pending && 'is-pending',
+      dragging && 'is-dragging',
+    ]"
     :style="{ '--hold-duration': `${LONG_PRESS_MS}ms` }"
     @pointerdown="onPointerDown"
     @pointermove="emit('move', $event)"
