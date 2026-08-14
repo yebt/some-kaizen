@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { calendarDate, eachDayBetween } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
-import { createCompletedHabit, frequency, type FrequencyPeriod } from '@modules/habits/domain/habit'
+import {
+  createCompletedHabit,
+  frequency,
+  type FrequencyPeriod,
+  onWeekdays,
+} from '@modules/habits/domain/habit'
 
-import { remainingPlacementsAcross } from './placement-plan'
+import { needsPlacing, remainingPlacementsAcross } from './placement-plan'
 import { planInstance } from './planned-instance'
 
 const CREATED_ON = calendarDate('2026-01-01')
@@ -146,5 +151,30 @@ describe('over placing', () => {
     const placed = placedOn(habit, '2026-03-09', '2026-03-10', '2026-03-11')
 
     expect(remainingPlacementsAcross(habit, placed, WEEK)).toBe(0)
+  })
+})
+
+describe('deciding whether a day is even a decision', () => {
+  it('asks for a weekly habit, whose day is genuinely open', () => {
+    expect(needsPlacing(habitOf('weekly', 3))).toBe(true)
+  })
+
+  it('asks for a monthly habit, which is the same decision on a longer period', () => {
+    expect(needsPlacing(habitOf('monthly', 1))).toBe(true)
+  })
+
+  it('does not ask for a daily habit, whose period is the day itself', () => {
+    expect(needsPlacing(habitOf('daily', 1))).toBe(false)
+  })
+
+  it('does not ask for a habit that already named its days', () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Run',
+      frequency: onWeekdays([1, 3, 5]),
+      createdOn: CREATED_ON,
+    })
+
+    expect(needsPlacing(habit)).toBe(false)
   })
 })

@@ -118,3 +118,20 @@ export function useSaveRoutines() {
     onSettled: () => cache.invalidateQueries({ key: ROUTINES_KEY }, true),
   })
 }
+
+/**
+ * Removes a routine, which frees its habits rather than losing them.
+ *
+ * Nothing about a habit is stored on the routine except its place in the order, so a removed
+ * routine leaves everything it held intact and simply unarranged — which is why this can be
+ * offered next to archiving without the two meaning the same dangerous thing.
+ */
+export function useRemoveRoutine() {
+  const persistence = usePersistence()
+  const cache = useQueryCache()
+
+  return useMutation({
+    mutation: (id: Identifier) => persistence.routines.remove(id),
+    onSettled: () => cache.invalidateQueries({ key: ROUTINES_KEY }, true),
+  })
+}

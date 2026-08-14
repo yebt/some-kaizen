@@ -17,10 +17,18 @@ fourteen rows.
 - [x] `Routine` in the habits domain, with its own store, backup round trip and merge rules
 - [x] Grouped rendering on Today, with a per-routine count, and no headings until a day has
       actually been arranged
+- [x] A screen to create and fill one — list, new, edit, with archive and removal
 - [ ] Grouped rendering on the day timeline
-- [ ] A screen to create and fill one: today they exist in the model and in the demo data, and
-      nowhere a person can reach
 - [ ] Optional anchor time, so a routine can say when it usually happens
+- [ ] **A library of routine presets to import from.** Not a store in the paid sense: a set of
+      routines somebody can start from instead of facing an empty form — *20/20/20*, *the calm
+      15*, *the focused 45*, *wind down*. Importing one creates the routine **and the habits it
+      needs**, which is the part that makes it worth doing and also the part that needs care:
+      a preset must merge with what already exists rather than duplicating a "Meditate" that
+      is already there. Ships bundled with the app first, since offline-first means a library
+      that only works online is a library that mostly does not work. A shared or downloadable
+      one can come later, and would need a way to read a routine someone else wrote without
+      trusting it
 
 ### A habit's usual hour
 The question this answers: today every occurrence is placed on its own day, so a habit that
@@ -97,7 +105,8 @@ For a morning routine it is by far the fastest of the three.
 - [ ] Writes real occurrences, not a separate kind of record
 
 ### Presets and categories
-- [ ] Preset routines to start from — *20/20/20*, *the calm 15*, *the focused 45*
+- [ ] Preset routines to start from — see the routine preset library under **Routines** above,
+      which is where that item now lives
 - [ ] A browsable, categorised habit-ideas list (health, focus, home, mind…)
 - [ ] Reuse the same list in the app's empty state: a first habit is the hardest one
 - [ ] Categories earn their keep **only if statistics group by them**. Otherwise it is a

@@ -1,8 +1,24 @@
 import type { CalendarDate } from '@shared/domain/calendar-date'
-import { isActiveOn, type PositiveHabit } from '@modules/habits/domain/habit'
+import { isActiveOn, namesItsDays, type PositiveHabit } from '@modules/habits/domain/habit'
 
 import { periodKeyFor } from './period'
 import { countPlacedIn, type PlannedInstance, remainingPlacements } from './planned-instance'
+
+/**
+ * Whether which day this habit falls on is a decision anyone still has to make.
+ *
+ * The planner is a screen for exactly one question, and this is the question. A daily habit
+ * has no answer to give — its period is the day itself, so it is due today whatever anyone
+ * drags — and a habit that named its weekdays answered it when it was created. Both were
+ * already excluded from the day's agenda for those reasons; without this they still turned
+ * up in the planner's tray asking to be placed, which is the same busywork wearing a hat.
+ *
+ * What is left is the genuinely open case: three times a week, once a month. The app cannot
+ * know which days those are, and nobody else can either.
+ */
+export function needsPlacing(habit: PositiveHabit): boolean {
+  return habit.frequency.period !== 'daily' && !namesItsDays(habit.frequency)
+}
 
 /**
  * How many occurrences of a habit still need a day among the ones on screen.

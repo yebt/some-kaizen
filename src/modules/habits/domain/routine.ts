@@ -93,6 +93,17 @@ export function archiveRoutine(routine: Routine, on: CalendarDate): Routine {
 }
 
 /**
+ * Puts an archived routine back to work.
+ *
+ * The habits it holds never left it, so restoring is only the removal of the end date. This
+ * is what makes archiving safe to offer: it is a reversible way of saying "not at the moment"
+ * rather than a soft delete you have to rebuild from.
+ */
+export function restoreRoutine(routine: Routine): Routine {
+  return { ...routine, archivedOn: undefined }
+}
+
+/**
  * The habits this routine would take from others, which is what makes a save a conflict.
  *
  * Reported rather than refused, and reported as a list rather than a boolean, because the

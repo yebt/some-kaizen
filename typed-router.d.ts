@@ -101,6 +101,27 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/routines/': RouteRecordInfo<
+      '/routines/',
+      '/routines',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/routines/[id]': RouteRecordInfo<
+      '/routines/[id]',
+      '/routines/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
+      | never
+    >,
+    '/routines/new': RouteRecordInfo<
+      '/routines/new',
+      '/routines/new',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/settings': RouteRecordInfo<
       '/settings',
       '/settings',
@@ -203,6 +224,30 @@ declare module 'vue-router/auto-routes' {
     'src/pages/plan.vue': {
       routes:
         | '/plan'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/routines/index.vue': {
+      routes:
+        | '/routines/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/routines/[id].vue': {
+      routes:
+        | '/routines/[id]'
+      views:
+        | never
+      pathParamNames:
+        | 'id'
+    }
+    'src/pages/routines/new.vue': {
+      routes:
+        | '/routines/new'
       views:
         | never
       pathParamNames:

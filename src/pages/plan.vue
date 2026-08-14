@@ -23,7 +23,7 @@ import { useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
 import { useHabits } from '@modules/habits/application/habit-queries'
-import { remainingPlacementsAcross } from '@modules/planning/domain/placement-plan'
+import { needsPlacing, remainingPlacementsAcross } from '@modules/planning/domain/placement-plan'
 import { moveToDate, planInstance, spanOf } from '@modules/planning/domain/planned-instance'
 import {
   usePlannedInstances,
@@ -62,17 +62,36 @@ const rangeLabel = computed(() => {
   return `${formatter.format(toDate(first))} – ${formatter.format(toDate(last))}`
 })
 
+/** Whether the board is showing the week being lived, which the arrows can leave behind. */
+const isThisWeek = computed(() => startOfWeek(weekAnchor.value) === startOfWeek(todayIn()))
+
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
-/** Habits still owing occurrences somewhere in the visible week. */
+/**
+ * The habits whose days are still an open question, and how many days each is short.
+ *
+ * Filtered by `needsPlacing` before anything is counted, because a screen that asks you to
+ * place a daily habit — or one that already named its weekdays — is asking a question that
+ * was answered elsewhere, and answering it here would only contradict it.
+ */
 const tray = computed(() =>
   positiveHabits.value
+    .filter(needsPlacing)
     .map((habit) => ({
       habit,
       remaining: remainingPlacementsAcross(habit, instances.value, weekDays.value),
     }))
     .filter((entry) => entry.remaining > 0),
 )
+
+/**
+ * Whether anything on this device works the way this screen is for.
+ *
+ * Separates the two empty trays that look identical and mean opposite things: a week where
+ * every decision has been made, and an app where there is no such decision to make. The
+ * second one used to read as "you are finished", which left the whole screen unexplained.
+ */
+const hasPlaceableHabits = computed(() => positiveHabits.value.some(needsPlacing))
 
 const habitsById = computed(() => new Map(positiveHabits.value.map((habit) => [habit.id, habit])))
 
@@ -167,10 +186,32 @@ function shiftWeek(offset: number) {
 
 <template>
   <div class="safe-top">
-    <header class="flex items-baseline justify-between pt-2 pb-4">
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-ink">Plan</h1>
-        <p class="text-sm text-ink-muted">{{ rangeLabel }}</p>
+    <!--
+      The screen says what it decides.
+
+      It used to open with the word "Plan" and a date range, and nothing anywhere explained
+      that the one question it exists to answer is which days a habit that repeats a number
+      of times lands on. A board you have to reverse engineer is a board you avoid.
+    -->
+    <header class="pt-2 pb-4">
+      <h1 class="text-2xl font-semibold tracking-tight text-ink">Plan the week</h1>
+      <p class="mt-0.5 max-w-sm text-sm text-ink-muted">
+        Some habits ask for a number of times rather than particular days. Choose which days
+        those land on by dragging them onto one.
+      </p>
+    </header>
+
+    <div class="flex items-center justify-between pb-4">
+      <div class="flex items-baseline gap-2">
+        <p class="text-sm font-medium text-ink">{{ rangeLabel }}</p>
+        <button
+          v-if="!isThisWeek"
+          type="button"
+          class="rounded-full border border-line-strong px-2.5 py-1 text-xs font-medium text-ink-muted transition-colors hover:text-ink"
+          @click="weekAnchor = todayIn()"
+        >
+          This week
+        </button>
       </div>
       <div class="flex gap-3">
         <button
@@ -190,7 +231,7 @@ function shiftWeek(offset: number) {
           <AppIcon name="chevron-right" :size="16" />
         </button>
       </div>
-    </header>
+    </div>
 
     <div
       v-if="habitsLoading && habitsData === undefined"
@@ -205,7 +246,7 @@ function shiftWeek(offset: number) {
           id="tray-heading"
           class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
         >
-          To place
+          Waiting for a day
         </h2>
 
         <ul v-if="tray.length" class="flex flex-wrap gap-2">
@@ -217,23 +258,42 @@ function shiftWeek(offset: number) {
               @release="drag.release($event)"
               @cancel="drag.cancel()"
             >
+              <!--
+                The number carries a label for anyone not looking at it. On screen the chip is
+                read next to six others and "3" is unmistakable; read aloud on its own it is
+                a habit called "Run 3".
+              -->
               <span
                 class="flex items-center gap-2 rounded-full border border-line-strong bg-surface px-3.5 py-2 text-xs font-medium text-ink shadow-card transition-transform active:scale-95"
                 :style="surfaceStyle(entry.habit)"
+                :aria-label="`${entry.habit.name}, ${entry.remaining} still to place`"
               >
                 {{ entry.habit.name }}
-                <span class="tabular rounded-full bg-black/15 px-1.5 py-0.5">
+                <span class="tabular rounded-full bg-black/15 px-1.5 py-0.5" aria-hidden="true">
                   {{ entry.remaining }}
                 </span>
               </span>
             </DraggableItem>
           </li>
         </ul>
+
+        <!--
+          Two empty trays that look the same and mean opposite things: a week you have
+          finished arranging, and a set of habits none of which this screen is about.
+        -->
+        <p
+          v-else-if="hasPlaceableHabits"
+          class="rounded-card border border-dashed border-line p-4 text-center text-xs text-ink-muted"
+        >
+          Every habit has the days it asked for. Nothing left to decide this week.
+        </p>
         <p
           v-else
           class="rounded-card border border-dashed border-line p-4 text-center text-xs text-ink-muted"
         >
-          Every habit has its days this week. Nothing left to place.
+          Nothing needs a day chosen. Habits that repeat daily, or that name their own weekdays,
+          are already on the days they belong to — this screen is only for the ones that ask for
+          a number of times.
         </p>
       </section>
 
@@ -242,7 +302,7 @@ function shiftWeek(offset: number) {
           id="week-heading"
           class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
         >
-          This week
+          Days
         </h2>
 
         <div
@@ -302,8 +362,12 @@ function shiftWeek(offset: number) {
               </span>
             </li>
           </ul>
+          <!--
+            An invitation only while there is something to accept it. With an empty tray
+            "Drop a habit here" is seven rows telling you to do something impossible.
+          -->
           <p v-else class="flex min-h-10 flex-1 items-center text-xs text-ink-subtle">
-            Drop a habit here
+            {{ tray.length ? 'Drop a habit here' : 'Nothing on this day' }}
           </p>
         </div>
       </section>

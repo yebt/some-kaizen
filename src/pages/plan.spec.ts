@@ -9,7 +9,12 @@ import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { calendarDate, startOfWeek, todayIn } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
-import { createCompletedHabit, createNegativeHabit, frequency } from '@modules/habits/domain/habit'
+import {
+  createCompletedHabit,
+  createNegativeHabit,
+  frequency,
+  onWeekdays,
+} from '@modules/habits/domain/habit'
 import { planInstance } from '@modules/planning/domain/planned-instance'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -54,8 +59,37 @@ describe('the tray', () => {
 
     const text = (await renderPlan()).text()
 
-    expect(text).toContain('To place')
+    expect(text).toContain('Waiting for a day')
     expect(text).toContain('Run')
+  })
+
+  it('never offers a daily habit, whose day was never in question', async () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Stretch',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const text = (await renderPlan()).text()
+
+    expect(text).not.toContain('Stretch')
+    expect(text).toContain('Nothing needs a day chosen')
+  })
+
+  it('never offers a habit that already named its weekdays', async () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Swim',
+      frequency: onWeekdays([1, 3, 5]),
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    expect((await renderPlan()).text()).not.toContain('Swim')
   })
 
   it('counts down as occurrences are placed', async () => {
@@ -87,7 +121,12 @@ describe('the tray', () => {
       ],
     })
 
-    expect((await renderPlan()).text()).toContain('Nothing left to place')
+    // Distinct from the tray being empty because nothing on this device works this way:
+    // one says "you have finished", the other says "this screen is not about your habits".
+    const text = (await renderPlan()).text()
+
+    expect(text).toContain('Nothing left to decide this week')
+    expect(text).not.toContain('Nothing needs a day chosen')
   })
 
   it('never offers a negative habit, which is not something you schedule', async () => {
@@ -140,10 +179,20 @@ describe('the week board', () => {
     expect(mondayZone.text()).toContain('Run')
   })
 
-  it('invites a drop on a day with nothing on it', async () => {
-    await replaceDataset(persistence, EMPTY_DATASET)
+  it('invites a drop on an empty day while something is waiting for one', async () => {
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [runTwiceAWeek()] })
 
     expect((await renderPlan()).text()).toContain('Drop a habit here')
+  })
+
+  it('stops inviting a drop once there is nothing to drop', async () => {
+    // Seven rows asking for something the tray cannot give is an instruction that fails.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const text = (await renderPlan()).text()
+
+    expect(text).not.toContain('Drop a habit here')
+    expect(text).toContain('Nothing on this day')
   })
 
   it('does not draw an occurrence whose habit no longer exists', async () => {
@@ -164,7 +213,7 @@ describe('the week board', () => {
     })
 
     expect((await renderPlan()).find(`[data-drop-zone="${monday}"]`).text()).toContain(
-      'Drop a habit here',
+      'Nothing on this day',
     )
   })
 })

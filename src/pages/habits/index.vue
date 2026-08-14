@@ -207,19 +207,32 @@ function isPressed(id: Identifier) {
     </header>
 
     <!--
-      Block time is the other half of a day, so it is reachable from here rather than only
-      from Settings, where nobody looks for it while thinking about their habits.
+      Block time is the other half of a day, and routines are how this list stops being a list,
+      so both are reachable from here rather than only from Settings, where nobody looks for
+      them while thinking about their habits.
     -->
-    <RouterLink
-      to="/block-time"
-      class="mb-4 flex items-center gap-3 rounded-card border border-line bg-surface p-3.5 shadow-card"
-    >
-      <div class="min-w-0 flex-1">
-        <p class="text-sm font-medium text-ink">Block time</p>
-        <p class="text-xs text-ink-muted">Sleep, work and the rest of the fixed day</p>
-      </div>
-      <AppIcon name="chevron-right" :size="18" />
-    </RouterLink>
+    <div class="mb-4 grid grid-cols-2 gap-2">
+      <RouterLink
+        to="/routines"
+        class="flex items-center gap-2 rounded-card border border-line bg-surface p-3.5 shadow-card"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-ink">Routines</p>
+          <p class="text-xs text-ink-muted">Group the day into its parts</p>
+        </div>
+        <AppIcon name="chevron-right" :size="18" class="shrink-0" />
+      </RouterLink>
+      <RouterLink
+        to="/block-time"
+        class="flex items-center gap-2 rounded-card border border-line bg-surface p-3.5 shadow-card"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-ink">Block time</p>
+          <p class="text-xs text-ink-muted">Sleep, work, the fixed day</p>
+        </div>
+        <AppIcon name="chevron-right" :size="18" class="shrink-0" />
+      </RouterLink>
+    </div>
 
     <div
       v-if="isLoading && habitsData === undefined"
