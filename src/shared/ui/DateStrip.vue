@@ -5,6 +5,7 @@ import { type CalendarDate, toDate, weekday } from '@shared/domain/calendar-date
 import { tick } from '@core/haptics'
 
 import AppIcon from './AppIcon.vue'
+import { isShowing, scrollToCentre } from './ribbon-geometry'
 
 const props = defineProps<{
   /** Every day the ribbon can reach, in order. Far more than fit on screen. */
@@ -46,22 +47,44 @@ const cells = computed(() =>
 
 const ribbon = useTemplateRef<HTMLElement>('ribbon')
 
+/** The container and a cell, in one coordinate space, for the geometry helpers to compare. */
+function measure(day: CalendarDate) {
+  const container = ribbon.value
+  const element = container?.querySelector<HTMLElement>(`[data-day="${day}"]`)
+
+  if (!container || !element) return null
+
+  const box = container.getBoundingClientRect()
+  const cellBox = element.getBoundingClientRect()
+
+  return {
+    container: { left: box.left, width: box.width, scrollLeft: container.scrollLeft },
+    cell: { left: cellBox.left, width: cellBox.width },
+    element: container,
+  }
+}
+
 /** Brings a day to the middle, which is where a chosen day belongs. */
 function centre(day: CalendarDate, behavior: ScrollBehavior = 'smooth') {
-  const element = ribbon.value?.querySelector<HTMLElement>(`[data-day="${day}"]`)
+  const measured = measure(day)
 
-  if (!element || !ribbon.value) return
-
-  const container = ribbon.value
-  const target = element.offsetLeft - (container.clientWidth - element.clientWidth) / 2
+  if (!measured) return
 
   // `scrollTo` rather than `scrollIntoView`: the latter also scrolls every ancestor, which
   // on this screen jumps the whole page to put a date in view.
-  container.scrollTo({ left: target, behavior })
+  measured.element.scrollTo({
+    left: scrollToCentre(measured.container, measured.cell),
+    behavior,
+  })
 }
 
 onMounted(() => {
-  void nextTick(() => centre(props.selected, 'auto'))
+  void nextTick(() => {
+    centre(props.selected, 'auto')
+    // Said once at the start too: a ribbon that opens already centred fires no scroll event,
+    // and a caller waiting to hear would wait for ever.
+    reportVisibility()
+  })
 })
 
 /**
@@ -89,15 +112,11 @@ const centred = ref<CalendarDate | null>(null)
  * offer about it.
  */
 function reportVisibility() {
-  const container = ribbon.value
-  const element = container?.querySelector<HTMLElement>(`[data-day="${props.selected}"]`)
+  const measured = measure(props.selected)
 
-  if (!container || !element) return
+  if (!measured) return
 
-  const left = element.offsetLeft - container.scrollLeft
-  const visible = left + element.clientWidth > 0 && left < container.clientWidth
-
-  emit('in-view', visible)
+  emit('in-view', isShowing(measured.container, measured.cell))
 }
 
 function onScroll() {
@@ -139,7 +158,7 @@ function step(days: number) {
 </script>
 
 <template>
-  <div class="flex items-center gap-1">
+  <div class="flex items-center gap-1 overflow-hidden">
     <button
       type="button"
       class="hit-area grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:text-ink"

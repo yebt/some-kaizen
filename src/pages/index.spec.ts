@@ -3,11 +3,11 @@ import 'fake-indexeddb/auto'
 import { PiniaColada } from '@pinia/colada'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
-import { addDays, calendarDate, todayIn } from '@shared/domain/calendar-date'
+import { addDays, calendarDate, toDate, todayIn } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
@@ -789,6 +789,46 @@ describe('the ribbon of days', () => {
 
     const wrapper = await renderToday()
 
+    expect(wrapper.text()).not.toContain('Back to today')
+  })
+
+  it('takes the day back to today and asks the ribbon to follow', async () => {
+    // Two things, because either alone leaves you somewhere you did not ask to be: the day
+    // without the view, or the view without the day.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+    const strip = wrapper.findComponent({ name: 'DateStrip' })
+    const recentre = vi.fn<() => void>()
+
+    Object.assign(strip.vm as object, { recentre })
+
+    await wrapper.find(`[data-day="${addDays(todayIn(), 2)}"] button`).trigger('click')
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text() === 'Back to today')
+      ?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('h1 + p').text()).toContain(
+      new Intl.DateTimeFormat(undefined, { day: 'numeric' }).format(toDate(todayIn())),
+    )
+  })
+
+  it('stops offering the way back once the ribbon says the day is showing again', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+    const strip = wrapper.findComponent({ name: 'DateStrip' })
+
+    await strip.vm.$emit('in-view', false)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Back to today')
+
+    await strip.vm.$emit('in-view', true)
+    await flushPromises()
     expect(wrapper.text()).not.toContain('Back to today')
   })
 
