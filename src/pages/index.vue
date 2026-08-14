@@ -192,17 +192,28 @@ watch(selectedDay, async () => {
  * With the setting on `show` there is nothing to separate and the finished ones sit where
  * they are; otherwise they leave the list and become the accordion below it.
  */
-const outstandingDuties = computed(() =>
-  preferences.preferences.done === 'show'
-    ? duties.value
-    : duties.value.filter((row) => row.outcome !== 'done'),
-)
+const outstandingDuties = computed(() => {
+  const setting = preferences.preferences.done
 
-/** The finished ones, which the accordion owns whenever they are not in the list above. */
+  if (setting === 'hide') return duties.value.filter((row) => row.outcome !== 'done')
+
+  // `show` leaves them where they are; `at the end` moves them below the work left but keeps
+  // them on screen. Only `hidden` takes them out of the list, and only then does the
+  // accordion have anything to hold — the label said "at the end" and the behaviour was
+  // "hidden", which is a setting lying about itself.
+  if (setting === 'show') return duties.value
+
+  return [
+    ...duties.value.filter((row) => row.outcome !== 'done'),
+    ...duties.value.filter((row) => row.outcome === 'done'),
+  ]
+})
+
+/** Only what the list is genuinely not showing, which is the accordion's whole job. */
 const finishedDuties = computed(() =>
-  preferences.preferences.done === 'show'
-    ? []
-    : duties.value.filter((row) => row.outcome === 'done'),
+  preferences.preferences.done === 'hide'
+    ? duties.value.filter((row) => row.outcome === 'done')
+    : [],
 )
 
 /**
@@ -860,14 +871,18 @@ const OUTCOME_CLASS = {
 
       <section v-show="pane === 'due'" class="mt-3" aria-label="Due today">
         <!--
-          Rows animate when one of them changes, and not when all of them do.
+          Keyed by the day, so moving to another one replaces the list rather than animating
+          across it.
 
-          Moving to another day replaces every row at once, and eight simultaneous entrances
-          crossing eight exits is not an animation, it is the list appearing twice. The leaving
-          rows also need to be taken out of flow properly — `absolute` alone, with nothing to
-          be absolute against, let them keep their space and push the new day downward.
+          Suppressing the classes for a tick was not enough: eight entrances crossing eight
+          exits still had to be scheduled and unscheduled, and anything that arrived a frame
+          late showed both days at once. Replacing the whole group is atomic — the old day
+          cannot be half on screen, because it is gone before the new one is built.
+
+          Creating or deleting a habit still animates, because the key has not changed.
         -->
         <TransitionGroup
+          :key="selectedDay"
           tag="ul"
           class="relative space-y-1.5"
           :enter-active-class="swappingDay ? '' : 'transition duration-200 ease-out'"

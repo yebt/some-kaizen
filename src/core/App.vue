@@ -28,7 +28,14 @@ const isImmersive = computed(
 <template>
   <div class="min-h-dvh bg-canvas">
     <!-- Padded for the floating tab bar so the last card is never trapped underneath it. -->
-    <main class="mx-auto w-full max-w-md px-4" :class="isImmersive ? 'pb-8' : 'pb-28'">
+    <!--
+      `safe-bottom` on every screen, not only the ones with a floating bar.
+
+      Hiding the tab bar took the clearance with it, and a form's Save sat exactly where the
+      phone draws its own buttons. The inset is what the device says it needs; the extra is
+      for the floating bar, when there is one.
+    -->
+    <main class="safe-bottom mx-auto w-full max-w-md px-4" :class="isImmersive ? 'pb-8' : 'pb-28'">
       <RouterView />
     </main>
 

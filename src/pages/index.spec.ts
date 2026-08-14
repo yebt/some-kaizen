@@ -590,8 +590,20 @@ describe('finished habits and the way back to them', () => {
     return await renderToday()
   }
 
-  it('offers the finished ones as a divider that opens, not as a rewritten list', async () => {
-    // The list above stays the work left; this says how much is behind it and opens in place.
+  it('keeps a finished row at the end of the list by default, not out of it', async () => {
+    // "At the end" has to mean at the end. The accordion is for `hidden` alone.
+    const wrapper = await renderWithOneDone()
+
+    expect(wrapper.text()).toContain('Meditate')
+    expect(wrapper.find('button[aria-expanded]').exists()).toBe(false)
+  })
+
+  it('offers the divider that opens only once they are genuinely hidden', async () => {
+    globalThis.localStorage?.setItem(
+      'some-kaisen.preferences',
+      JSON.stringify({ clock: '24h', theme: 'system', timeline: 'normal', done: 'hide' }),
+    )
+
     const wrapper = await renderWithOneDone()
 
     expect(wrapper.find('button[aria-expanded]').exists()).toBe(true)

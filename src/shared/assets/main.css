@@ -160,17 +160,6 @@
     /* Stops iOS enlarging text in landscape, which would break the timeline grid. */
     -webkit-text-size-adjust: 100%;
     background-color: var(--color-canvas);
-
-    /*
-     * The page itself never scrolls sideways. Anything that needs to, owns a scroller.
-     *
-     * A guard rather than a fix: this app is one column on a phone, so a document wider than
-     * the screen is always a mistake somewhere — and the symptom, a whole layout shifted with
-     * the tab bar off the edge, is far worse than whatever caused it. `clip` rather than
-     * `hidden` because `hidden` turns this into a scroll container, which would break the
-     * ribbon's own scrolling and anything sticky later.
-     */
-    overflow-x: clip;
   }
 
   body {
