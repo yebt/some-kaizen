@@ -91,25 +91,35 @@ function centre(day: CalendarDate, behavior: ScrollBehavior = 'smooth') {
   })
 }
 
+/**
+ * Puts the ribbon where it belongs before the browser has drawn it anywhere else.
+ *
+ * Synchronous, and deliberately not inside `nextTick`. The cells are part of the first render,
+ * so by the time this runs they are already in the document and the position can simply be
+ * assigned — a tick later is a tick after the browser has painted a ribbon sitting at its very
+ * start, which is the jolt you see on arriving.
+ *
+ * The smooth scrolling that used to live in CSS is gone for the same reason: it applied to
+ * every change of position, so restoring a remembered place animated its way there from the
+ * beginning of the year. Animation is now asked for per call, by the controls that want it.
+ */
 onMounted(() => {
-  void nextTick(() => {
-    const container = ribbon.value
+  const container = ribbon.value
 
-    if (!container) return
+  if (!container) return
 
-    // Put it back where it was, then check the chosen day is actually there. Restoring blind
-    // would open the screen four months away from the day being worked on, which is a worse
-    // greeting than the jolt this exists to remove.
-    if (rememberedPosition !== null) container.scrollLeft = rememberedPosition
+  // Put it back where it was, then check the chosen day is actually there. Restoring blind
+  // would open the screen four months away from the day being worked on, which is a worse
+  // greeting than the jolt this exists to remove.
+  if (rememberedPosition !== null) container.scrollLeft = rememberedPosition
 
-    const measured = measure(props.selected)
+  const measured = measure(props.selected)
 
-    if (!measured || !isShowing(measured.container, measured.cell)) centre(props.selected, 'auto')
+  if (!measured || !isShowing(measured.container, measured.cell)) centre(props.selected, 'auto')
 
-    // Said once at the start too: a ribbon that opens already centred fires no scroll event,
-    // and a caller waiting to hear would wait for ever.
-    reportVisibility()
-  })
+  // Said once at the start too: a ribbon that opens already centred fires no scroll event,
+  // and a caller waiting to hear would wait for ever.
+  reportVisibility()
 })
 
 /**
@@ -207,7 +217,7 @@ function step(days: number) {
     -->
     <ul
       ref="ribbon"
-      class="grippable flex min-w-0 flex-1 snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain scroll-smooth"
+      class="grippable flex min-w-0 flex-1 snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain"
       @scroll="onScroll"
     >
       <li
