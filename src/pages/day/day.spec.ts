@@ -1187,8 +1187,10 @@ describe('a day with more than a drawer can show', () => {
     const wrapper = await openTray(await renderCrowded())
     const list = wrapper.find('[data-drop-zone="tray"] ul')
 
+    // Bounded rather than a fixed height: it takes what the screen can spare and only starts
+    // scrolling past that, so a day with three chips does not scroll for no reason.
     expect(list.classes().join(' ')).toContain('overflow-y-auto')
-    expect(list.classes().join(' ')).toContain('max-h-44')
+    expect(list.classes().some((name) => name.startsWith('max-h-'))).toBe(true)
   })
 
   it('closes when the backdrop behind it is tapped', async () => {
@@ -1352,6 +1354,38 @@ describe('carrying a chip out of the drawer', () => {
     expect((await persistence.instances.all())[0]?.startsAt).toBe(9 * 60)
   })
 
+  it('leaves the drawer shut once the habit has an hour', async () => {
+    // It was open to hand this over, and it has. Reopening onto a day it no longer has
+    // anything to say about is the app answering a question that was already settled.
+    const { wrapper } = await carryChipTo(9 * 60)
+
+    expect(wrapper.find('[data-drop-zone="tray"]').exists()).toBe(false)
+  })
+
+  it('keeps the remove badge from arming a drag', async () => {
+    // It is a button, not a handle. A press that landed on it started the lift as well, and
+    // the first movement then cancelled both.
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay()
+
+    await wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('needs an hour'))
+      ?.trigger('click')
+    await flushPromises()
+
+    const badge = wrapper.find('[aria-label^="Take Meditate"]')
+
+    await badge.trigger('pointerdown')
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    await flushPromises()
+
+    expect(wrapper.find('[data-live-time]').exists()).toBe(false)
+  })
+
   it('lifts the dim off the ruler the chip is being carried to', async () => {
     const habit = meditate()
 
@@ -1372,5 +1406,77 @@ describe('carrying a chip out of the drawer', () => {
     await flushPromises()
 
     expect(wrapper.find('.backdrop-blur-sm').exists()).toBe(false)
+  })
+})
+
+describe('a lift that ends without a drop', () => {
+  function pointer(type: string, clientY: number) {
+    return new MouseEvent(type, { clientY, bubbles: true })
+  }
+
+  async function liftAndThen(finish: (card: Element) => void) {
+    const habit = meditate()
+    const instance = scheduleAt(
+      planInstance({ id: newIdentifier(), habitId: habit.id, date: DAY, period: 'daily' }),
+      timeOfDay(4 * 60 + 15),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const wrapper = await renderDay()
+    const canvas = wrapper.find('[data-drop-zone="timeline"]').element
+
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => canvas,
+    })
+
+    const card = wrapper.find('[aria-label="Adjust Meditate"]').element.parentElement
+
+    if (!card) throw new Error('No card found')
+
+    card.dispatchEvent(pointer('pointerdown', 4 * 60 + 15))
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    card.dispatchEvent(pointer('pointermove', 4 * 60 + 30))
+    await flushPromises()
+
+    expect(wrapper.find('[data-live-time]').exists()).toBe(true)
+
+    finish(card)
+
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+
+    return wrapper
+  }
+
+  it('clears the marker when the browser takes the gesture for a scroll', async () => {
+    // `pointercancel` is what arrives when the page decides mid-hold that it was a scroll.
+    // Only a completed drop used to tidy up, so the gutter kept a time nothing had moved to.
+    const wrapper = await liftAndThen((card) => card.dispatchEvent(pointer('pointercancel', 0)))
+
+    expect(wrapper.find('[data-live-time]').exists()).toBe(false)
+  })
+
+  it('clears it when the card is released onto nothing at all', async () => {
+    const wrapper = await liftAndThen((card) => {
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: () => null,
+      })
+      card.dispatchEvent(pointer('pointerup', 4 * 60 + 30))
+    })
+
+    expect(wrapper.find('[data-live-time]').exists()).toBe(false)
+  })
+
+  it('leaves the card exactly where it was', async () => {
+    await liftAndThen((card) => card.dispatchEvent(pointer('pointercancel', 0)))
+
+    expect((await persistence.instances.all())[0]?.startsAt).toBe(4 * 60 + 15)
   })
 })

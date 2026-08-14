@@ -244,11 +244,25 @@ function liftChip(entry: Liftable, event: PointerEvent) {
 /** A release outside any zone never reaches the drop handler, so it thaws the day here. */
 async function releaseCard(event: PointerEvent) {
   await drag.release(event)
-  letAgendaMove()
+  forgetLift()
 }
 
 function abandonLift() {
   drag.cancel()
+  forgetLift()
+}
+
+/**
+ * Clears everything a lift put on screen, whatever ended it.
+ *
+ * There are three ways a gesture stops and only one of them used to tidy up. A drop cleared
+ * the guide line, the gutter marker and the ghost; a release onto nothing and a
+ * `pointercancel` cleared none of them — and `pointercancel` is exactly what the browser
+ * sends when it decides the gesture was a scroll after all. The leftovers were a time marker
+ * and a line drawn across the day, pointing at an hour nothing had been moved to.
+ */
+function forgetLift() {
+  hoverTime.value = null
   ghostBox.value = null
   letAgendaMove()
 }
@@ -401,6 +415,9 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   const instance = await occurrenceFor(payload.duty)
 
   await saveInstance.mutateAsync(scheduleAt(instance, minutes))
+  // The drawer was open to hand this over, and it has. Reopening onto a day it no longer has
+  // anything to say about is the app answering a question that was already settled.
+  trayOpen.value = false
   feedback.notify(`${payload.habit.name} at ${preferences.formatClock(minutes)}`, 'success')
 }
 
@@ -933,7 +950,7 @@ function trackHover(event: PointerEvent) {
             that keeps growing eats the ruler it exists to fill — which is the one thing it
             must never do, since the ruler is where the chips are going.
           -->
-          <ul class="flex max-h-44 flex-wrap gap-2 overflow-y-auto overscroll-contain">
+          <ul class="flex max-h-[45vh] flex-wrap gap-2 overflow-y-auto overscroll-contain">
             <li v-for="entry in untimed" :key="entry.key">
               <DraggableItem
                 v-bind="pressState(entry.key)"
@@ -951,6 +968,7 @@ function trackHover(event: PointerEvent) {
                     type="button"
                     class="hit-area -mr-1 grid size-5 place-items-center rounded-full text-current opacity-50"
                     :aria-label="`Take ${entry.habit.name} off today`"
+                    @pointerdown.stop
                     @click.stop="dropChip(entry.duty)"
                   >
                     <AppIcon name="ban" :size="12" />
