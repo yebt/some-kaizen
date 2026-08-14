@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -701,16 +701,26 @@ function selectDay(day: CalendarDate) {
   selectedDay.value = day
 }
 
+const strip = useTemplateRef<{ recentre: () => void }>('strip')
+
+/** Whether the chosen day is still somewhere on the ribbon, as the ribbon last reported. */
+const selectedInView = ref(true)
+
 /**
- * Whether the day being worked on is not today.
+ * Whether there is anywhere to go back to.
  *
- * The ribbon scrolls freely and the selection stays put, so the two can end up far apart with
- * nothing on screen saying how to get back. This is that.
+ * Two different ways to be lost, and only one of them used to count. Working on another day
+ * is the obvious one. The other is scrolling the ribbon months away while still working on
+ * today: nothing has changed, the day is right, and there is no longer anything on screen
+ * that says so.
  */
-const hasWandered = computed(() => selectedDay.value !== today)
+const hasWandered = computed(() => selectedDay.value !== today || !selectedInView.value)
 
 function returnToToday() {
   selectedDay.value = today
+  // Asked rather than set: the ribbon's position belongs to the browser, and choosing a day
+  // that is already chosen changes nothing for a watcher to react to.
+  strip.value?.recentre()
 }
 
 function openHabit(habitId: Identifier) {
@@ -753,10 +763,12 @@ const OUTCOME_CLASS = {
     </header>
 
     <DateStrip
+      ref="strip"
       :days="ribbonDays"
       :selected="selectedDay"
       :marked="markedDays"
       @select="selectDay"
+      @in-view="selectedInView = $event"
     />
 
     <div class="mt-1.5 flex items-center justify-center gap-3">

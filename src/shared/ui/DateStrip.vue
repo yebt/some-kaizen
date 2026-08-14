@@ -14,7 +14,11 @@ const props = defineProps<{
   marked?: readonly CalendarDate[]
 }>()
 
-const emit = defineEmits<{ select: [day: CalendarDate] }>()
+const emit = defineEmits<{
+  select: [day: CalendarDate]
+  /** Whether the chosen day is currently on screen, so a caller can offer the way back. */
+  'in-view': [visible: boolean]
+}>()
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
@@ -76,10 +80,32 @@ watch(
 /** The day nearest the middle right now, which is what a tick is counting. */
 const centred = ref<CalendarDate | null>(null)
 
+/**
+ * Whether the chosen day is still somewhere on screen.
+ *
+ * The ribbon scrolls without changing anything, which is the point — and the cost is that you
+ * can leave the day you are working on far behind with nothing saying so. Reported rather
+ * than solved here: the strip knows where things are, and the screen around it owns what to
+ * offer about it.
+ */
+function reportVisibility() {
+  const container = ribbon.value
+  const element = container?.querySelector<HTMLElement>(`[data-day="${props.selected}"]`)
+
+  if (!container || !element) return
+
+  const left = element.offsetLeft - container.scrollLeft
+  const visible = left + element.clientWidth > 0 && left < container.clientWidth
+
+  emit('in-view', visible)
+}
+
 function onScroll() {
   const container = ribbon.value
 
   if (!container) return
+
+  reportVisibility()
 
   const middle = container.scrollLeft + container.clientWidth / 2
   const index = Math.round(middle / (container.scrollWidth / Math.max(cells.value.length, 1)) - 0.5)
@@ -92,6 +118,14 @@ function onScroll() {
 
   centred.value = day
 }
+
+/**
+ * Brings the chosen day back into the middle without changing it.
+ *
+ * Exposed because the ribbon's position is the browser's, not a value this component can be
+ * told: a parent that wants the day back on screen has to ask rather than set.
+ */
+defineExpose({ recentre: () => centre(props.selected) })
 
 function step(days: number) {
   const container = ribbon.value

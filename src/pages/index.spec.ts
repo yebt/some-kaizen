@@ -784,11 +784,24 @@ describe('the ribbon of days', () => {
     expect(wrapper.text()).toContain('Back to today')
   })
 
-  it('offers the way back once the day is not today', async () => {
+  it('offers no way back while nothing is lost', async () => {
     await replaceDataset(persistence, EMPTY_DATASET)
 
     const wrapper = await renderToday()
 
     expect(wrapper.text()).not.toContain('Back to today')
+  })
+
+  it('offers the way back when the ribbon is scrolled off the chosen day', async () => {
+    // Two ways to be lost and only one used to count. Scrolling months away while still
+    // working on today changes nothing, and left nothing on screen saying so.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderToday()
+
+    await wrapper.findComponent({ name: 'DateStrip' }).vm.$emit('in-view', false)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Back to today')
   })
 })
