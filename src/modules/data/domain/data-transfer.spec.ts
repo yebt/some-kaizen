@@ -16,6 +16,7 @@ import {
 import { recordMeasured, recordNegative } from '@modules/habits/domain/habit-entry'
 import { InvalidWeekdaysError } from '@shared/domain/calendar-date'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
+import { createRoutine } from '@modules/habits/domain/routine'
 import { planInstance, scheduleAt } from '@modules/planning/domain/planned-instance'
 
 import { BACKUP_FORMAT, InvalidBackupError, parseBackup, serializeDataset } from './data-transfer'
@@ -45,6 +46,14 @@ function fullDataset(): Dataset {
   })
 
   return {
+    routines: [
+      createRoutine({
+        id: newIdentifier(),
+        name: 'Morning',
+        habitIds: [water.id],
+        createdOn: CREATED_ON,
+      }),
+    ],
     habits: [water, run, smoking],
     entries: [
       recordMeasured(newIdentifier(), water, calendarDate('2026-03-04'), 1.5, { recordedAt: 10 }),
@@ -136,7 +145,7 @@ describe('a full round trip', () => {
   })
 
   it('survives an empty dataset', () => {
-    const empty: Dataset = { habits: [], entries: [], instances: [], blocks: [] }
+    const empty: Dataset = { habits: [], entries: [], instances: [], blocks: [], routines: [] }
 
     expect(roundTrip(empty)).toEqual(empty)
   })

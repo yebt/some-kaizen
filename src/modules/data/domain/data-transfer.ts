@@ -17,6 +17,7 @@ import {
   type PositiveOutcome,
 } from '@modules/habits/domain/habit'
 import { type HabitEntry, readNote } from '@modules/habits/domain/habit-entry'
+import { createRoutine, type Routine } from '@modules/habits/domain/routine'
 import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 
 import type { Dataset } from './dataset'
@@ -83,7 +84,30 @@ export function parseBackup(text: string): Dataset {
     entries: asArray(dataset.entries, 'entries').map(readEntry),
     instances: asArray(dataset.instances, 'instances').map(readInstance),
     blocks: asArray(dataset.blocks, 'block time').map(readBlock),
+    // Absent rather than refused for a file written before routines existed: an older backup
+    // is a real thing to restore, and a missing group is no groups rather than a broken file.
+    routines:
+      dataset.routines === undefined ? [] : asArray(dataset.routines, 'routines').map(readRoutine),
   }
+}
+
+function readRoutine(raw: unknown): Routine {
+  const value = asRecord(raw, 'A routine is not an object.')
+
+  if (!Array.isArray(value.habitIds)) {
+    throw new InvalidBackupError('A routine needs a list of habits.')
+  }
+
+  // Rebuilt through the domain's own constructor, so a hand edited file cannot import a
+  // routine holding the same habit twice or carrying a name no screen can draw.
+  return createRoutine({
+    id: readId(value.id, 'routine'),
+    name: asString(value.name, 'A routine needs a name.'),
+    habitIds: value.habitIds.map((habitId) => readId(habitId, 'routine')),
+    createdOn: readDate(value.createdOn, 'routine'),
+    archivedOn: value.archivedOn === undefined ? undefined : readDate(value.archivedOn, 'routine'),
+    ...readAppearance(value),
+  })
 }
 
 function readHabit(raw: unknown): Habit {

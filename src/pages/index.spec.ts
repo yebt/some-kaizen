@@ -13,6 +13,7 @@ import { interval, timeOfDay } from '@shared/domain/time-of-day'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { createCompletedHabit, createNegativeHabit, frequency } from '@modules/habits/domain/habit'
 import { latestEntryFor, recordCompleted } from '@modules/habits/domain/habit-entry'
+import { createRoutine } from '@modules/habits/domain/routine'
 import { planInstance } from '@modules/planning/domain/planned-instance'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -932,5 +933,86 @@ describe('marking a habit done from its own button', () => {
       .some((node) => node.classes().includes('overflow-x-clip'))
 
     expect(clipped).toBe(true)
+  })
+})
+
+describe('a day arranged into routines', () => {
+  async function renderArranged() {
+    const meditate = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+    })
+    const run = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Run',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+    })
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [meditate, run],
+      routines: [
+        createRoutine({
+          id: newIdentifier(),
+          name: 'Morning',
+          habitIds: [meditate.id],
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+
+    const wrapper = await renderToday()
+
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+
+    return wrapper
+  }
+
+  it('shows the routine as a heading over what it owns', async () => {
+    const wrapper = await renderArranged()
+
+    expect(wrapper.text()).toContain('Morning')
+  })
+
+  it('counts what is finished inside it', async () => {
+    const wrapper = await renderArranged()
+
+    expect(wrapper.text()).toContain('0/1')
+  })
+
+  it('gathers whatever has no routine under a heading of its own', async () => {
+    const wrapper = await renderArranged()
+
+    expect(wrapper.text()).toContain('Anything else')
+  })
+
+  it('draws no headings at all when nothing has been arranged', async () => {
+    // A list of three rows under one heading called "anything else" is ceremony pretending
+    // to be structure.
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Run',
+          frequency: frequency('daily', 1),
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+
+    const wrapper = await renderToday()
+
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Anything else')
   })
 })

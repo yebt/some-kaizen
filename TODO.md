@@ -12,11 +12,15 @@ A routine is shaped like block time already is: a named stretch of the day. It i
 only thing that makes a fourteen-habit day readable, since today that is a flat list of
 fourteen rows.
 
-- [ ] `Routine` in the habits domain: name, ordered habit ids, optional anchor time
-- [ ] Grouped rendering on Today and on the day timeline
-- [ ] Per-routine completion count
-- [ ] Decide: does a routine **own** its habits, or **tag** them? Owning is simpler; tagging
-      lets one habit sit in both *Morning* and *Health* and costs a join everywhere
+- [x] Decided: a routine **owns** its habits. Tagging only looked necessary because *Health*
+      is a category, not a routine — and categories are free to cut across later
+- [x] `Routine` in the habits domain, with its own store, backup round trip and merge rules
+- [x] Grouped rendering on Today, with a per-routine count, and no headings until a day has
+      actually been arranged
+- [ ] Grouped rendering on the day timeline
+- [ ] A screen to create and fill one: today they exist in the model and in the demo data, and
+      nowhere a person can reach
+- [ ] Optional anchor time, so a routine can say when it usually happens
 
 ### A habit's usual hour
 The question this answers: today every occurrence is placed on its own day, so a habit that

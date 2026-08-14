@@ -4,6 +4,7 @@ import { usePersistence } from '@core/persistence-context'
 import type { Identifier } from '@shared/domain/identifier'
 import type { Habit } from '@modules/habits/domain/habit'
 import type { HabitEntry } from '@modules/habits/domain/habit-entry'
+import type { Routine } from '@modules/habits/domain/routine'
 import { INSTANCES_KEY } from '@modules/planning/application/planning-queries'
 
 import { deleteHabitCascade } from './delete-habit'
@@ -95,5 +96,25 @@ export function useRemoveEntry() {
   return useMutation({
     mutation: (id: Identifier) => persistence.entries.remove(id),
     onSettled: () => cache.invalidateQueries({ key: ENTRIES_KEY }, true),
+  })
+}
+
+export const ROUTINES_KEY = ['routines']
+
+export function useRoutines() {
+  const persistence = usePersistence()
+
+  return useQuery({ key: ROUTINES_KEY, query: () => persistence.routines.all() })
+}
+
+export function useSaveRoutines() {
+  const persistence = usePersistence()
+  const cache = useQueryCache()
+
+  return useMutation({
+    // Saved as a set rather than one at a time: "a habit belongs to at most one routine" is
+    // a rule about the whole arrangement, and writing half of a move would break it.
+    mutation: (routines: readonly Routine[]) => persistence.routines.saveAll(routines),
+    onSettled: () => cache.invalidateQueries({ key: ROUTINES_KEY }, true),
   })
 }

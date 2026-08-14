@@ -7,7 +7,7 @@ import type { Dataset } from './dataset'
 
 /** Something the merge could not decide on its own, reported rather than resolved silently. */
 export interface MergeCollision {
-  readonly kind: 'habit' | 'occurrence' | 'block' | 'overlap'
+  readonly kind: 'habit' | 'occurrence' | 'block' | 'overlap' | 'routine'
   readonly id: Identifier
   readonly label: string
   readonly detail: string
@@ -15,7 +15,13 @@ export interface MergeCollision {
 
 export interface MergeReport {
   readonly dataset: Dataset
-  readonly added: { habits: number; entries: number; instances: number; blocks: number }
+  readonly added: {
+    habits: number
+    entries: number
+    instances: number
+    blocks: number
+    routines: number
+  }
   /** Entries the incoming file answered more recently than this device had. */
   readonly superseded: number
   readonly collisions: MergeCollision[]
@@ -146,6 +152,13 @@ export function mergeDataset(mine: Dataset, theirs: Dataset): MergeReport {
     detail: 'The file has different hours for this block. Yours were kept.',
   }))
 
+  const routines = mergeEntities(mine.routines, theirs.routines, (routine) => ({
+    kind: 'routine',
+    id: routine.id,
+    label: routine.name,
+    detail: 'The file arranges this part of the day differently. Yours was kept.',
+  }))
+
   const entries = mergeEntries(mine.entries, theirs.entries)
 
   return {
@@ -154,18 +167,21 @@ export function mergeDataset(mine: Dataset, theirs: Dataset): MergeReport {
       entries: entries.merged,
       instances: instances.merged,
       blocks: blocks.merged,
+      routines: routines.merged,
     },
     added: {
       habits: habits.added.length,
       entries: entries.added.length,
       instances: instances.added.length,
       blocks: blocks.added.length,
+      routines: routines.added.length,
     },
     superseded: entries.superseded,
     collisions: [
       ...habits.collisions,
       ...instances.collisions,
       ...blocks.collisions,
+      ...routines.collisions,
       ...overlappingBlocks(blocks.merged),
     ],
   }

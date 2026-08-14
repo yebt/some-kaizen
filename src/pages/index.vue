@@ -48,10 +48,12 @@ import {
   useHabits,
   useRecordEntry,
   useRemoveEntry,
+  useRoutines,
 } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import { type DayDuty, dutiesFor, impliedOccurrenceId } from '@modules/planning/domain/day-agenda'
+import { groupByRoutine, hasArrangement } from '@modules/planning/domain/routine-agenda'
 import {
   planInstance,
   type PlannedInstance,
@@ -68,6 +70,7 @@ const { data: habitsData, isLoading: habitsLoading } = useHabits()
 const { data: entriesData } = useHabitEntries()
 const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
+const { data: routinesData } = useRoutines()
 const recordEntry = useRecordEntry()
 const removeEntry = useRemoveEntry()
 const saveInstance = useSaveInstance()
@@ -79,6 +82,7 @@ const habits = computed(() => habitsData.value ?? [])
 const entries = computed(() => entriesData.value ?? [])
 const instances = computed(() => instancesData.value ?? [])
 const blocks = computed(() => blocksData.value ?? [])
+const routines = computed(() => routinesData.value ?? [])
 
 const today = todayIn()
 const selectedDay = ref<CalendarDate>(today)
@@ -233,6 +237,49 @@ const finishedDuties = computed(() =>
  * between them is what the divider was drawn to look like in the first place.
  */
 const visibleDuties = computed(() => outstandingDuties.value)
+
+/**
+ * The day under its own headings, flattened back into one list.
+ *
+ * One list rather than a list per routine, because the row markup, the swipe, the hold and
+ * the transitions all belong to it and none of them should exist twice. A heading is simply
+ * another row that happens to be a heading — which is also what makes a habit moving between
+ * routines an animated move rather than a disappearance and an arrival.
+ *
+ * Headings appear only once the day has some. A list of three rows under a single heading
+ * called "anything else" is ceremony pretending to be structure.
+ */
+type ListRow =
+  | {
+      readonly kind: 'heading'
+      readonly key: string
+      readonly title: string
+      readonly count: string
+    }
+  | { readonly kind: 'duty'; readonly key: string; readonly duty: (typeof duties.value)[number] }
+
+const visibleRows = computed<ListRow[]>(() => {
+  const groups = groupByRoutine(
+    visibleDuties.value,
+    routines.value,
+    selectedDay.value,
+    (row) => row.outcome === 'done',
+  )
+
+  if (!hasArrangement(groups)) {
+    return visibleDuties.value.map((duty) => ({ kind: 'duty', key: duty.key, duty }))
+  }
+
+  return groups.flatMap<ListRow>((group) => [
+    {
+      kind: 'heading',
+      key: `heading-${group.key}`,
+      title: group.routine?.name ?? 'Anything else',
+      count: `${group.done}/${group.total}`,
+    },
+    ...group.duties.map((duty) => ({ kind: 'duty' as const, key: duty.key, duty })),
+  ])
+})
 
 /** Block time and timed duties merged into one ribbon, as the day is lived. */
 const schedule = computed(() => {
@@ -914,94 +961,118 @@ const OUTCOME_CLASS = {
             "
             :move-class="swappingDay ? '' : 'transition-transform duration-200'"
           >
-            <li
-              v-for="row in visibleDuties"
-              :key="row.key"
-              class="relative overflow-hidden rounded-card"
-              :class="refused === row.key ? 'refuse' : ''"
-            >
-              <!-- Revealed as the row slides, so the gesture says what it will do. -->
-              <div
-                class="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-medium"
-                aria-hidden="true"
-              >
-                <span class="flex items-center gap-1.5 text-done">
-                  <AppIcon name="check" :size="16" />
-                  Done
-                </span>
-                <span class="text-ink-subtle">Not yet</span>
+            <li v-for="entry in visibleRows" :key="entry.key">
+              <!-- A heading is another row that happens to be a heading. -->
+              <div v-if="entry.kind === 'heading'" class="flex items-baseline gap-2 pt-2 pb-0.5">
+                <h3 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
+                  {{ entry.title }}
+                </h3>
+                <span class="h-px flex-1 bg-line" />
+                <span class="tabular text-[0.625rem] text-ink-subtle">{{ entry.count }}</span>
               </div>
 
-              <!--
+              <div
+                v-else
+                class="relative overflow-hidden rounded-card"
+                :class="refused === entry.duty.key ? 'refuse' : ''"
+              >
+                <!-- Revealed as the row slides, so the gesture says what it will do. -->
+                <div
+                  class="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-medium"
+                  aria-hidden="true"
+                >
+                  <span class="flex items-center gap-1.5 text-done">
+                    <AppIcon name="check" :size="16" />
+                    Done
+                  </span>
+                  <span class="text-ink-subtle">Not yet</span>
+                </div>
+
+                <!--
               `relative` is load bearing, not layout. A positioned element paints above a
               static one regardless of DOM order, so without this the reveal layer above
               draws on top of the row instead of behind it.
             -->
-              <div
-                class="grippable relative flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
-                :class="[
-                  swipe.activeKey.value === row.key ? 'duration-0' : 'duration-200',
-                  row.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',
-                ]"
-                :style="swipeStyle(row.key)"
-                @pointerdown="onRowPress(row.key, $event)"
-                @pointermove="onRowMove($event)"
-                @pointerup="onRowRelease($event)"
-                @pointercancel="onRowCancel"
-                @click="onRowClick"
-              >
-                <button
-                  type="button"
-                  class="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  :aria-label="`Open ${row.habit.name}`"
-                  @click="openHabit(row.habit.id)"
+                <div
+                  class="grippable relative flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
+                  :class="[
+                    swipe.activeKey.value === entry.duty.key ? 'duration-0' : 'duration-200',
+                    entry.duty.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',
+                  ]"
+                  :style="swipeStyle(entry.duty.key)"
+                  @pointerdown="onRowPress(entry.duty.key, $event)"
+                  @pointermove="onRowMove($event)"
+                  @pointerup="onRowRelease($event)"
+                  @pointercancel="onRowCancel"
+                  @click="onRowClick"
                 >
-                  <span
-                    v-if="row.habit.colour"
-                    class="size-7 shrink-0 rounded-full"
-                    :style="surfaceStyle(row.habit)"
-                    aria-hidden="true"
-                  />
-                  <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm font-medium text-ink">
-                      {{ row.habit.name }}
+                  <button
+                    type="button"
+                    class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    :aria-label="`Open ${entry.duty.habit.name}`"
+                    @click="openHabit(entry.duty.habit.id)"
+                  >
+                    <span
+                      v-if="entry.duty.habit.colour"
+                      class="size-7 shrink-0 rounded-full"
+                      :style="surfaceStyle(entry.duty.habit)"
+                      aria-hidden="true"
+                    />
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-medium text-ink">
+                        {{ entry.duty.habit.name }}
+                      </span>
+                      <span class="tabular block truncate text-xs text-ink-muted">
+                        <template v-if="entry.duty.measured && entry.duty.achievement">
+                          {{ entry.duty.value }} / {{ entry.duty.measured.measure.goal }}
+                          {{ entry.duty.measured.measure.unit }} ·
+                          <span :class="ACHIEVEMENT_CLASS[entry.duty.achievement]">
+                            {{ ACHIEVEMENT_LABEL[entry.duty.achievement] }}
+                          </span>
+                        </template>
+                        <template v-else>
+                          {{ entry.duty.outcome === 'done' ? 'Done' : 'Not yet' }}
+                          <span v-if="entry.duty.time">· {{ entry.duty.time }}</span>
+                        </template>
+                      </span>
                     </span>
-                    <span class="tabular block truncate text-xs text-ink-muted">
-                      <template v-if="row.measured && row.achievement">
-                        {{ row.value }} / {{ row.measured.measure.goal }}
-                        {{ row.measured.measure.unit }} ·
-                        <span :class="ACHIEVEMENT_CLASS[row.achievement]">
-                          {{ ACHIEVEMENT_LABEL[row.achievement] }}
-                        </span>
-                      </template>
-                      <template v-else>
-                        {{ row.outcome === 'done' ? 'Done' : 'Not yet' }}
-                        <span v-if="row.time">· {{ row.time }}</span>
-                      </template>
-                    </span>
-                  </span>
-                </button>
+                  </button>
 
-                <button
-                  v-if="row.measured"
-                  type="button"
-                  class="shrink-0"
-                  :aria-label="`Log ${row.habit.name}`"
-                  @click="startLogging(row.habit, row.duty, row.value, row.entryId)"
-                >
-                  <ProgressRing :value="row.progress" :size="36" />
-                </button>
-                <button
-                  v-else
-                  type="button"
-                  class="hit-area grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
-                  :class="OUTCOME_CLASS[row.outcome ?? 'missed']"
-                  :aria-label="`Mark ${row.habit.name}`"
-                  :aria-pressed="row.outcome === 'done'"
-                  @click="setCompleted(row.habit, row.duty, row.outcome !== 'done', row.entryId)"
-                >
-                  <AppIcon name="check" :size="18" />
-                </button>
+                  <button
+                    v-if="entry.duty.measured"
+                    type="button"
+                    class="shrink-0"
+                    :aria-label="`Log ${entry.duty.habit.name}`"
+                    @click="
+                      startLogging(
+                        entry.duty.habit,
+                        entry.duty.duty,
+                        entry.duty.value,
+                        entry.duty.entryId,
+                      )
+                    "
+                  >
+                    <ProgressRing :value="entry.duty.progress" :size="36" />
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="hit-area grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
+                    :class="OUTCOME_CLASS[entry.duty.outcome ?? 'missed']"
+                    :aria-label="`Mark ${entry.duty.habit.name}`"
+                    :aria-pressed="entry.duty.outcome === 'done'"
+                    @click="
+                      setCompleted(
+                        entry.duty.habit,
+                        entry.duty.duty,
+                        entry.duty.outcome !== 'done',
+                        entry.duty.entryId,
+                      )
+                    "
+                  >
+                    <AppIcon name="check" :size="18" />
+                  </button>
+                </div>
               </div>
             </li>
           </TransitionGroup>

@@ -12,6 +12,7 @@ import {
   measure,
 } from '@modules/habits/domain/habit'
 import { type HabitEntry, recordCompleted } from '@modules/habits/domain/habit-entry'
+import { createRoutine } from '@modules/habits/domain/routine'
 import { planInstance } from '@modules/planning/domain/planned-instance'
 
 import type { Dataset } from './dataset'
@@ -20,7 +21,7 @@ import { mergeDataset } from './merge'
 const CREATED_ON = calendarDate('2020-01-01')
 const DAY = calendarDate('2026-03-11')
 
-const EMPTY: Dataset = { habits: [], entries: [], instances: [], blocks: [] }
+const EMPTY: Dataset = { habits: [], entries: [], instances: [], blocks: [], routines: [] }
 
 function habitNamed(name: string, id: Identifier = newIdentifier()) {
   return createCompletedHabit({
@@ -75,7 +76,7 @@ describe('bringing in what is missing', () => {
 
     const report = mergeDataset(EMPTY, theirs)
 
-    expect(report.added).toEqual({ habits: 1, entries: 1, instances: 1, blocks: 1 })
+    expect(report.added).toEqual({ habits: 1, entries: 1, instances: 1, blocks: 1, routines: 0 })
   })
 
   it('leaves an identical record alone rather than reporting it', () => {
@@ -294,5 +295,39 @@ describe('a realistic second device', () => {
     expect(twice.dataset.habits).toHaveLength(1)
     expect(twice.added.habits).toBe(0)
     expect(twice.collisions).toEqual([])
+  })
+})
+
+describe('routines, which arrange a day rather than fill it', () => {
+  function morning(name: string, habitIds: Identifier[] = [], id = newIdentifier()) {
+    return createRoutine({ id, name, habitIds, createdOn: CREATED_ON })
+  }
+
+  it('brings in one the other device had', () => {
+    const report = mergeDataset(EMPTY, dataset({ routines: [morning('Morning')] }))
+
+    expect(report.dataset.routines).toHaveLength(1)
+    expect(report.added.routines).toBe(1)
+  })
+
+  it('keeps this device’s arrangement when the two disagree', () => {
+    // An arrangement is a preference rather than a record, and the device you are standing
+    // at is the one whose preference you can still see and correct.
+    const id = newIdentifier()
+    const report = mergeDataset(
+      dataset({ routines: [morning('Morning', [], id)] }),
+      dataset({ routines: [morning('Mornings', [], id)] }),
+    )
+
+    expect(report.dataset.routines[0]?.name).toBe('Morning')
+    expect(report.collisions[0]).toMatchObject({ kind: 'routine', label: 'Morning' })
+  })
+
+  it('says nothing when both devices arrange the day the same way', () => {
+    const shared = morning('Morning', [newIdentifier()])
+
+    expect(
+      mergeDataset(dataset({ routines: [shared] }), dataset({ routines: [shared] })).collisions,
+    ).toEqual([])
   })
 })

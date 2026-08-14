@@ -7,13 +7,21 @@
  * throw with no warning.
  */
 export const DATABASE_NAME = 'some-kaisen'
-export const DATABASE_VERSION = 1
+/**
+ * Raised for the routines store.
+ *
+ * The upgrade below creates whatever is missing and touches nothing else, so an existing
+ * database gains an empty store and keeps every row it had. That is the whole migration: a
+ * schema that only ever adds does not need one written by hand.
+ */
+export const DATABASE_VERSION = 2
 
 export const STORE = {
   habits: 'habits',
   entries: 'entries',
   instances: 'instances',
   blocks: 'blocks',
+  routines: 'routines',
 } as const
 
 export type StoreName = (typeof STORE)[keyof typeof STORE]

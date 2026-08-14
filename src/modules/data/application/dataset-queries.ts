@@ -18,18 +18,20 @@ export async function replaceDataset(persistence: Persistence, dataset: Dataset)
   await persistence.entries.replaceAll(dataset.entries)
   await persistence.instances.replaceAll(dataset.instances)
   await persistence.blocks.replaceAll(dataset.blocks)
+  await persistence.routines.replaceAll(dataset.routines)
 }
 
 /** Reads everything stored, as one value ready to be written to a file. */
 export async function readDataset(persistence: Persistence): Promise<Dataset> {
-  const [habits, entries, instances, blocks] = await Promise.all([
+  const [habits, entries, instances, blocks, routines] = await Promise.all([
     persistence.habits.all(),
     persistence.entries.all(),
     persistence.instances.all(),
     persistence.blocks.all(),
+    persistence.routines.all(),
   ])
 
-  return { habits, entries, instances, blocks }
+  return { habits, entries, instances, blocks, routines }
 }
 
 export function useReplaceDataset() {

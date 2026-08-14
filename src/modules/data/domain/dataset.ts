@@ -1,5 +1,6 @@
 import type { Habit } from '@modules/habits/domain/habit'
 import type { HabitEntry } from '@modules/habits/domain/habit-entry'
+import type { Routine } from '@modules/habits/domain/routine'
 import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 import type { BlockTime } from '@modules/block-time/domain/block-time'
 
@@ -15,6 +16,13 @@ export interface Dataset {
   readonly entries: readonly HabitEntry[]
   readonly instances: readonly PlannedInstance[]
   readonly blocks: readonly BlockTime[]
+  readonly routines: readonly Routine[]
 }
 
-export const EMPTY_DATASET: Dataset = { habits: [], entries: [], instances: [], blocks: [] }
+export const EMPTY_DATASET: Dataset = {
+  habits: [],
+  entries: [],
+  instances: [],
+  blocks: [],
+  routines: [],
+}

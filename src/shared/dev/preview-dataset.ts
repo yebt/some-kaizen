@@ -16,6 +16,7 @@ import {
   recordNegative,
 } from '@modules/habits/domain/habit-entry'
 import { type BlockTime, createBlockTime } from '@modules/block-time/domain/block-time'
+import { createRoutine, type Routine } from '@modules/habits/domain/routine'
 import {
   planInstance,
   type PlannedInstance,
@@ -34,6 +35,7 @@ export interface PreviewDataset {
   readonly entries: HabitEntry[]
   readonly instances: PlannedInstance[]
   readonly blocks: BlockTime[]
+  readonly routines: Routine[]
 }
 
 const EVERY_DAY: Weekday[] = [1, 2, 3, 4, 5, 6, 7]
@@ -68,6 +70,22 @@ export function buildPreviewDataset(now: Date = new Date()): PreviewDataset {
   const smoking = createNegativeHabit({ id: newIdentifier(), name: 'Smoking', createdOn })
 
   const habits: Habit[] = [water, meditate, run, smoking]
+
+  /*
+   * Two named parts of a day, so the demo shows the shape rather than a flat list.
+   *
+   * `Run` is left out of both on purpose. A day is never entirely arranged, and the demo
+   * would be lying about the feature if every habit happened to have a home.
+   */
+  const routines: Routine[] = [
+    createRoutine({
+      id: newIdentifier(),
+      name: 'Morning',
+      habitIds: [meditate.id, water.id],
+      createdOn,
+    }),
+    createRoutine({ id: newIdentifier(), name: 'Wind down', habitIds: [], createdOn }),
+  ]
 
   const entries: HabitEntry[] = [
     recordMeasured(newIdentifier(), water, today, 1.2),
@@ -118,5 +136,5 @@ export function buildPreviewDataset(now: Date = new Date()): PreviewDataset {
     }),
   ]
 
-  return { today, habits, entries, instances, blocks }
+  return { today, habits, entries, instances, blocks, routines }
 }

@@ -4,7 +4,12 @@ import { latestTimestamp, openDatabase, STORE } from '@shared/infrastructure/idb
 import { createIdbRepository } from '@shared/infrastructure/idb/idb-repository'
 import type { Habit } from '@modules/habits/domain/habit'
 import type { HabitEntry } from '@modules/habits/domain/habit-entry'
-import type { HabitEntryRepository, HabitRepository } from '@modules/habits/domain/habit-repository'
+import type {
+  HabitEntryRepository,
+  HabitRepository,
+  RoutineRepository,
+} from '@modules/habits/domain/habit-repository'
+import type { Routine } from '@modules/habits/domain/routine'
 import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 import type { PlannedInstanceRepository } from '@modules/planning/domain/planned-instance-repository'
 import type { BlockTime } from '@modules/block-time/domain/block-time'
@@ -22,6 +27,7 @@ export interface Persistence {
   readonly entries: HabitEntryRepository
   readonly instances: PlannedInstanceRepository
   readonly blocks: BlockTimeRepository
+  readonly routines: RoutineRepository
 }
 
 export async function createPersistence(databaseName?: string): Promise<Persistence> {
@@ -34,7 +40,13 @@ export async function createPersistence(databaseName?: string): Promise<Persiste
    * within a table: an entry corrected a second after the occurrence it belongs to was moved
    * has to read as the later of the two.
    */
-  const stores = [STORE.habits, STORE.entries, STORE.instances, STORE.blocks] as const
+  const stores = [
+    STORE.habits,
+    STORE.entries,
+    STORE.instances,
+    STORE.blocks,
+    STORE.routines,
+  ] as const
   const clock = monotonicClock(Date.now, await latestTimestamp(database, stores))
 
   return {
@@ -44,5 +56,6 @@ export async function createPersistence(databaseName?: string): Promise<Persiste
       createCollection<PlannedInstance>(database, STORE.instances, clock),
     ),
     blocks: createIdbRepository(createCollection<BlockTime>(database, STORE.blocks, clock)),
+    routines: createIdbRepository(createCollection<Routine>(database, STORE.routines, clock)),
   }
 }
