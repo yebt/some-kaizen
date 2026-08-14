@@ -77,6 +77,22 @@ function measure(day: CalendarDate) {
   }
 }
 
+/**
+ * Moves a scroller, on whatever is available.
+ *
+ * `scrollTo` is the one that can be asked to animate, and it is also the one a plain DOM
+ * implementation is allowed not to have — jsdom does not. Assigning `scrollLeft` is the
+ * primitive underneath and always exists, so it is the fallback rather than an error.
+ *
+ * This was hiding inside a `nextTick` until now, where a thrown call was swallowed as an
+ * unhandled rejection and every test still passed while the component had failed to place
+ * itself.
+ */
+function scrollRibbonTo(container: HTMLElement, left: number, behavior: ScrollBehavior) {
+  if (typeof container.scrollTo === 'function') container.scrollTo({ left, behavior })
+  else container.scrollLeft = left
+}
+
 /** Brings a day to the middle, which is where a chosen day belongs. */
 function centre(day: CalendarDate, behavior: ScrollBehavior = 'smooth') {
   const measured = measure(day)
@@ -85,10 +101,7 @@ function centre(day: CalendarDate, behavior: ScrollBehavior = 'smooth') {
 
   // `scrollTo` rather than `scrollIntoView`: the latter also scrolls every ancestor, which
   // on this screen jumps the whole page to put a date in view.
-  measured.element.scrollTo({
-    left: scrollToCentre(measured.container, measured.cell),
-    behavior,
-  })
+  scrollRibbonTo(measured.element, scrollToCentre(measured.container, measured.cell), behavior)
 }
 
 /**
@@ -149,7 +162,11 @@ const centred = ref<CalendarDate | null>(null)
 function reportVisibility() {
   const measured = measure(props.selected)
 
-  if (!measured) return
+  // A container of no width has not been laid out — or is in an environment with no layout at
+  // all. Either way the answer would be "the day is off screen", which is a statement about
+  // the measurement rather than about the day, and it put a "Back to today" on a screen where
+  // nothing had gone anywhere.
+  if (!measured || measured.container.width === 0) return
 
   emit('in-view', isShowing(measured.container, measured.cell))
 }
@@ -189,7 +206,7 @@ function step(days: number) {
 
   const cellWidth = container.scrollWidth / Math.max(cells.value.length, 1)
 
-  container.scrollBy({ left: cellWidth * days, behavior: 'smooth' })
+  scrollRibbonTo(container, container.scrollLeft + cellWidth * days, 'smooth')
 }
 </script>
 
