@@ -45,6 +45,19 @@ const cells = computed(() =>
   })),
 )
 
+/**
+ * Where the ribbon was left, remembered across mounts.
+ *
+ * Module level on purpose: it belongs to the strip as a control rather than to any one visit
+ * to the screen, and it must survive the component being destroyed and rebuilt — which is
+ * exactly what happens on every navigation away and back.
+ *
+ * Without it, arriving home rendered the ribbon at its start and then scrolled it to today a
+ * tick later, so every visit began with a visible jolt. Restoring a remembered position has
+ * nothing to animate, because it is already where it was.
+ */
+let rememberedPosition: number | null = null
+
 const ribbon = useTemplateRef<HTMLElement>('ribbon')
 
 /** The container and a cell, in one coordinate space, for the geometry helpers to compare. */
@@ -80,7 +93,19 @@ function centre(day: CalendarDate, behavior: ScrollBehavior = 'smooth') {
 
 onMounted(() => {
   void nextTick(() => {
-    centre(props.selected, 'auto')
+    const container = ribbon.value
+
+    if (!container) return
+
+    // Put it back where it was, then check the chosen day is actually there. Restoring blind
+    // would open the screen four months away from the day being worked on, which is a worse
+    // greeting than the jolt this exists to remove.
+    if (rememberedPosition !== null) container.scrollLeft = rememberedPosition
+
+    const measured = measure(props.selected)
+
+    if (!measured || !isShowing(measured.container, measured.cell)) centre(props.selected, 'auto')
+
     // Said once at the start too: a ribbon that opens already centred fires no scroll event,
     // and a caller waiting to hear would wait for ever.
     reportVisibility()
@@ -124,6 +149,7 @@ function onScroll() {
 
   if (!container) return
 
+  rememberedPosition = container.scrollLeft
   reportVisibility()
 
   const middle = container.scrollLeft + container.clientWidth / 2

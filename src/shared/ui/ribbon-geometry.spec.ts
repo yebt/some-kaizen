@@ -64,3 +64,16 @@ describe('scrolling a cell to the middle', () => {
     expect(second).toBe(first)
   })
 })
+
+describe('what a remembered position has to satisfy', () => {
+  it('is kept when the chosen day is still on screen', () => {
+    // The point of remembering: arriving back on a screen you were already looking at should
+    // not move anything.
+    expect(isShowing(container, { left: 120, width: 44 })).toBe(true)
+  })
+
+  it('is abandoned when it would open four months from the chosen day', () => {
+    // A greeting that lands somewhere unrelated is worse than the jolt it saves.
+    expect(isShowing(container, { left: 5834, width: 44 })).toBe(false)
+  })
+})
