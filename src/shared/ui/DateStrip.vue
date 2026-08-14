@@ -188,7 +188,7 @@ function step(days: number) {
         v-for="cell in cells"
         :key="cell.day"
         :data-day="cell.day"
-        class="w-11 shrink-0 snap-center"
+        class="relative w-11 shrink-0 snap-center"
       >
         <button
           type="button"
@@ -212,6 +212,15 @@ function step(days: number) {
             "
             aria-hidden="true"
           />
+          <!--
+            The cell is positioned so this stays inside it.
+
+            `sr-only` is absolutely positioned, so without a positioned ancestor it is placed
+            against the page rather than the ribbon — and a ribbon scrolled four months along
+            put an invisible one-pixel span nearly six thousand pixels from the left, which
+            made the whole document scroll sideways. It appeared the moment a day gained a
+            dot, which is why marking a habit done was what triggered it.
+          -->
           <span v-if="cell.isMarked" class="sr-only">has something planned</span>
         </button>
       </li>

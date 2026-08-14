@@ -143,10 +143,19 @@ const duties = computed(() =>
     const measured = isMeasured(duty.habit) ? duty.habit : undefined
 
     return {
-      // The day is part of the identity. Without it Monday's unplanned meditation and
-      // Tuesday's share a key, so moving between days makes the list animate a row out
-      // and an identical one in — which reads on screen as a duplicate that then vanishes.
-      key: duty.instance?.id ?? `${duty.habit.id}-${selectedDay.value}-slot-${duty.slot ?? index}`,
+      /*
+       * The identity of the occurrence, whether or not one has been written yet.
+       *
+       * Derived rather than improvised, because it has to survive the thing being recorded.
+       * Marking a habit done creates its occurrence, and a key built from `instance?.id`
+       * changed at that exact moment — so Vue removed a row and inserted another instead of
+       * updating one. That is the duplicate: the old row leaving, absolutely positioned and
+       * sliding twelve pixels right, which is also where the page's sideways scroll came
+       * from. `occurrenceFor` mints the same derived id, so the two now agree.
+       */
+      key:
+        duty.instance?.id ??
+        impliedOccurrenceId(duty.habit.id, selectedDay.value, duty.slot ?? index),
       duty,
       habit: duty.habit,
       measured,
@@ -881,111 +890,122 @@ const OUTCOME_CLASS = {
 
           Creating or deleting a habit still animates, because the key has not changed.
         -->
-        <TransitionGroup
-          :key="selectedDay"
-          tag="ul"
-          class="relative space-y-1.5"
-          :enter-active-class="swappingDay ? '' : 'transition duration-200 ease-out'"
-          :enter-from-class="
-            swappingDay ? '' : '-translate-x-3 opacity-0 motion-reduce:translate-x-0'
-          "
-          :leave-active-class="
-            swappingDay ? '' : 'absolute inset-x-0 transition duration-150 ease-in'
-          "
-          :leave-to-class="swappingDay ? '' : 'translate-x-3 opacity-0 motion-reduce:translate-x-0'"
-          :move-class="swappingDay ? '' : 'transition-transform duration-200'"
-        >
-          <li
-            v-for="row in visibleDuties"
-            :key="row.key"
-            class="relative overflow-hidden rounded-card"
-            :class="refused === row.key ? 'refuse' : ''"
-          >
-            <!-- Revealed as the row slides, so the gesture says what it will do. -->
-            <div
-              class="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-medium"
-              aria-hidden="true"
-            >
-              <span class="flex items-center gap-1.5 text-done">
-                <AppIcon name="check" :size="16" />
-                Done
-              </span>
-              <span class="text-ink-subtle">Not yet</span>
-            </div>
+        <!--
+          The clip and the positioning live on a container, not on the group.
 
-            <!--
+          A leaving row is taken out of flow and slides twelve pixels sideways; it needs
+          something positioned to be absolute against, and something to be clipped by, and
+          `TransitionGroup` does not reliably carry either of those onto the tag it renders.
+        -->
+        <div class="relative overflow-x-clip">
+          <TransitionGroup
+            :key="selectedDay"
+            tag="ul"
+            class="space-y-1.5"
+            :enter-active-class="swappingDay ? '' : 'transition duration-200 ease-out'"
+            :enter-from-class="
+              swappingDay ? '' : '-translate-x-3 opacity-0 motion-reduce:translate-x-0'
+            "
+            :leave-active-class="
+              swappingDay ? '' : 'absolute inset-x-0 transition duration-150 ease-in'
+            "
+            :leave-to-class="
+              swappingDay ? '' : 'translate-x-3 opacity-0 motion-reduce:translate-x-0'
+            "
+            :move-class="swappingDay ? '' : 'transition-transform duration-200'"
+          >
+            <li
+              v-for="row in visibleDuties"
+              :key="row.key"
+              class="relative overflow-hidden rounded-card"
+              :class="refused === row.key ? 'refuse' : ''"
+            >
+              <!-- Revealed as the row slides, so the gesture says what it will do. -->
+              <div
+                class="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-medium"
+                aria-hidden="true"
+              >
+                <span class="flex items-center gap-1.5 text-done">
+                  <AppIcon name="check" :size="16" />
+                  Done
+                </span>
+                <span class="text-ink-subtle">Not yet</span>
+              </div>
+
+              <!--
               `relative` is load bearing, not layout. A positioned element paints above a
               static one regardless of DOM order, so without this the reveal layer above
               draws on top of the row instead of behind it.
             -->
-            <div
-              class="grippable relative flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
-              :class="[
-                swipe.activeKey.value === row.key ? 'duration-0' : 'duration-200',
-                row.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',
-              ]"
-              :style="swipeStyle(row.key)"
-              @pointerdown="onRowPress(row.key, $event)"
-              @pointermove="onRowMove($event)"
-              @pointerup="onRowRelease($event)"
-              @pointercancel="onRowCancel"
-              @click="onRowClick"
-            >
-              <button
-                type="button"
-                class="flex min-w-0 flex-1 items-center gap-3 text-left"
-                :aria-label="`Open ${row.habit.name}`"
-                @click="openHabit(row.habit.id)"
+              <div
+                class="grippable relative flex touch-pan-y items-center gap-3 border border-line bg-surface p-3 shadow-card transition-transform"
+                :class="[
+                  swipe.activeKey.value === row.key ? 'duration-0' : 'duration-200',
+                  row.outcome === 'done' ? 'rounded-card border-done/40' : 'rounded-card',
+                ]"
+                :style="swipeStyle(row.key)"
+                @pointerdown="onRowPress(row.key, $event)"
+                @pointermove="onRowMove($event)"
+                @pointerup="onRowRelease($event)"
+                @pointercancel="onRowCancel"
+                @click="onRowClick"
               >
-                <span
-                  v-if="row.habit.colour"
-                  class="size-7 shrink-0 rounded-full"
-                  :style="surfaceStyle(row.habit)"
-                  aria-hidden="true"
-                />
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm font-medium text-ink">
-                    {{ row.habit.name }}
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  :aria-label="`Open ${row.habit.name}`"
+                  @click="openHabit(row.habit.id)"
+                >
+                  <span
+                    v-if="row.habit.colour"
+                    class="size-7 shrink-0 rounded-full"
+                    :style="surfaceStyle(row.habit)"
+                    aria-hidden="true"
+                  />
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-sm font-medium text-ink">
+                      {{ row.habit.name }}
+                    </span>
+                    <span class="tabular block truncate text-xs text-ink-muted">
+                      <template v-if="row.measured && row.achievement">
+                        {{ row.value }} / {{ row.measured.measure.goal }}
+                        {{ row.measured.measure.unit }} ·
+                        <span :class="ACHIEVEMENT_CLASS[row.achievement]">
+                          {{ ACHIEVEMENT_LABEL[row.achievement] }}
+                        </span>
+                      </template>
+                      <template v-else>
+                        {{ row.outcome === 'done' ? 'Done' : 'Not yet' }}
+                        <span v-if="row.time">· {{ row.time }}</span>
+                      </template>
+                    </span>
                   </span>
-                  <span class="tabular block truncate text-xs text-ink-muted">
-                    <template v-if="row.measured && row.achievement">
-                      {{ row.value }} / {{ row.measured.measure.goal }}
-                      {{ row.measured.measure.unit }} ·
-                      <span :class="ACHIEVEMENT_CLASS[row.achievement]">
-                        {{ ACHIEVEMENT_LABEL[row.achievement] }}
-                      </span>
-                    </template>
-                    <template v-else>
-                      {{ row.outcome === 'done' ? 'Done' : 'Not yet' }}
-                      <span v-if="row.time">· {{ row.time }}</span>
-                    </template>
-                  </span>
-                </span>
-              </button>
+                </button>
 
-              <button
-                v-if="row.measured"
-                type="button"
-                class="shrink-0"
-                :aria-label="`Log ${row.habit.name}`"
-                @click="startLogging(row.habit, row.duty, row.value, row.entryId)"
-              >
-                <ProgressRing :value="row.progress" :size="36" />
-              </button>
-              <button
-                v-else
-                type="button"
-                class="hit-area grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
-                :class="OUTCOME_CLASS[row.outcome ?? 'missed']"
-                :aria-label="`Mark ${row.habit.name}`"
-                :aria-pressed="row.outcome === 'done'"
-                @click="setCompleted(row.habit, row.duty, row.outcome !== 'done', row.entryId)"
-              >
-                <AppIcon name="check" :size="18" />
-              </button>
-            </div>
-          </li>
-        </TransitionGroup>
+                <button
+                  v-if="row.measured"
+                  type="button"
+                  class="shrink-0"
+                  :aria-label="`Log ${row.habit.name}`"
+                  @click="startLogging(row.habit, row.duty, row.value, row.entryId)"
+                >
+                  <ProgressRing :value="row.progress" :size="36" />
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="hit-area grid size-9 shrink-0 place-items-center rounded-full border transition-colors"
+                  :class="OUTCOME_CLASS[row.outcome ?? 'missed']"
+                  :aria-label="`Mark ${row.habit.name}`"
+                  :aria-pressed="row.outcome === 'done'"
+                  @click="setCompleted(row.habit, row.duty, row.outcome !== 'done', row.entryId)"
+                >
+                  <AppIcon name="check" :size="18" />
+                </button>
+              </div>
+            </li>
+          </TransitionGroup>
+        </div>
 
         <!--
           A divider that is also a door. The list above is the work left; this says how much

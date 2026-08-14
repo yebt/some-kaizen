@@ -122,10 +122,9 @@ const liveAgenda = computed(() =>
   dutiesFor(habits.value, instances.value, day.value).map((duty, index) => ({
     duty,
     habit: duty.habit,
-    // The day is part of the identity. Without it Monday's unplanned meditation and
-    // Tuesday's share a key, so moving between days makes the list animate a row out
-    // and an identical one in — which reads on screen as a duplicate that then vanishes.
-    key: duty.instance?.id ?? `${duty.habit.id}-${day.value}-slot-${duty.slot ?? index}`,
+    // The derived identity of this occurrence, so a key cannot change the moment one is
+    // written. See the same decision on Today.
+    key: duty.instance?.id ?? impliedOccurrenceId(duty.habit.id, day.value, duty.slot ?? index),
     span: duty.instance ? spanOf(duty.instance) : undefined,
   })),
 )

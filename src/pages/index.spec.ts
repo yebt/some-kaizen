@@ -857,3 +857,80 @@ describe('the ribbon of days', () => {
     expect(wrapper.text()).toContain('Back to today')
   })
 })
+
+describe('marking a habit done from its own button', () => {
+  async function settle() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  async function renderOne() {
+    showFinishedRows()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Example',
+          frequency: frequency('daily', 1),
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+
+    const wrapper = await renderToday()
+
+    // IndexedDB resolves through timers, so one microtask flush is not enough for the rows
+    // to exist yet.
+    await settle()
+
+    return wrapper
+  }
+
+  function rows(wrapper: Awaited<ReturnType<typeof renderToday>>) {
+    return wrapper.findAll('[aria-label^="Open Example"]')
+  }
+
+  it('keeps one row rather than replacing it with another', async () => {
+    // Recording creates the occurrence, and a key built from the occurrence's id changed at
+    // that moment — so Vue removed a row and inserted a second one. That is the duplicate.
+    const wrapper = await renderOne()
+
+    expect(rows(wrapper)).toHaveLength(1)
+
+    await wrapper
+      .find('[aria-label^="Open Example"] ~ button, button.rounded-full')
+      .trigger('click')
+    await settle()
+
+    expect(rows(wrapper)).toHaveLength(1)
+  })
+
+  it('keeps every day cell positioned, so a hidden label cannot escape the ribbon', async () => {
+    // `sr-only` is absolutely positioned. Without a positioned ancestor it lands against the
+    // page, and a ribbon scrolled four months along put a one-pixel span six thousand pixels
+    // from the left — which is what made the whole document scroll sideways the moment a day
+    // gained a dot. jsdom has no layout, so the containment is what can be checked here.
+    const wrapper = await renderOne()
+    const cells = wrapper.findAll('[data-day]')
+
+    expect(cells.length).toBeGreaterThan(0)
+    expect(cells.every((cell) => cell.classes().includes('relative'))).toBe(true)
+  })
+
+  it('clips a leaving row rather than letting the page grow sideways', async () => {
+    // A row on its way out is absolutely positioned and slides twelve pixels right. Without
+    // clipping, that animation widened the document and put a scrollbar under the whole app.
+    const wrapper = await renderOne()
+    const clipped = wrapper
+      .findAll('div')
+      .some((node) => node.classes().includes('overflow-x-clip'))
+
+    expect(clipped).toBe(true)
+  })
+})
