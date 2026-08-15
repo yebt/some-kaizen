@@ -34,9 +34,10 @@ import { tick } from '@core/haptics'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { useSwipePage } from '@shared/ui/press/use-swipe-page'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
-import { useHabits } from '@modules/habits/application/habit-queries'
+import { useHabits, useRoutines } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { type DayDuty, dutiesFor, impliedOccurrenceId } from '@modules/planning/domain/day-agenda'
+import { groupByRoutine, hasArrangement } from '@modules/planning/domain/routine-agenda'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import {
   hasReminder,
@@ -80,6 +81,7 @@ const day = computed<CalendarDate>(() => {
 const { data: habitsData, isLoading: habitsLoading } = useHabits()
 const { data: instancesData } = usePlannedInstances()
 const { data: blocksData } = useBlockTime()
+const { data: routinesData } = useRoutines()
 const saveInstance = useSaveInstance()
 const removeInstance = useRemoveInstance()
 const feedback = useFeedback()
@@ -101,6 +103,7 @@ const ZOOM_LABEL = 'Timeline detail'
 const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
 const instances = computed(() => instancesData.value ?? [])
 const blocks = computed(() => blocksData.value ?? [])
+const routines = computed(() => routinesData.value ?? [])
 
 const dayLabel = computed(() =>
   new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(
@@ -159,6 +162,46 @@ function letAgendaMove() {
 
 /** Duties with no time yet. They are what the tray is for. */
 const untimed = computed(() => onThisDay.value.filter((entry) => entry.span === undefined))
+
+/** A heading is another row that happens to be a heading, as it is on Today. */
+type TrayRow =
+  | {
+      readonly kind: 'heading'
+      readonly key: string
+      readonly title: string
+      readonly count: number
+    }
+  | { readonly kind: 'chip'; readonly key: string; readonly entry: (typeof untimed.value)[number] }
+
+/**
+ * The tray, under the routines its chips belong to.
+ *
+ * The ruler itself cannot be grouped — a card is where its hour puts it, and a heading has no
+ * hour — so the tray is where an arrangement can show on this screen at all. It earns its
+ * place here more than anywhere: filling a day means asking "what happens in the morning",
+ * and a flat bag of a dozen chips makes that a question you answer from memory.
+ *
+ * Counted by total rather than done out of total. Every chip in here is by definition without
+ * a time, so a `[0/4]` on each heading would be four zeroes saying nothing.
+ */
+const trayRows = computed<TrayRow[]>(() => {
+  const groups = groupByRoutine(untimed.value, routines.value, day.value, () => false)
+
+  // Nothing arranged means no headings, not a single heading called "everything".
+  if (!hasArrangement(groups)) {
+    return untimed.value.map((entry) => ({ kind: 'chip', key: entry.key, entry }))
+  }
+
+  return groups.flatMap<TrayRow>((group) => [
+    {
+      kind: 'heading',
+      key: `heading-${group.key}`,
+      title: group.routine?.name ?? 'Anything else',
+      count: group.total,
+    },
+    ...group.duties.map((entry) => ({ kind: 'chip' as const, key: entry.key, entry })),
+  ])
+})
 
 const timed = computed(() =>
   onThisDay.value.flatMap((entry) => {
@@ -958,27 +1001,45 @@ function trackHover(event: PointerEvent) {
             that keeps growing eats the ruler it exists to fill — which is the one thing it
             must never do, since the ruler is where the chips are going.
           -->
+          <!--
+            A heading is another item in the same wrapping row, made full width so the chips
+            after it start a line of their own. Keeping one list rather than a list of lists
+            is what lets the chips stay exactly the draggable elements they already were.
+          -->
           <ul class="flex max-h-[45vh] flex-wrap gap-2 overflow-y-auto overscroll-contain">
-            <li v-for="entry in untimed" :key="entry.key">
+            <li
+              v-for="row in trayRows"
+              :key="row.key"
+              :class="row.kind === 'heading' && 'basis-full'"
+            >
+              <div v-if="row.kind === 'heading'" class="flex items-baseline gap-2 pt-1">
+                <h3 class="text-[0.625rem] font-semibold tracking-wide text-ink-muted uppercase">
+                  {{ row.title }}
+                </h3>
+                <span class="h-px flex-1 bg-line" />
+                <span class="tabular text-[0.625rem] text-ink-subtle">{{ row.count }}</span>
+              </div>
+
               <DraggableItem
-                v-bind="pressState(entry.key)"
+                v-else
+                v-bind="pressState(row.entry.key)"
                 claim
-                @press="liftChip(entry, $event)"
+                @press="liftChip(row.entry, $event)"
                 @move="trackHover($event)"
                 @release="releaseCard($event)"
                 @cancel="abandonLift"
               >
                 <span
                   class="flex items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
-                  :style="surfaceStyle(entry.habit)"
+                  :style="surfaceStyle(row.entry.habit)"
                 >
-                  {{ entry.habit.name }}
+                  {{ row.entry.habit.name }}
                   <button
                     type="button"
                     class="hit-area -mr-1 grid size-5 place-items-center rounded-full text-current opacity-50"
-                    :aria-label="`Take ${entry.habit.name} off today`"
+                    :aria-label="`Take ${row.entry.habit.name} off today`"
                     @pointerdown.stop
-                    @click.stop="dropChip(entry.duty)"
+                    @click.stop="dropChip(row.entry.duty)"
                   >
                     <AppIcon name="ban" :size="12" />
                   </button>
@@ -1291,15 +1352,23 @@ function trackHover(event: PointerEvent) {
         {{ DEFAULT_DURATION_MINUTES }} minutes, adjustable once it is there.
       </p>
 
+      <!-- Grouped the same way the tray is: this is the same choice, made from a slot. -->
       <ul v-if="untimed.length" class="space-y-1.5">
-        <li v-for="entry in untimed" :key="entry.key">
+        <li v-for="row in trayRows" :key="row.key">
+          <p
+            v-if="row.kind === 'heading'"
+            class="pt-2 text-[0.625rem] font-semibold tracking-wide text-ink-muted uppercase"
+          >
+            {{ row.title }}
+          </p>
           <button
+            v-else
             type="button"
             class="w-full rounded-cell border border-line-strong bg-surface px-3.5 py-3 text-left text-sm font-medium text-ink"
-            :style="surfaceStyle(entry.habit)"
-            @click="fillSlot(entry.duty)"
+            :style="surfaceStyle(row.entry.habit)"
+            @click="fillSlot(row.entry.duty)"
           >
-            {{ entry.habit.name }}
+            {{ row.entry.habit.name }}
           </button>
         </li>
       </ul>

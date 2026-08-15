@@ -18,7 +18,8 @@ fourteen rows.
 - [x] Grouped rendering on Today, with a per-routine count, and no headings until a day has
       actually been arranged
 - [x] A screen to create and fill one — list, new, edit, with archive and removal
-- [ ] Grouped rendering on the day timeline
+- [x] Grouped rendering on the day timeline — in the tray and the slot dialog, which is where
+      an arrangement can show on a screen whose other axis is the clock
 - [ ] Optional anchor time, so a routine can say when it usually happens
 - [ ] **A library of routine presets to import from.** Not a store in the paid sense: a set of
       routines somebody can start from instead of facing an empty form — *20/20/20*, *the calm

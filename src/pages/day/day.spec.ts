@@ -19,6 +19,7 @@ import {
   frequency,
   measure,
 } from '@modules/habits/domain/habit'
+import { createRoutine } from '@modules/habits/domain/routine'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { planInstance, scheduleAt } from '@modules/planning/domain/planned-instance'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
@@ -285,6 +286,101 @@ describe('the tray', () => {
     expect((await openTray(await renderDay())).find('[data-drop-zone="tray"]').text()).toContain(
       'Drink water',
     )
+  })
+
+  describe('grouped by routine', () => {
+    function habitNamed(name: string) {
+      return createCompletedHabit({
+        id: newIdentifier(),
+        name,
+        frequency: frequency('daily', 1),
+        createdOn: CREATED_ON,
+      })
+    }
+
+    it('puts a heading above the chips a routine holds', async () => {
+      const stretch = habitNamed('Stretch')
+      const read = habitNamed('Read')
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [stretch, read],
+        routines: [
+          createRoutine({
+            id: newIdentifier(),
+            name: 'Morning',
+            habitIds: [stretch.id],
+            createdOn: CREATED_ON,
+          }),
+        ],
+      })
+
+      const tray = (await openTray(await renderDay())).find('[data-drop-zone="tray"]')
+
+      expect(tray.text()).toContain('Morning')
+      // Whatever no routine claimed keeps its place, under no name of its own.
+      expect(tray.text()).toContain('Anything else')
+      expect(tray.text()).toContain('Read')
+    })
+
+    it('orders the chips as the routine does, not as the habits were stored', async () => {
+      const stretch = habitNamed('Stretch')
+      const read = habitNamed('Read')
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [stretch, read],
+        routines: [
+          createRoutine({
+            id: newIdentifier(),
+            name: 'Morning',
+            // Deliberately the reverse of the alphabet the picker would have used.
+            habitIds: [stretch.id, read.id],
+            createdOn: CREATED_ON,
+          }),
+        ],
+      })
+
+      const tray = (await openTray(await renderDay())).find('[data-drop-zone="tray"]')
+      const names = tray.findAll('li').map((row) => row.text())
+
+      expect(names.findIndex((text) => text.includes('Stretch'))).toBeLessThan(
+        names.findIndex((text) => text.includes('Read')),
+      )
+    })
+
+    it('draws no headings at all until a day has actually been arranged', async () => {
+      // A single heading over everything is a heading that groups nothing.
+      await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habitNamed('Stretch')] })
+
+      const tray = (await openTray(await renderDay())).find('[data-drop-zone="tray"]')
+
+      expect(tray.text()).not.toContain('Anything else')
+      expect(tray.text()).toContain('Stretch')
+    })
+
+    it('leaves an archived routine out of the arrangement', async () => {
+      const stretch = habitNamed('Stretch')
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [stretch],
+        routines: [
+          createRoutine({
+            id: newIdentifier(),
+            name: 'Morning',
+            habitIds: [stretch.id],
+            createdOn: CREATED_ON,
+            archivedOn: calendarDate('2026-03-01'),
+          }),
+        ],
+      })
+
+      const tray = (await openTray(await renderDay())).find('[data-drop-zone="tray"]')
+
+      expect(tray.text()).not.toContain('Morning')
+      expect(tray.text()).toContain('Stretch')
+    })
   })
 })
 
