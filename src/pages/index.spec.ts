@@ -349,6 +349,27 @@ describe('a habit that was never placed on the calendar', () => {
       outcome: 'done',
     })
   })
+
+  it('creates it at the hour the habit usually happens at', async () => {
+    // The occurrence written by marking something done is a record of the same event the day
+    // was already showing at seven. Creating it blank would quietly overrule that.
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Stretch',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+      usualTime: timeOfDay(7 * 60),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label="Mark Stretch"]').trigger('click')
+    await settle()
+
+    expect((await persistence.instances.all())[0]).toMatchObject({ startsAt: 7 * 60 })
+  })
 })
 
 describe('the swipe reveal', () => {

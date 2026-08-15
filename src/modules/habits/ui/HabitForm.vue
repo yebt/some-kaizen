@@ -5,6 +5,7 @@ import type { PatternName } from '@shared/domain/appearance'
 import { calendarDate, todayIn, type Weekday } from '@shared/domain/calendar-date'
 import type { HexColour } from '@shared/domain/colour'
 import { newIdentifier } from '@shared/domain/identifier'
+import { formatTime, parseTime } from '@shared/domain/time-of-day'
 import AppearancePicker from '@shared/ui/AppearancePicker.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import SegmentedControl from '@shared/ui/SegmentedControl.vue'
@@ -136,6 +137,18 @@ const scheduleSummary = computed(() => {
  */
 const startedOn = ref<string>(props.initial?.createdOn ?? todayIn())
 
+/**
+ * The hour it usually happens at, as the empty string when there is none.
+ *
+ * An empty `<input type="time">` reads as `''`, which is exactly the shape "no usual hour"
+ * needs — so the field's own empty state is the model's, with nothing to keep in step.
+ */
+const usualTime = ref(
+  props.initial && !isNegative(props.initial) && props.initial.usualTime !== undefined
+    ? formatTime(props.initial.usualTime)
+    : '',
+)
+
 const unit = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.unit : '')
 const minimum = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.minimum : 1)
 const goal = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.goal : 2)
@@ -173,6 +186,13 @@ function build(): Habit {
 
   if (kind.value === 'negative') return createNegativeHabit(core)
 
+  // Left off entirely when unstated rather than sent as undefined, so a habit with no usual
+  // hour stores no field for one.
+  const positiveCore = {
+    ...core,
+    ...(usualTime.value ? { usualTime: parseTime(usualTime.value) } : {}),
+  }
+
   const recurrence =
     scheduleMode.value === 'days'
       ? onWeekdays(days.value)
@@ -180,13 +200,13 @@ function build(): Habit {
 
   if (kind.value === 'measured') {
     return createMeasuredHabit({
-      ...core,
+      ...positiveCore,
       frequency: recurrence,
       measure: measure(unit.value, Number(minimum.value), Number(goal.value)),
     })
   }
 
-  return createCompletedHabit({ ...core, frequency: recurrence })
+  return createCompletedHabit({ ...positiveCore, frequency: recurrence })
 }
 
 function submit() {
@@ -302,6 +322,37 @@ function submit() {
       <!-- Read back in words, because a row of seven single letters is not a sentence. -->
       <p class="mt-2 text-xs text-ink-subtle">{{ scheduleSummary }}</p>
     </fieldset>
+
+    <!--
+      Optional on purpose, and the clear button is not decoration.
+
+      A time input with no value is easy to fill and, on several browsers, impossible to empty
+      again — so without a way out, answering this once would make it unanswerable. The habit
+      keeps no hour at all until someone states one.
+    -->
+    <label v-if="isPositive" class="block text-xs font-medium text-ink-muted">
+      Usual time
+      <span class="font-normal text-ink-subtle">· optional</span>
+      <span class="mt-1.5 flex items-center gap-2">
+        <input
+          v-model="usualTime"
+          type="time"
+          aria-label="The time of day this habit usually happens"
+          class="tabular flex-1 rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm font-normal text-ink"
+        />
+        <button
+          v-if="usualTime"
+          type="button"
+          class="rounded-full border border-line-strong px-3 py-2 text-xs font-medium text-ink-muted"
+          @click="usualTime = ''"
+        >
+          Clear
+        </button>
+      </span>
+      <span class="mt-1 block text-[0.625rem] text-ink-subtle">
+        Where it lands on the day by default. Moving it on any one day changes that day only.
+      </span>
+    </label>
 
     <fieldset v-if="kind === 'measured'" class="space-y-3">
       <legend class="mb-1.5 text-xs font-medium text-ink-muted">How it is measured</legend>

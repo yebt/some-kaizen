@@ -24,9 +24,7 @@ const routineId = computed(() => {
 })
 
 const routines = computed(() => routinesData.value ?? [])
-const routine = computed(() =>
-  routines.value.find((candidate) => candidate.id === routineId.value),
-)
+const routine = computed(() => routines.value.find((candidate) => candidate.id === routineId.value))
 
 async function save(edited: Routine) {
   // Taking a habit means taking it from wherever it was, so the write is the whole set: the

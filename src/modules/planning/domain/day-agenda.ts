@@ -8,7 +8,13 @@ import {
   timesDueOn,
 } from '@modules/habits/domain/habit'
 
-import type { PlannedInstance } from './planned-instance'
+import { interval, type TimeInterval } from '@shared/domain/time-of-day'
+
+import {
+  DEFAULT_INSTANCE_DURATION_MINUTES,
+  type PlannedInstance,
+  spanOf,
+} from './planned-instance'
 
 /**
  * One thing a day owes.
@@ -101,4 +107,28 @@ export function dutiesFor(
     })
 
   return [...placed, ...implied]
+}
+
+/**
+ * Where on the ruler a duty is drawn, if anywhere.
+ *
+ * An occurrence always speaks for itself. Once one exists, its start — or its deliberate lack
+ * of one — is the answer, because dragging a card off the ruler is how you say "not at the
+ * usual time today", and re-applying the habit's hour there would spring the card straight
+ * back and make loosening it impossible.
+ *
+ * Only a duty with no occurrence at all falls back to the hour the habit usually happens at.
+ * That is the case that used to cost something: a new day starts with no occurrences, so a
+ * habit performed at seven every morning appeared with no time every morning and had to be
+ * dragged onto seven again. Now the day opens with it already there, and moving it is a
+ * correction of that day rather than a chore repeated on all of them.
+ */
+export function spanFor(duty: DayDuty): TimeInterval | undefined {
+  if (duty.instance) return spanOf(duty.instance)
+
+  const usualTime = duty.habit.usualTime
+
+  return usualTime === undefined
+    ? undefined
+    : interval(usualTime, DEFAULT_INSTANCE_DURATION_MINUTES)
 }

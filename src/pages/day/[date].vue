@@ -36,12 +36,17 @@ import { useSwipePage } from '@shared/ui/press/use-swipe-page'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
 import { useHabits, useRoutines } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
-import { type DayDuty, dutiesFor, impliedOccurrenceId } from '@modules/planning/domain/day-agenda'
+import {
+  type DayDuty,
+  dutiesFor,
+  impliedOccurrenceId,
+  spanFor,
+} from '@modules/planning/domain/day-agenda'
 import { groupByRoutine, hasArrangement } from '@modules/planning/domain/routine-agenda'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import {
   hasReminder,
-  planInstance,
+  planFor,
   type PlannedInstance,
   remindBefore,
   REMINDER_LEAD_TIMES,
@@ -128,7 +133,7 @@ const liveAgenda = computed(() =>
     // The derived identity of this occurrence, so a key cannot change the moment one is
     // written. See the same decision on Today.
     key: duty.instance?.id ?? impliedOccurrenceId(duty.habit.id, day.value, duty.slot ?? index),
-    span: duty.instance ? spanOf(duty.instance) : undefined,
+    span: spanFor(duty),
   })),
 )
 
@@ -311,7 +316,7 @@ function forgetLift() {
 
 /** Where inside its own card a press landed, so the card can be carried rather than reset. */
 function grabOffset(duty: DayDuty, event: PointerLike): number {
-  const span = duty.instance ? spanOf(duty.instance) : undefined
+  const span = spanFor(duty)
 
   if (!span) return 0
 
@@ -325,24 +330,23 @@ function grabOffset(duty: DayDuty, event: PointerLike): number {
 }
 
 /**
- * Makes sure the duty has an occurrence to hang a time on, creating one if it has none.
+ * The occurrence a duty hangs a time on, built if it has none yet.
+ *
+ * Deliberately does not save. Every caller immediately changes what it gets back — a start, a
+ * length, a reminder — and writing the blank one first made two records' worth of writes for
+ * one gesture, with a moment in between where the day showed an occurrence nobody asked for.
  *
  * The identifier is derived from the slot rather than random, so two devices scheduling the
  * same unplanned duty converge on one record instead of two.
  */
-async function occurrenceFor(duty: DayDuty): Promise<PlannedInstance> {
-  if (duty.instance) return duty.instance
-
-  const created = planInstance({
-    id: impliedOccurrenceId(duty.habit.id, day.value, duty.slot ?? 0),
-    habitId: duty.habit.id,
-    date: day.value,
-    period: duty.habit.frequency.period,
-  })
-
-  await saveInstance.mutateAsync(created)
-
-  return created
+function occurrenceOf(duty: DayDuty): PlannedInstance {
+  return (
+    duty.instance ??
+    planFor(duty.habit, {
+      id: impliedOccurrenceId(duty.habit.id, day.value, duty.slot ?? 0),
+      date: day.value,
+    })
+  )
 }
 
 const drag = useDragAndDrop<DragPayload>({
@@ -437,12 +441,12 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
   editing.value = null
 
   if (zone === TRAY_ZONE) {
-    const existing = payload.duty.instance
+    // A duty with no time at all is already "sometime today"; there is nothing to loosen.
+    // One drawn at its habit's usual hour does have a time, and taking it away is a real
+    // thing to record — "not at the usual hour today" is a statement about this day only.
+    if (!spanFor(payload.duty)) return
 
-    // A duty that was never placed is already "sometime today"; there is nothing to loosen.
-    if (!existing || !spanOf(existing)) return
-
-    await saveInstance.mutateAsync(unschedule(existing))
+    await saveInstance.mutateAsync(unschedule(occurrenceOf(payload.duty)))
     feedback.notify(`${payload.habit.name} has no fixed time now`)
 
     return
@@ -454,24 +458,33 @@ async function handleDrop(payload: DragPayload, zone: string, at: DropPoint) {
 
   if (minutes === null) return
 
-  const instance = await occurrenceFor(payload.duty)
-
-  await saveInstance.mutateAsync(scheduleAt(instance, minutes))
+  await saveInstance.mutateAsync(scheduleAt(occurrenceOf(payload.duty), minutes))
   // The drawer was open to hand this over, and it has. Reopening onto a day it no longer has
   // anything to say about is the app answering a question that was already settled.
   trayOpen.value = false
   feedback.notify(`${payload.habit.name} at ${preferences.formatClock(minutes)}`, 'success')
 }
 
-/** The occurrence being adjusted, if any. */
+/**
+ * The occurrence being adjusted, held by its identity rather than by its record.
+ *
+ * A card drawn at its habit's usual hour has no record yet, and opening a sheet on it must
+ * not create one: a curious tap would leave an occurrence behind. The identity is the same
+ * either way, so the sheet can read a duty that exists only as a plan and write it the
+ * moment something is actually changed.
+ */
 const editing = ref<Identifier | null>(null)
 
 /** Lengths worth offering. Anything finer is a drag on the ruler rather than a menu. */
 const DURATIONS: readonly number[] = [15, 30, 45, 60, 90, 120]
 
-const editingInstance = computed(() =>
-  instances.value.find((instance) => instance.id === editing.value),
-)
+const editingEntry = computed(() => timed.value.find((entry) => entry.key === editing.value))
+
+const editingInstance = computed(() => {
+  const entry = editingEntry.value
+
+  return entry ? occurrenceOf(entry.duty) : undefined
+})
 
 /**
  * A drag ends with a click when the finger lifts.
@@ -497,7 +510,9 @@ const swallowNextClick = ref(false)
 type Edge = 'start' | 'end'
 
 interface Resizing {
-  readonly instanceId: Identifier
+  /** The occurrence's identity, derived when it has no record of its own yet. */
+  readonly key: Identifier
+  readonly duty: DayDuty
   readonly edge: Edge
   /** The edge that is standing still, in minutes. Dragging one never moves the other. */
   readonly anchor: TimeOfDay
@@ -508,14 +523,16 @@ interface Resizing {
 const resizing = ref<Resizing | null>(null)
 
 /** The span to draw while a resize is in flight, before anything has been saved. */
-function preview(instanceId: Identifier | undefined): Resizing | undefined {
-  if (!instanceId || resizing.value?.instanceId !== instanceId) return undefined
-
-  return resizing.value
+function preview(key: Identifier): Resizing | undefined {
+  return resizing.value?.key === key ? resizing.value : undefined
 }
 
-function startResize(instance: PlannedInstance | undefined, edge: Edge, event: PointerEvent) {
-  if (!instance || instance.startsAt === undefined) return
+function startResize(entry: { key: Identifier; duty: DayDuty }, edge: Edge, event: PointerEvent) {
+  const span = spanFor(entry.duty)
+
+  // Nothing to stretch on a duty with no hour. Reached through the grips, which are only
+  // drawn on a card that has one, so this is a guard rather than a branch.
+  if (!span) return
 
   // Claimed here so the card underneath never begins its own press.
   event.stopPropagation()
@@ -526,14 +543,12 @@ function startResize(instance: PlannedInstance | undefined, edge: Edge, event: P
 
   target.setPointerCapture?.(event.pointerId)
   resizing.value = {
-    instanceId: instance.id,
+    key: entry.key,
+    duty: entry.duty,
     edge,
-    anchor:
-      edge === 'end'
-        ? instance.startsAt
-        : ((instance.startsAt + instance.durationMinutes) as TimeOfDay),
-    start: instance.startsAt,
-    duration: instance.durationMinutes,
+    anchor: edge === 'end' ? span.start : ((span.start + span.durationMinutes) as TimeOfDay),
+    start: span.start,
+    duration: span.durationMinutes,
   }
 }
 
@@ -571,9 +586,9 @@ async function endResize(event: PointerEvent) {
   event.stopPropagation()
   resizing.value = null
 
-  const existing = instances.value.find((instance) => instance.id === current.instanceId)
-
-  if (!existing) return
+  // A card sitting at its habit's usual hour has no record until something is changed about
+  // it, and stretching it is exactly such a change.
+  const existing = occurrenceOf(current.duty)
 
   const unchanged =
     existing.durationMinutes === current.duration && existing.startsAt === current.start
@@ -593,21 +608,21 @@ async function endResize(event: PointerEvent) {
  * Computed rather than written inline: the first version fell back with `|| entry.top`, and
  * a card starting at midnight is a top of zero, which that expression quietly replaced.
  */
-function cardTop(entry: { top: number; duty: DayDuty }): number {
-  const current = preview(entry.duty.instance?.id)
+function cardTop(entry: { top: number; key: Identifier }): number {
+  const current = preview(entry.key)
 
   return current ? current.start * pixelsPerMinute.value : entry.top
 }
 
-function cardHeight(entry: { height: number; duty: DayDuty }): number {
-  const current = preview(entry.duty.instance?.id)
+function cardHeight(entry: { height: number; key: Identifier }): number {
+  const current = preview(entry.key)
 
   return current ? Math.max(current.duration * pixelsPerMinute.value, 22) : entry.height
 }
 
 /** What the card reads while an edge is being dragged, before anything is saved. */
-function previewLabel(instanceId: Identifier | undefined): string | undefined {
-  const current = preview(instanceId)
+function previewLabel(key: Identifier): string | undefined {
+  const current = preview(key)
 
   if (!current) return undefined
 
@@ -711,13 +726,13 @@ async function fillSlot(duty: DayDuty) {
 
   if (!current) return
 
-  const instance = await occurrenceFor(duty)
-
-  await saveInstance.mutateAsync(resize(scheduleAt(instance, current.start), current.duration))
+  await saveInstance.mutateAsync(
+    resize(scheduleAt(occurrenceOf(duty), current.start), current.duration),
+  )
   feedback.notify(`${duty.habit.name} at ${preferences.formatClock(current.start)}`, 'success')
 }
 
-function openOccurrence(instanceId: Identifier | undefined, event: MouseEvent) {
+function openOccurrence(key: Identifier, event: MouseEvent) {
   if (swallowNextClick.value) {
     swallowNextClick.value = false
     event.preventDefault()
@@ -725,14 +740,12 @@ function openOccurrence(instanceId: Identifier | undefined, event: MouseEvent) {
     return
   }
 
-  if (!instanceId) return
-
   // A sheet takes over from whatever gesture opened it. The press that produced this tap
   // froze the day so it could not change under a moving finger, and the release that would
   // have thawed it never arrives once a modal is up — leaving the day showing a snapshot of
   // itself, which is the card that stays behind after its hour is taken away.
   abandonLift()
-  editing.value = instanceId
+  editing.value = key
 }
 
 async function chooseDuration(minutes: number) {
@@ -1176,7 +1189,7 @@ function trackHover(event: PointerEvent) {
               class="tabular absolute right-1 z-20 -translate-y-1/2 rounded-full bg-ink px-1.5 py-0.5 text-[0.5625rem] font-medium text-ink-inverse shadow-card"
               :style="{ top: `${entry.top}px` }"
               :aria-label="`Set the exact time of ${entry.habit.name}`"
-              @click="editing = entry.duty.instance?.id ?? null"
+              @click="editing = entry.key"
             >
               {{ entry.startLabel }}
             </button>
@@ -1290,7 +1303,7 @@ function trackHover(event: PointerEvent) {
                 :style="surfaceStyle(entry.habit)"
                 role="button"
                 :aria-label="`Adjust ${entry.habit.name}`"
-                @click="openOccurrence(entry.duty.instance?.id, $event)"
+                @click="openOccurrence(entry.key, $event)"
               >
                 <!--
                 Two contact points, stacked on the edge a right hand reaches first, with the
@@ -1306,14 +1319,14 @@ function trackHover(event: PointerEvent) {
                 dot is painted.
               -->
                 <span
-                  v-for="edge in entry.duty.instance ? (['start', 'end'] as const) : []"
+                  v-for="edge in ['start', 'end'] as const"
                   :key="edge"
                   data-resize-grip
                   :data-edge="edge"
                   class="grippable absolute right-0 z-10 flex size-7 cursor-ns-resize touch-none items-center justify-center"
                   :class="edge === 'start' ? '-top-1' : '-bottom-1'"
                   aria-hidden="true"
-                  @pointerdown="startResize(entry.duty.instance, edge, $event)"
+                  @pointerdown="startResize(entry, edge, $event)"
                   @pointermove="moveResize($event)"
                   @pointerup="endResize($event)"
                   @pointercancel="resizing = null"
@@ -1326,7 +1339,7 @@ function trackHover(event: PointerEvent) {
                   {{ entry.habit.name }}
                 </p>
                 <p class="tabular truncate text-[0.625rem] opacity-75">
-                  {{ previewLabel(entry.duty.instance?.id) ?? entry.label }}
+                  {{ previewLabel(entry.key) ?? entry.label }}
                 </p>
               </div>
             </DraggableItem>
@@ -1388,7 +1401,7 @@ function trackHover(event: PointerEvent) {
 
     <AppDialog :open="editing !== null" label="Adjust this occurrence" @dismiss="editing = null">
       <h2 class="text-base font-semibold text-ink">
-        {{ timed.find((entry) => entry.duty.instance?.id === editing)?.habit.name ?? 'Occurrence' }}
+        {{ editingEntry?.habit.name ?? 'Occurrence' }}
       </h2>
 
       <p class="mb-2 text-xs text-ink-muted">

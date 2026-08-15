@@ -8,6 +8,7 @@ import {
   weekdaySet,
 } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
+import type { TimeOfDay } from '@shared/domain/time-of-day'
 
 /**
  * Whether the habit is something to build or something to quit.
@@ -74,6 +75,19 @@ export interface CompletedHabit extends HabitCore {
   readonly polarity: 'positive'
   readonly tracking: 'completed'
   readonly frequency: Frequency
+  /**
+   * The hour it usually happens at, when there is one.
+   *
+   * A habit performed at seven every morning had to be dragged onto seven every morning,
+   * because an occurrence carried the only time anyone could state and a new day starts with
+   * no occurrence. Saying it once on the habit turns placing it into a correction rather than
+   * a chore, and each day's occurrence still owns its own time — moving a card moves that
+   * day, never every day after it.
+   *
+   * Absent rather than midnight when unstated. Midnight is a real answer to "when do you do
+   * this", so a default would be the habit claiming an hour nobody chose.
+   */
+  readonly usualTime?: TimeOfDay
 }
 
 export interface MeasuredHabit extends HabitCore {
@@ -81,6 +95,19 @@ export interface MeasuredHabit extends HabitCore {
   readonly tracking: 'measured'
   readonly frequency: Frequency
   readonly measure: Measure
+  /**
+   * The hour it usually happens at, when there is one.
+   *
+   * A habit performed at seven every morning had to be dragged onto seven every morning,
+   * because an occurrence carried the only time anyone could state and a new day starts with
+   * no occurrence. Saying it once on the habit turns placing it into a correction rather than
+   * a chore, and each day's occurrence still owns its own time — moving a card moves that
+   * day, never every day after it.
+   *
+   * Absent rather than midnight when unstated. Midnight is a real answer to "when do you do
+   * this", so a default would be the habit claiming an hour nobody chose.
+   */
+  readonly usualTime?: TimeOfDay
 }
 
 export type PositiveHabit = CompletedHabit | MeasuredHabit
@@ -234,6 +261,7 @@ export interface CompletedHabitDraft extends Appearance {
   readonly createdOn: CalendarDate
   /** Kept when editing, so re-saving a retired habit does not quietly revive it. */
   readonly archivedOn?: CalendarDate
+  readonly usualTime?: TimeOfDay
 }
 
 export interface MeasuredHabitDraft extends CompletedHabitDraft {
@@ -257,6 +285,7 @@ export function createCompletedHabit(draft: CompletedHabitDraft): CompletedHabit
     polarity: 'positive',
     tracking: 'completed',
     frequency: draft.frequency,
+    ...usualTimeOf(draft),
   }
 }
 
@@ -271,6 +300,7 @@ export function createMeasuredHabit(draft: MeasuredHabitDraft): MeasuredHabit {
     tracking: 'measured',
     frequency: draft.frequency,
     measure: draft.measure,
+    ...usualTimeOf(draft),
   }
 }
 
@@ -317,6 +347,11 @@ export function isNegative(habit: Habit): habit is NegativeHabit {
 
 export function isMeasured(habit: Habit): habit is MeasuredHabit {
   return habit.polarity === 'positive' && habit.tracking === 'measured'
+}
+
+/** Absent rather than present-and-undefined, so an unstated hour stores nothing at all. */
+function usualTimeOf(draft: { readonly usualTime?: TimeOfDay }): { usualTime?: TimeOfDay } {
+  return draft.usualTime === undefined ? {} : { usualTime: draft.usualTime }
 }
 
 /** Only the parts that were actually chosen, so an unstyled habit stores no empty fields. */

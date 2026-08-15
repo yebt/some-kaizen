@@ -239,9 +239,7 @@ describe('creating a routine', () => {
 
     await choose(wrapper, 'Stretch')
 
-    expect(
-      wrapper.find('[aria-label="Move Stretch earlier"]').attributes('disabled'),
-    ).toBeDefined()
+    expect(wrapper.find('[aria-label="Move Stretch earlier"]').attributes('disabled')).toBeDefined()
   })
 
   it('takes a habit back out, returning it to the ones on offer', async () => {

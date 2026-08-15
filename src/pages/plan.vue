@@ -24,7 +24,7 @@ import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
 import { useHabits } from '@modules/habits/application/habit-queries'
 import { needsPlacing, remainingPlacementsAcross } from '@modules/planning/domain/placement-plan'
-import { moveToDate, planInstance, spanOf } from '@modules/planning/domain/planned-instance'
+import { moveToDate, planFor, spanOf } from '@modules/planning/domain/planned-instance'
 import {
   usePlannedInstances,
   useRemoveInstance,
@@ -144,14 +144,10 @@ async function handleDrop(payload: DragPayload, zone: string) {
   const date = calendarDate(zone)
 
   if (payload.kind === 'create') {
-    await saveInstance.mutateAsync(
-      planInstance({
-        id: newIdentifier(),
-        habitId: payload.habit.id,
-        date,
-        period: payload.habit.frequency.period,
-      }),
-    )
+    // Planned through the habit, so one with a usual hour arrives on its day already at that
+    // hour. Choosing the day is this screen's whole question; choosing the hour again on the
+    // day itself, every week, is the chore the usual hour exists to remove.
+    await saveInstance.mutateAsync(planFor(payload.habit, { id: newIdentifier(), date }))
     feedback.notify(`${payload.habit.name} placed`, 'success')
 
     return
@@ -196,8 +192,8 @@ function shiftWeek(offset: number) {
     <header class="pt-2 pb-4">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Plan the week</h1>
       <p class="mt-0.5 max-w-sm text-sm text-ink-muted">
-        Some habits ask for a number of times rather than particular days. Choose which days
-        those land on by dragging them onto one.
+        Some habits ask for a number of times rather than particular days. Choose which days those
+        land on by dragging them onto one.
       </p>
     </header>
 
@@ -291,9 +287,9 @@ function shiftWeek(offset: number) {
           v-else
           class="rounded-card border border-dashed border-line p-4 text-center text-xs text-ink-muted"
         >
-          Nothing needs a day chosen. Habits that repeat daily, or that name their own weekdays,
-          are already on the days they belong to — this screen is only for the ones that ask for
-          a number of times.
+          Nothing needs a day chosen. Habits that repeat daily, or that name their own weekdays, are
+          already on the days they belong to — this screen is only for the ones that ask for a
+          number of times.
         </p>
       </section>
 

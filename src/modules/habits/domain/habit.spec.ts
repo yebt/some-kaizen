@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { calendarDate, InvalidWeekdaysError } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
+import { timeOfDay } from '@shared/domain/time-of-day'
 
 import {
   archiveHabit,
@@ -373,5 +374,57 @@ describe('how many times a day owes a habit', () => {
   it('owes nothing for a counted weekly habit, whose day is a decision to be made', () => {
     // The planner exists to settle which day it lands on; the day cannot assume it.
     expect(timesDueOn(frequency('weekly', 3), MONDAY)).toBe(0)
+  })
+})
+
+describe('the hour a habit usually happens at', () => {
+  it('is kept when one is given', () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+      usualTime: timeOfDay(7 * 60),
+    })
+
+    expect(habit.usualTime).toBe(timeOfDay(7 * 60))
+  })
+
+  it('is absent rather than zero when none is given', () => {
+    // Midnight is a real answer to "when do you do this", so a defaulted 0 would be a habit
+    // claiming an hour nobody chose — and every card on the ruler would stack at the top.
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+    })
+
+    expect('usualTime' in habit).toBe(false)
+  })
+
+  it('is kept on a measured habit too, which is no different in this respect', () => {
+    const habit = createMeasuredHabit({
+      id: newIdentifier(),
+      name: 'Drink water',
+      frequency: frequency('daily', 1),
+      measure: measure('litres', 1, 2),
+      createdOn: CREATED_ON,
+      usualTime: timeOfDay(8 * 60),
+    })
+
+    expect(habit.usualTime).toBe(timeOfDay(8 * 60))
+  })
+
+  it('survives being archived, which changes only when the habit ended', () => {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+      usualTime: timeOfDay(7 * 60),
+    })
+
+    expect(archiveHabit(habit, calendarDate('2026-03-09')).usualTime).toBe(timeOfDay(7 * 60))
   })
 })

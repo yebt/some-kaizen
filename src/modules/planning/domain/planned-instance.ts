@@ -7,7 +7,7 @@ import {
   type TimeInterval,
   type TimeOfDay,
 } from '@shared/domain/time-of-day'
-import type { Frequency, FrequencyPeriod } from '@modules/habits/domain/habit'
+import type { Frequency, FrequencyPeriod, PositiveHabit } from '@modules/habits/domain/habit'
 
 import { periodKeyFor } from './period'
 
@@ -57,6 +57,34 @@ export function planInstance(draft: PlanInstanceDraft): PlannedInstance {
     periodKey: periodKeyFor(draft.period, draft.date),
     durationMinutes: assertDuration(draft.durationMinutes ?? DEFAULT_INSTANCE_DURATION_MINUTES),
   }
+}
+
+export interface PlanForDraft {
+  readonly id: Identifier
+  readonly date: CalendarDate
+  readonly durationMinutes?: number
+}
+
+/**
+ * Plans an occurrence of a habit, at the hour that habit usually happens.
+ *
+ * The habit is passed rather than a period and a time because those two always came from it
+ * anyway, and separating them is what let a caller create an occurrence and forget to apply
+ * the usual hour — which reads, on screen, as the setting silently not working.
+ *
+ * A habit with no usual hour still gets a perfectly good occurrence. "Sometime today" has
+ * always been a valid plan here, and the tray exists for it.
+ */
+export function planFor(habit: PositiveHabit, draft: PlanForDraft): PlannedInstance {
+  const instance = planInstance({
+    id: draft.id,
+    habitId: habit.id,
+    date: draft.date,
+    period: habit.frequency.period,
+    durationMinutes: draft.durationMinutes,
+  })
+
+  return habit.usualTime === undefined ? instance : scheduleAt(instance, habit.usualTime)
 }
 
 export function isScheduled(instance: PlannedInstance): boolean {

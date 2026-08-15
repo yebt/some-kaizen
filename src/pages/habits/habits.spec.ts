@@ -199,6 +199,52 @@ describe('creating a habit', () => {
     expect(await persistence.habits.all()).toEqual([])
   })
 
+  it('stores the hour a habit usually happens at', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Meditate')
+    await wrapper
+      .find('input[aria-label="The time of day this habit usually happens"]')
+      .setValue('07:00')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const [stored] = await persistence.habits.all()
+
+    expect(stored).toMatchObject({ usualTime: 7 * 60 })
+  })
+
+  it('stores no usual hour at all when none is given', async () => {
+    // Midnight is a real answer, so a defaulted zero would be a habit claiming an hour
+    // nobody chose — and every card would stack at the top of the ruler.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Meditate')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const [stored] = await persistence.habits.all()
+
+    expect(stored).not.toHaveProperty('usualTime')
+  })
+
+  it('never asks a habit you are quitting when it usually happens', async () => {
+    // You do not schedule the thing you are trying to stop doing.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.findAll('input[type="radio"]')[2]?.setValue()
+
+    expect(
+      wrapper.find('input[aria-label="The time of day this habit usually happens"]').exists(),
+    ).toBe(false)
+  })
+
   it('refuses a blank name without storing anything', async () => {
     await replaceDataset(persistence, EMPTY_DATASET)
 

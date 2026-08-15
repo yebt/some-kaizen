@@ -384,6 +384,76 @@ describe('the tray', () => {
   })
 })
 
+describe('a habit with a usual hour', () => {
+  function meditateAtSeven() {
+    return createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+      usualTime: timeOfDay(7 * 60),
+    })
+  }
+
+  it('opens the day already on the ruler, without anything having been placed', async () => {
+    // The whole point: a habit performed at seven every morning used to arrive with no time
+    // every morning, and had to be dragged onto seven again each day.
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditateAtSeven()] })
+
+    const card = (await renderDay()).find('[data-drop-zone="timeline"] .absolute.inset-x-1')
+
+    expect(card.attributes('style')).toContain('top: 420px')
+  })
+
+  it('is not in the tray, having nowhere left to be placed', async () => {
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditateAtSeven()] })
+
+    expect((await renderDay()).find('[data-drop-zone="tray"]').exists()).toBe(false)
+  })
+
+  it('writes nothing until something about the day is actually changed', async () => {
+    // A hour the habit states is not a record of a plan. Materialising one on sight would
+    // fill the database with occurrences nobody made a decision about.
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditateAtSeven()] })
+    await renderDay()
+
+    expect(await persistence.instances.all()).toHaveLength(0)
+  })
+
+  it('lets today occurrence disagree with the usual hour', async () => {
+    const habit = meditateAtSeven()
+    const instance = scheduleAt(
+      planInstance({ id: newIdentifier(), habitId: habit.id, date: DAY, period: 'daily' }),
+      timeOfDay(9 * 60),
+    )
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [instance] })
+
+    const card = (await renderDay()).find('[data-drop-zone="timeline"] .absolute.inset-x-1')
+
+    expect(card.attributes('style')).toContain('top: 540px')
+  })
+
+  it('stays loosened once it has been taken off the ruler', async () => {
+    // An occurrence with no start is a decision — "not at the usual time today". Re-applying
+    // the habit's hour over it would make loosening a card impossible.
+    const habit = meditateAtSeven()
+    const loosened = planInstance({
+      id: newIdentifier(),
+      habitId: habit.id,
+      date: DAY,
+      period: 'daily',
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit], instances: [loosened] })
+
+    const wrapper = await renderDay()
+
+    expect(wrapper.find('[data-drop-zone="timeline"] .absolute.inset-x-1').exists()).toBe(false)
+    expect(wrapper.text()).toContain('needs an hour')
+  })
+})
+
 describe('a bad date in the url', () => {
   it('falls back to today rather than crashing the screen', async () => {
     await replaceDataset(persistence, EMPTY_DATASET)

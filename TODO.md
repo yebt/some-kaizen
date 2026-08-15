@@ -35,9 +35,11 @@ fourteen rows.
 The question this answers: today every occurrence is placed on its own day, so a habit that
 happens at 07:00 every morning has to be dropped onto 07:00 every morning.
 
-- [ ] An optional `usualTime` on a habit, used as the start whenever an occurrence is created
+- [x] An optional `usualTime` on a habit, used as the start whenever an occurrence is created
       for it — so placing it is a correction rather than a chore
-- [ ] Dragging a card on one day changes that day only; changing the usual hour is a separate,
+- [x] The day draws a duty at that hour before any occurrence exists, and writes nothing until
+      something is actually changed about it
+- [x] Dragging a card on one day changes that day only; changing the usual hour is a separate,
       explicit act on the habit itself. Editing every future day from a gesture meant for one
       of them is how a planner starts lying about the past
 

@@ -145,8 +145,8 @@ function isPressed(id: Identifier) {
       </RouterLink>
     </header>
     <p class="pb-4 text-sm text-ink-muted">
-      Parts of the day, in the order you do them. Today groups itself under their names instead
-      of running as one long list.
+      Parts of the day, in the order you do them. Today groups itself under their names instead of
+      running as one long list.
     </p>
 
     <div

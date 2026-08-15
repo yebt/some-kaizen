@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { InvalidTimeIntervalError, timeOfDay } from '@shared/domain/time-of-day'
-import { frequency } from '@modules/habits/domain/habit'
+import { createCompletedHabit, frequency } from '@modules/habits/domain/habit'
 
 import {
   countPlacedIn,
@@ -14,6 +14,7 @@ import {
   DEFAULT_INSTANCE_DURATION_MINUTES,
   isScheduled,
   moveToDate,
+  planFor,
   planInstance,
   remainingPlacements,
   resize,
@@ -245,5 +246,56 @@ describe('reminders', () => {
     expect(
       moveToDate(withReminder, calendarDate('2026-03-13'), 'weekly').reminderMinutesBefore,
     ).toBeUndefined()
+  })
+})
+
+describe('planning an occurrence for a habit', () => {
+  const DAY = calendarDate('2026-03-09')
+
+  function habitAt(usualTime?: number) {
+    return createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+      ...(usualTime === undefined ? {} : { usualTime: timeOfDay(usualTime) }),
+    })
+  }
+
+  it('starts at the hour the habit usually happens at', () => {
+    const instance = planFor(habitAt(7 * 60), { id: newIdentifier(), date: DAY })
+
+    expect(instance.startsAt).toBe(timeOfDay(7 * 60))
+  })
+
+  it('leaves it without a time when the habit never named an hour', () => {
+    // "Sometime today" is a real plan, and the planner has always allowed it.
+    const instance = planFor(habitAt(), { id: newIdentifier(), date: DAY })
+
+    expect(isScheduled(instance)).toBe(false)
+  })
+
+  it('counts against the habit own period, as any occurrence does', () => {
+    const habit = habitAt(7 * 60)
+    const instance = planFor(habit, { id: newIdentifier(), date: DAY })
+
+    expect(instance.periodKey).toBe(
+      planInstance({
+        id: newIdentifier(),
+        habitId: habit.id,
+        date: DAY,
+        period: 'daily',
+      }).periodKey,
+    )
+  })
+
+  it('takes the duration it is given, since a usual hour says nothing about length', () => {
+    const instance = planFor(habitAt(7 * 60), {
+      id: newIdentifier(),
+      date: DAY,
+      durationMinutes: 45,
+    })
+
+    expect(instance.durationMinutes).toBe(45)
   })
 })

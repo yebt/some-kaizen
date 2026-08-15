@@ -52,13 +52,14 @@ import {
 } from '@modules/habits/application/habit-queries'
 import { blocksOnDate } from '@modules/block-time/domain/block-time'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
-import { type DayDuty, dutiesFor, impliedOccurrenceId } from '@modules/planning/domain/day-agenda'
-import { groupByRoutine, hasArrangement } from '@modules/planning/domain/routine-agenda'
 import {
-  planInstance,
-  type PlannedInstance,
-  spanOf,
-} from '@modules/planning/domain/planned-instance'
+  type DayDuty,
+  dutiesFor,
+  impliedOccurrenceId,
+  spanFor,
+} from '@modules/planning/domain/day-agenda'
+import { groupByRoutine, hasArrangement } from '@modules/planning/domain/routine-agenda'
+import { planFor, type PlannedInstance } from '@modules/planning/domain/planned-instance'
 import {
   usePlannedInstances,
   useSaveInstance,
@@ -143,7 +144,7 @@ const duties = computed(() =>
       ? latestEntryForInstance(entries.value, duty.instance.id)
       : undefined
     const value = entry?.value ?? 0
-    const span = duty.instance ? spanOf(duty.instance) : undefined
+    const span = spanFor(duty)
     const measured = isMeasured(duty.habit) ? duty.habit : undefined
 
     return {
@@ -303,7 +304,7 @@ const schedule = computed(() => {
       holdKey: row.habit.id,
       name: row.habit.name,
       from: row.span?.start ?? 0,
-      to: (row.span?.start ?? 0) + (row.duty.instance?.durationMinutes ?? 0),
+      to: (row.span?.start ?? 0) + (row.span?.durationMinutes ?? 0),
       continues: false,
       style: surfaceStyle(row.habit),
     }))
@@ -384,13 +385,14 @@ const logging = ref<{
 async function occurrenceFor(duty: DayDuty): Promise<PlannedInstance> {
   if (duty.instance) return duty.instance
 
-  const created = planInstance({
+  // Planned through the habit so it lands on the hour that habit usually happens at. Marking
+  // something done writes the occurrence it is recorded against, and one created blank would
+  // quietly overrule the usual hour the day was showing.
+  const created = planFor(duty.habit, {
     // Derived from the slot rather than random: this is the same real event whichever
     // device notices it first, so two of them must not create two records for it.
     id: impliedOccurrenceId(duty.habit.id, selectedDay.value, duty.slot ?? 0),
-    habitId: duty.habit.id,
     date: selectedDay.value,
-    period: duty.habit.frequency.period,
   })
 
   await saveInstance.mutateAsync(created)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { calendarDate } from '@shared/domain/calendar-date'
+import { timeOfDay } from '@shared/domain/time-of-day'
 import { newIdentifier } from '@shared/domain/identifier'
 import {
   createCompletedHabit,
@@ -10,8 +11,12 @@ import {
   onWeekdays,
 } from '@modules/habits/domain/habit'
 
-import { dutiesFor, impliedOccurrenceId } from './day-agenda'
-import { planInstance } from './planned-instance'
+import { dutiesFor, impliedOccurrenceId, spanFor } from './day-agenda'
+import {
+  DEFAULT_INSTANCE_DURATION_MINUTES,
+  planInstance,
+  scheduleAt,
+} from './planned-instance'
 
 const CREATED_ON = calendarDate('2020-01-01')
 const TODAY = calendarDate('2026-03-11')
@@ -239,5 +244,57 @@ describe('a habit that named its own days', () => {
     const retired = { ...gym(), archivedOn: calendarDate('2026-03-01') }
 
     expect(dutiesFor([retired], [], MONDAY)).toEqual([])
+  })
+})
+
+describe('the span a duty is drawn at', () => {
+  const AT_SEVEN = createCompletedHabit({
+    id: newIdentifier(),
+    name: 'Meditate',
+    frequency: frequency('daily', 1),
+    createdOn: CREATED_ON,
+    usualTime: timeOfDay(7 * 60),
+  })
+
+  it('is the occurrence own time whenever there is an occurrence', () => {
+    const instance = scheduleAt(
+      planInstance({
+        id: newIdentifier(),
+        habitId: AT_SEVEN.id,
+        date: TODAY,
+        period: 'daily',
+      }),
+      timeOfDay(9 * 60),
+    )
+
+    // Moving today card moved today, and today is what this reads back.
+    expect(spanFor({ habit: AT_SEVEN, instance })?.start).toBe(timeOfDay(9 * 60))
+  })
+
+  it('falls back to the hour the habit usually happens at when nothing has been placed', () => {
+    expect(spanFor({ habit: AT_SEVEN, slot: 0 })?.start).toBe(timeOfDay(7 * 60))
+  })
+
+  it('lasts the default duration, which the ruler can then be used to correct', () => {
+    expect(spanFor({ habit: AT_SEVEN, slot: 0 })?.durationMinutes).toBe(
+      DEFAULT_INSTANCE_DURATION_MINUTES,
+    )
+  })
+
+  it('stays untimed once an occurrence has deliberately been given no time', () => {
+    // Dragging a card off the ruler leaves an occurrence without a start. Re-applying the
+    // usual hour there would make unscheduling impossible: the card would spring back.
+    const loosened = planInstance({
+      id: newIdentifier(),
+      habitId: AT_SEVEN.id,
+      date: TODAY,
+      period: 'daily',
+    })
+
+    expect(spanFor({ habit: AT_SEVEN, instance: loosened })).toBeUndefined()
+  })
+
+  it('is nothing at all for a habit that never named an hour', () => {
+    expect(spanFor({ habit: habitOf('daily'), slot: 0 })).toBeUndefined()
   })
 })
