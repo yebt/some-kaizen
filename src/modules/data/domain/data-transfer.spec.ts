@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { calendarDate, InvalidCalendarDateError } from '@shared/domain/calendar-date'
 import { InvalidIdentifierError, newIdentifier } from '@shared/domain/identifier'
-import { interval, InvalidTimeIntervalError, timeOfDay } from '@shared/domain/time-of-day'
+import {
+  interval,
+  InvalidTimeIntervalError,
+  InvalidTimeOfDayError,
+  timeOfDay,
+} from '@shared/domain/time-of-day'
 import {
   createCompletedHabit,
   createMeasuredHabit,
@@ -32,6 +37,7 @@ function fullDataset(): Dataset {
     frequency: frequency('daily', 1),
     measure: measure('litres', 1, 2),
     createdOn: CREATED_ON,
+    usualTime: timeOfDay(8 * 60),
   })
   const run = createCompletedHabit({
     id: newIdentifier(),
@@ -52,6 +58,7 @@ function fullDataset(): Dataset {
         name: 'Morning',
         habitIds: [water.id],
         createdOn: CREATED_ON,
+        anchorTime: timeOfDay(6 * 60 + 30),
       }),
     ],
     habits: [water, run, smoking],
@@ -150,6 +157,19 @@ describe('a full round trip', () => {
     expect(roundTrip(empty)).toEqual(empty)
   })
 
+  it('returns the hour a habit usually happens at', () => {
+    const dataset = fullDataset()
+    const restored = roundTrip(dataset)
+
+    expect(restored.habits).toEqual(dataset.habits)
+  })
+
+  it('returns the hour a routine usually starts at', () => {
+    const dataset = fullDataset()
+
+    expect(roundTrip(dataset).routines).toEqual(dataset.routines)
+  })
+
   it('keeps an archived habit archived', () => {
     const dataset = fullDataset()
     const archived: Dataset = {
@@ -207,6 +227,17 @@ describe('refusing a corrupted file', () => {
     })
 
     expect(() => parseBackup(text)).toThrow(InvalidMeasureError)
+  })
+
+  it('rejects an hour outside the clock, rather than importing a habit nothing can draw', () => {
+    const file = corrupted((dataset) => {
+      const habits = dataset.habits as Array<Record<string, unknown>>
+      const first = habits[0]
+
+      if (first) first.usualTime = 1500
+    })
+
+    expect(() => parseBackup(file)).toThrow(InvalidTimeOfDayError)
   })
 
   it('rejects an impossible date', () => {

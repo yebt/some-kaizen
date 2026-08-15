@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { calendarDate } from '@shared/domain/calendar-date'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
+import { timeOfDay } from '@shared/domain/time-of-day'
 
 import {
   archiveRoutine,
@@ -11,6 +12,7 @@ import {
   habitsAlreadyGrouped,
   InvalidRoutineNameError,
   isRoutineActiveOn,
+  restoreRoutine,
   MAX_ROUTINE_NAME_LENGTH,
   routineOf,
 } from './routine'
@@ -156,5 +158,37 @@ describe('finding and retiring', () => {
 
     expect(isRoutineActiveOn(retired, calendarDate('2026-03-10'))).toBe(true)
     expect(isRoutineActiveOn(retired, calendarDate('2026-03-11'))).toBe(false)
+  })
+})
+
+describe('the hour a routine usually starts at', () => {
+  it('is kept when one is given', () => {
+    const morning = createRoutine({
+      id: newIdentifier(),
+      name: 'Morning',
+      habitIds: [],
+      createdOn: CREATED_ON,
+      anchorTime: timeOfDay(6 * 60 + 30),
+    })
+
+    expect(morning.anchorTime).toBe(timeOfDay(6 * 60 + 30))
+  })
+
+  it('is absent rather than midnight when none is given', () => {
+    expect('anchorTime' in routine('Morning')).toBe(false)
+  })
+
+  it('survives being archived and restored', () => {
+    const morning = createRoutine({
+      id: newIdentifier(),
+      name: 'Morning',
+      habitIds: [],
+      createdOn: CREATED_ON,
+      anchorTime: timeOfDay(6 * 60),
+    })
+
+    expect(restoreRoutine(archiveRoutine(morning, calendarDate('2026-03-10'))).anchorTime).toBe(
+      timeOfDay(6 * 60),
+    )
   })
 })

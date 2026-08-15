@@ -175,6 +175,7 @@ type TrayRow =
       readonly key: string
       readonly title: string
       readonly count: number
+      readonly at?: string
     }
   | { readonly kind: 'chip'; readonly key: string; readonly entry: (typeof untimed.value)[number] }
 
@@ -203,6 +204,9 @@ const trayRows = computed<TrayRow[]>(() => {
       key: `heading-${group.key}`,
       title: group.routine?.name ?? 'Anything else',
       count: group.total,
+      ...(group.routine?.anchorTime === undefined
+        ? {}
+        : { at: preferences.formatClock(group.routine.anchorTime) }),
     },
     ...group.duties.map((entry) => ({ kind: 'chip' as const, key: entry.key, entry })),
   ])
@@ -1029,6 +1033,9 @@ function trackHover(event: PointerEvent) {
                 <h3 class="text-[0.625rem] font-semibold tracking-wide text-ink-muted uppercase">
                   {{ row.title }}
                 </h3>
+                <span v-if="row.at" class="tabular text-[0.625rem] text-ink-subtle">
+                  {{ row.at }}
+                </span>
                 <span class="h-px flex-1 bg-line" />
                 <span class="tabular text-[0.625rem] text-ink-subtle">{{ row.count }}</span>
               </div>

@@ -5,6 +5,7 @@ import type { PatternName } from '@shared/domain/appearance'
 import { todayIn } from '@shared/domain/calendar-date'
 import type { HexColour } from '@shared/domain/colour'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
+import { formatTime, parseTime } from '@shared/domain/time-of-day'
 import AppearancePicker from '@shared/ui/AppearancePicker.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
@@ -31,6 +32,16 @@ const emit = defineEmits<{ submit: [routine: Routine] }>()
 
 const name = ref(props.initial?.name ?? '')
 const chosen = ref<Identifier[]>([...(props.initial?.habitIds ?? [])])
+/**
+ * The hour it usually starts, as the empty string when there is none.
+ *
+ * An empty `<input type="time">` reads as `''`, which is the shape "no hour" already needs,
+ * so the field's own empty state is the model's with nothing to keep in step.
+ */
+const anchorTime = ref(
+  props.initial?.anchorTime === undefined ? '' : formatTime(props.initial.anchorTime),
+)
+
 const colour = ref<HexColour | undefined>(props.initial?.colour)
 const pattern = ref<PatternName | undefined>(props.initial?.pattern)
 const error = ref<string | null>(null)
@@ -96,6 +107,7 @@ function submit() {
         name: name.value,
         habitIds: chosen.value,
         createdOn: props.initial?.createdOn ?? todayIn(),
+        ...(anchorTime.value ? { anchorTime: parseTime(anchorTime.value) } : {}),
         archivedOn: props.initial?.archivedOn,
         colour: colour.value,
         pattern: pattern.value,
@@ -211,6 +223,36 @@ defineExpose({ reject })
         No habits to arrange yet. Create one first and it will appear here.
       </p>
     </fieldset>
+
+    <!--
+      An hour orders the day and labels the heading; it is not a schedule for what is inside.
+      Handing it down to every habit in the routine would stack them all on one minute of the
+      ruler, and spreading them out needs durations rather than a single time.
+    -->
+    <label class="block text-xs font-medium text-ink-muted">
+      Usually starts
+      <span class="font-normal text-ink-subtle">· optional</span>
+      <span class="mt-1.5 flex items-center gap-2">
+        <input
+          v-model="anchorTime"
+          type="time"
+          aria-label="The time of day this routine usually starts"
+          class="tabular flex-1 rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm font-normal text-ink"
+        />
+        <button
+          v-if="anchorTime"
+          type="button"
+          class="rounded-full border border-line-strong px-3 py-2 text-xs font-medium text-ink-muted"
+          @click="anchorTime = ''"
+        >
+          Clear
+        </button>
+      </span>
+      <span class="mt-1 block text-[0.625rem] text-ink-subtle">
+        Puts this part of the day in its place among the others. The habits inside keep their own
+        times.
+      </span>
+    </label>
 
     <AppearancePicker v-model:colour="colour" v-model:pattern="pattern" />
 

@@ -256,6 +256,8 @@ type ListRow =
       readonly key: string
       readonly title: string
       readonly count: string
+      /** The hour the routine says it starts, already formatted. */
+      readonly at?: string
     }
   | { readonly kind: 'duty'; readonly key: string; readonly duty: (typeof duties.value)[number] }
 
@@ -277,6 +279,9 @@ const visibleRows = computed<ListRow[]>(() => {
       key: `heading-${group.key}`,
       title: group.routine?.name ?? 'Anything else',
       count: `${group.done}/${group.total}`,
+      ...(group.routine?.anchorTime === undefined
+        ? {}
+        : { at: preferences.formatClock(group.routine.anchorTime) }),
     },
     ...group.duties.map((duty) => ({ kind: 'duty' as const, key: duty.key, duty })),
   ])
@@ -969,6 +974,9 @@ const OUTCOME_CLASS = {
                 <h3 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
                   {{ entry.title }}
                 </h3>
+                <span v-if="entry.at" class="tabular text-[0.625rem] text-ink-subtle">
+                  {{ entry.at }}
+                </span>
                 <span class="h-px flex-1 bg-line" />
                 <span class="tabular text-[0.625rem] text-ink-subtle">{{ entry.count }}</span>
               </div>

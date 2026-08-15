@@ -23,9 +23,13 @@ export interface DutyGroup<T> {
 /**
  * Arranges a day's duties under the routines that own them.
  *
- * Order comes from two places and neither is alphabetical. Routines appear in the order they
- * were created, which is the order someone built their day in; the habits inside one appear in
- * the routine's own order, because a morning is a sequence rather than a set.
+ * Order comes from three places and none of them is alphabetical. Routines that named an hour
+ * appear in clock order, so the day reads in the order it is lived; the rest follow in the
+ * order they were created, which is the order someone built their day in; and the habits inside
+ * one appear in the routine's own order, because a morning is a sequence rather than a set.
+ *
+ * A routine with no hour sorts after every routine with one, rather than at midnight. Saying
+ * nothing about when something happens is not a claim that it happens first.
  *
  * Anything with no routine is collected into a single trailing group. It goes last rather than
  * first on the grounds that a habit nobody has placed in a part of the day is, by definition,
@@ -52,7 +56,13 @@ export function groupByRoutine<T extends { readonly duty: DayDuty }>(
   const groups: Array<DutyGroup<T>> = []
   const claimed = new Set<Identifier>()
 
-  for (const routine of routines) {
+  // Sorted on a copy: the caller's array is theirs, and a stable sort is what keeps two
+  // routines sharing an hour in the order they were built.
+  const inOrder = [...routines].sort(
+    (left, right) => (left.anchorTime ?? Infinity) - (right.anchorTime ?? Infinity),
+  )
+
+  for (const routine of inOrder) {
     if (!isRoutineActiveOn(routine, date)) continue
 
     const inside: T[] = []

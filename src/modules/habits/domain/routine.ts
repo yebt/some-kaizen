@@ -1,6 +1,7 @@
 import type { Appearance } from '@shared/domain/appearance'
 import { type CalendarDate, isAfter } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
+import type { TimeOfDay } from '@shared/domain/time-of-day'
 
 /**
  * A named, ordered group of habits — Morning, Deep Work, Wind Down.
@@ -25,6 +26,19 @@ export interface Routine extends Appearance {
   /** The habits it contains, in the order they are performed. */
   readonly habitIds: readonly Identifier[]
   readonly createdOn: CalendarDate
+  /**
+   * The hour it usually starts, when there is one.
+   *
+   * Deliberately a label and an ordering rather than a schedule. It is what lets a day read
+   * in the order it is lived — Morning before Wind down, whatever order the routines were
+   * created in — and what a builder will one day count durations forward from.
+   *
+   * It is explicitly *not* handed down to the habits inside as their own hour. Five habits
+   * sharing one minute would stack five cards on the same pixel of the ruler, which is a
+   * worse answer than no answer; spreading them out needs durations, and those belong to the
+   * routine builder rather than to a single time on a routine.
+   */
+  readonly anchorTime?: TimeOfDay
   /** Archived rather than deleted, so a day already lived keeps its shape. */
   readonly archivedOn?: CalendarDate
 }
@@ -50,6 +64,7 @@ export interface RoutineDraft extends Appearance {
   readonly name: string
   readonly habitIds: readonly Identifier[]
   readonly createdOn: CalendarDate
+  readonly anchorTime?: TimeOfDay
   readonly archivedOn?: CalendarDate
 }
 
@@ -77,6 +92,9 @@ export function createRoutine(draft: RoutineDraft): Routine {
     name,
     habitIds: [...draft.habitIds],
     createdOn: draft.createdOn,
+    // Absent rather than present-and-undefined, so a routine with no hour stores no field
+    // for one — midnight is a real answer and must not be arrived at by default.
+    ...(draft.anchorTime === undefined ? {} : { anchorTime: draft.anchorTime }),
     archivedOn: draft.archivedOn,
     colour: draft.colour,
     pattern: draft.pattern,

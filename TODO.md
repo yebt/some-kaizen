@@ -20,7 +20,10 @@ fourteen rows.
 - [x] A screen to create and fill one — list, new, edit, with archive and removal
 - [x] Grouped rendering on the day timeline — in the tray and the slot dialog, which is where
       an arrangement can show on a screen whose other axis is the clock
-- [ ] Optional anchor time, so a routine can say when it usually happens
+- [x] Optional anchor time, so a routine can say when it usually happens — it orders the day
+      and labels the heading, and is deliberately *not* handed down to the habits inside, which
+      would stack them all on one minute of the ruler. Spreading them needs durations, which is
+      the routine builder's job and where this anchor becomes its start time
 - [ ] **A library of routine presets to import from.** Not a store in the paid sense: a set of
       routines somebody can start from instead of facing an empty form — *20/20/20*, *the calm
       15*, *the focused 45*, *wind down*. Importing one creates the routine **and the habits it

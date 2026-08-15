@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { calendarDate } from '@shared/domain/calendar-date'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
+import { timeOfDay } from '@shared/domain/time-of-day'
 import { createCompletedHabit, frequency } from '@modules/habits/domain/habit'
 import { archiveRoutine, createRoutine } from '@modules/habits/domain/routine'
 
@@ -143,5 +144,72 @@ describe('whether the day is arranged at all', () => {
         groupByRoutine([entry(meditate)], [routine('Morning', [meditate.id])], DAY, isDone),
       ),
     ).toBe(true)
+  })
+})
+
+describe('the order the day is read in', () => {
+  function at(name: string, habitIds: Identifier[], minutes?: number) {
+    return createRoutine({
+      id: newIdentifier(),
+      name,
+      habitIds,
+      createdOn: CREATED_ON,
+      ...(minutes === undefined ? {} : { anchorTime: timeOfDay(minutes) }),
+    })
+  }
+
+  it('puts an earlier routine first, whatever order they were created in', () => {
+    const stretch = habit('Stretch')
+    const unwind = habit('Unwind')
+    const evening = at('Wind down', [unwind.id], 21 * 60)
+    const morning = at('Morning', [stretch.id], 6 * 60)
+
+    const groups = groupByRoutine(
+      [entry(stretch), entry(unwind)],
+      [evening, morning],
+      DAY,
+      (row) => row.done,
+    )
+
+    expect(groups.map((group) => group.routine?.name)).toEqual(['Morning', 'Wind down'])
+  })
+
+  it('leaves the ones with no hour after the ones that have one', () => {
+    // An hour is a claim about where in the day something goes. Nothing is not an earlier
+    // hour, so a routine that made no claim cannot overtake one that did.
+    const stretch = habit('Stretch')
+    const focus = habit('Focus')
+    const anywhere = at('Deep work', [focus.id])
+    const morning = at('Morning', [stretch.id], 6 * 60)
+
+    const groups = groupByRoutine(
+      [entry(stretch), entry(focus)],
+      [anywhere, morning],
+      DAY,
+      (row) => row.done,
+    )
+
+    expect(groups.map((group) => group.routine?.name)).toEqual(['Morning', 'Deep work'])
+  })
+
+  it('keeps creation order between two that share an hour', () => {
+    const first = habit('First')
+    const second = habit('Second')
+    const one = at('One', [first.id], 6 * 60)
+    const two = at('Two', [second.id], 6 * 60)
+
+    const groups = groupByRoutine([entry(first), entry(second)], [one, two], DAY, (row) => row.done)
+
+    expect(groups.map((group) => group.routine?.name)).toEqual(['One', 'Two'])
+  })
+
+  it('still ends with whatever no routine claimed', () => {
+    const stretch = habit('Stretch')
+    const loose = habit('Loose')
+    const morning = at('Morning', [stretch.id], 6 * 60)
+
+    const groups = groupByRoutine([entry(loose), entry(stretch)], [morning], DAY, (row) => row.done)
+
+    expect(groups.at(-1)?.routine).toBeUndefined()
   })
 })

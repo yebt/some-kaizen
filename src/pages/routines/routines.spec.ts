@@ -9,6 +9,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { calendarDate } from '@shared/domain/calendar-date'
+import { timeOfDay } from '@shared/domain/time-of-day'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
 import { createCompletedHabit, createNegativeHabit, frequency } from '@modules/habits/domain/habit'
 import { createRoutine } from '@modules/habits/domain/routine'
@@ -81,13 +82,18 @@ function habitNamed(name: string, id: Identifier = newIdentifier()) {
   })
 }
 
-function routineOf(name: string, habitIds: Identifier[], archivedOn?: string) {
+function routineOf(
+  name: string,
+  habitIds: Identifier[],
+  options: { archivedOn?: string; anchorTime?: number } = {},
+) {
   return createRoutine({
     id: newIdentifier(),
     name,
     habitIds,
     createdOn: CREATED_ON,
-    archivedOn: archivedOn === undefined ? undefined : calendarDate(archivedOn),
+    ...(options.anchorTime === undefined ? {} : { anchorTime: timeOfDay(options.anchorTime) }),
+    archivedOn: options.archivedOn === undefined ? undefined : calendarDate(options.archivedOn),
   })
 }
 
@@ -134,7 +140,7 @@ describe('the routine list', () => {
     await replaceDataset(persistence, {
       ...EMPTY_DATASET,
       habits: [stretch],
-      routines: [routineOf('Morning', [stretch.id], '2020-06-01')],
+      routines: [routineOf('Morning', [stretch.id], { archivedOn: '2020-06-01' })],
     })
 
     expect((await render(RoutinesPage)).text()).toContain('archived')
@@ -289,5 +295,67 @@ describe('creating a routine', () => {
 
     expect(wrapper.find('[role="alert"]').text()).toContain('needs a name')
     expect(await persistence.routines.all()).toHaveLength(0)
+  })
+})
+
+describe('the hour a routine starts', () => {
+  it('is shown beside what it holds', async () => {
+    const stretch = habitNamed('Stretch')
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [stretch],
+      routines: [routineOf('Morning', [stretch.id], { anchorTime: 6 * 60 + 30 })],
+    })
+
+    expect((await render(RoutinesPage)).text()).toContain('06:30')
+  })
+
+  it('orders the list the way the day runs, not the way it was built', async () => {
+    // A list ordered differently from the thing it describes is a list you have to translate.
+    const stretch = habitNamed('Stretch')
+    const unwind = habitNamed('Unwind')
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [stretch, unwind],
+      routines: [
+        routineOf('Wind down', [unwind.id], { anchorTime: 21 * 60 }),
+        routineOf('Morning', [stretch.id], { anchorTime: 6 * 60 }),
+      ],
+    })
+
+    const names = (await render(RoutinesPage)).findAll('li').map((row) => row.text())
+
+    expect(names.findIndex((text) => text.includes('Morning'))).toBeLessThan(
+      names.findIndex((text) => text.includes('Wind down')),
+    )
+  })
+
+  it('is stored from the form when one is typed', async () => {
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habitNamed('Stretch')] })
+
+    const wrapper = await render(NewRoutinePage)
+
+    await wrapper.find('input[type="text"]').setValue('Morning')
+    await wrapper
+      .find('input[aria-label="The time of day this routine usually starts"]')
+      .setValue('06:30')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.routines.all())[0]).toMatchObject({ anchorTime: 6 * 60 + 30 })
+  })
+
+  it('stores none at all when the field is left alone', async () => {
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habitNamed('Stretch')] })
+
+    const wrapper = await render(NewRoutinePage)
+
+    await wrapper.find('input[type="text"]').setValue('Morning')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.routines.all())[0]).not.toHaveProperty('anchorTime')
   })
 })

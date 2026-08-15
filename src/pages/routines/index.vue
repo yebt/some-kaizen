@@ -10,6 +10,7 @@ import AppSpinner from '@shared/ui/AppSpinner.vue'
 import BackLink from '@shared/ui/BackLink.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { usePreferences } from '@core/preferences-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
 import { isPositive } from '@modules/habits/domain/habit'
 import {
@@ -26,6 +27,7 @@ const { data: habitsData } = useHabits()
 const saveRoutines = useSaveRoutines()
 const removeRoutine = useRemoveRoutine()
 const feedback = useFeedback()
+const preferences = usePreferences()
 
 const routines = computed(() => routinesData.value ?? [])
 const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
@@ -38,10 +40,14 @@ const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
  * three is the kind of small lie that makes someone stop believing the rest of the screen.
  */
 const rows = computed(() =>
-  routines.value.map((routine) => ({
-    routine,
-    count: routine.habitIds.filter((id) => habits.value.some((habit) => habit.id === id)).length,
-  })),
+  // Listed in the order the day runs in, which is the order the day itself shows them. A list
+  // ordered differently from the thing it describes is a list you have to translate.
+  [...routines.value]
+    .sort((left, right) => (left.anchorTime ?? Infinity) - (right.anchorTime ?? Infinity))
+    .map((routine) => ({
+      routine,
+      count: routine.habitIds.filter((id) => habits.value.some((habit) => habit.id === id)).length,
+    })),
 )
 
 /** The habits belonging to no routine, which is the number that says whether this is finished. */
@@ -197,6 +203,9 @@ function isPressed(id: Identifier) {
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-ink">{{ row.routine.name }}</p>
             <p class="text-xs text-ink-muted">
+              <span v-if="row.routine.anchorTime !== undefined" class="tabular">
+                {{ preferences.formatClock(row.routine.anchorTime) }} ·
+              </span>
               {{ row.count === 1 ? '1 habit' : `${row.count} habits` }}
               <template v-if="row.routine.archivedOn"> · archived</template>
             </p>

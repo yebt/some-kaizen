@@ -105,6 +105,7 @@ function readRoutine(raw: unknown): Routine {
     name: asString(value.name, 'A routine needs a name.'),
     habitIds: value.habitIds.map((habitId) => readId(habitId, 'routine')),
     createdOn: readDate(value.createdOn, 'routine'),
+    ...readOptionalTime(value.anchorTime, 'anchorTime'),
     archivedOn: value.archivedOn === undefined ? undefined : readDate(value.archivedOn, 'routine'),
     ...readAppearance(value),
   })
@@ -118,9 +119,28 @@ function readHabit(raw: unknown): Habit {
   const archivedOn =
     value.archivedOn === undefined ? undefined : readDate(value.archivedOn, 'habit')
 
-  const built = buildHabit(value, { id, name, createdOn, ...readAppearance(value) })
+  const built = buildHabit(value, {
+    id,
+    name,
+    createdOn,
+    ...readAppearance(value),
+    ...readOptionalTime(value.usualTime, 'usualTime'),
+  })
 
   return archivedOn ? { ...built, archivedOn } : built
+}
+
+/**
+ * An optional time of day, under the key it was read from.
+ *
+ * Returns the whole field rather than the value so an absent one contributes nothing at all,
+ * which is what keeps "no usual hour" from arriving back as midnight. Validated through the
+ * domain's own constructor, so a hand edited file cannot import an hour of 1500.
+ */
+function readOptionalTime<K extends string>(raw: unknown, key: K): Partial<Record<K, TimeOfDay>> {
+  if (raw === undefined) return {}
+
+  return { [key]: timeOfDay(asNumber(raw, key)) } as Record<K, TimeOfDay>
 }
 
 /** Colour and pattern are optional, and each is validated only when it is actually present. */
@@ -137,7 +157,12 @@ function readAppearance(value: Record<string, unknown>): Appearance {
 
 function buildHabit(
   value: Record<string, unknown>,
-  core: { id: Identifier; name: string; createdOn: CalendarDate } & Appearance,
+  core: {
+    id: Identifier
+    name: string
+    createdOn: CalendarDate
+    usualTime?: TimeOfDay
+  } & Appearance,
 ): Habit {
   if (value.polarity === 'negative') return createNegativeHabit(core)
 

@@ -10,11 +10,7 @@ import {
 
 import { interval, type TimeInterval } from '@shared/domain/time-of-day'
 
-import {
-  DEFAULT_INSTANCE_DURATION_MINUTES,
-  type PlannedInstance,
-  spanOf,
-} from './planned-instance'
+import { DEFAULT_INSTANCE_DURATION_MINUTES, type PlannedInstance, spanOf } from './planned-instance'
 
 /**
  * One thing a day owes.

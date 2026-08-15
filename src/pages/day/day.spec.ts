@@ -359,6 +359,29 @@ describe('the tray', () => {
       expect(tray.text()).toContain('Stretch')
     })
 
+    it('shows the hour the routine says it starts', async () => {
+      const stretch = habitNamed('Stretch')
+      const read = habitNamed('Read')
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [stretch, read],
+        routines: [
+          createRoutine({
+            id: newIdentifier(),
+            name: 'Morning',
+            habitIds: [stretch.id],
+            createdOn: CREATED_ON,
+            anchorTime: timeOfDay(6 * 60 + 30),
+          }),
+        ],
+      })
+
+      const tray = (await openTray(await renderDay())).find('[data-drop-zone="tray"]')
+
+      expect(tray.text()).toContain('06:30')
+    })
+
     it('leaves an archived routine out of the arrangement', async () => {
       const stretch = habitNamed('Stretch')
 

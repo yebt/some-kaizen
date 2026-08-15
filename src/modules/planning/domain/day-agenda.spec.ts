@@ -12,11 +12,7 @@ import {
 } from '@modules/habits/domain/habit'
 
 import { dutiesFor, impliedOccurrenceId, spanFor } from './day-agenda'
-import {
-  DEFAULT_INSTANCE_DURATION_MINUTES,
-  planInstance,
-  scheduleAt,
-} from './planned-instance'
+import { DEFAULT_INSTANCE_DURATION_MINUTES, planInstance, scheduleAt } from './planned-instance'
 
 const CREATED_ON = calendarDate('2020-01-01')
 const TODAY = calendarDate('2026-03-11')
