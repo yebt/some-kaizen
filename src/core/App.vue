@@ -34,8 +34,15 @@ const isImmersive = computed(
       Hiding the tab bar took the clearance with it, and a form's Save sat exactly where the
       phone draws its own buttons. The inset is what the device says it needs; the extra is
       for the floating bar, when there is one.
+
+      The extra arrives as `--space-below` rather than as a `pb-*` class. Both would write
+      `padding-bottom` and one would be dropped — which is what happened: `pb-28` never
+      applied, and the floating bar covered the last control of every list in the app.
     -->
-    <main class="safe-bottom mx-auto w-full max-w-md px-4" :class="isImmersive ? 'pb-8' : 'pb-28'">
+    <main
+      class="safe-bottom mx-auto w-full max-w-md px-4"
+      :class="isImmersive ? '[--space-below:2rem]' : '[--space-below:7rem]'"
+    >
       <RouterView />
     </main>
 

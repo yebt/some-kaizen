@@ -295,8 +295,17 @@
   padding-top: max(env(safe-area-inset-top), 0.5rem);
 }
 
+/*
+ * The device's own bottom inset, plus whatever else that screen needs cleared.
+ *
+ * The extra is a variable rather than a second class because both would write
+ * `padding-bottom`, and one of them is then silently discarded — which is not hypothetical.
+ * `safe-bottom pb-28` on the app shell resolved to the inset alone, so the floating tab bar
+ * sat on top of the last control of every list in the app, permanently, however far you
+ * scrolled. Written this way the two cannot fight: the extra is added, not layered.
+ */
 @utility safe-bottom {
-  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 0.5rem) + var(--space-below, 0px));
 }
 
 /* Numbers in a calendar grid must not jitter as the digits change. */
