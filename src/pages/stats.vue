@@ -1,26 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
-import { addDays, todayIn } from '@shared/domain/calendar-date'
+import { type CalendarDate, isBefore, todayIn } from '@shared/domain/calendar-date'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import BackLink from '@shared/ui/BackLink.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import SegmentedControl from '@shared/ui/SegmentedControl.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import { type Habit, isNegative, isPositive } from '@modules/habits/domain/habit'
 import { currentEntries } from '@modules/habits/domain/habit-entry'
 import { useHabitEntries, useHabits } from '@modules/habits/application/habit-queries'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import { negativeStatistics, positiveStatistics } from '@modules/stats/domain/habit-statistics'
-
-/** Roughly six months, matching the per-habit view so the two figures agree. */
-const WINDOW_DAYS = 182
+import {
+  DEFAULT_STAT_WINDOW,
+  STAT_WINDOWS,
+  type StatWindowKey,
+  statWindow,
+  windowStartFrom,
+} from '@modules/stats/domain/stat-window'
+import { MINIMUM_ANSWERED_DAYS, weekdayBreakdown } from '@modules/stats/domain/weekday-breakdown'
 
 const { data: habitsData, isLoading } = useHabits()
 const { data: entriesData } = useHabitEntries()
 const { data: blocksData } = useBlockTime()
 
 const today = todayIn()
-const windowStart = addDays(today, -WINDOW_DAYS)
 
 const habits = computed(() => habitsData.value ?? [])
 const entries = computed(() => entriesData.value ?? [])
@@ -28,10 +33,38 @@ const blocks = computed(() => blocksData.value ?? [])
 
 const live = computed(() => habits.value.filter((habit) => habit.archivedOn === undefined))
 
+/**
+ * The window every figure below is measured over.
+ *
+ * Not remembered between visits on purpose. It is a question you ask of the data — "how has
+ * the last week gone" — rather than a preference about the app, and a screen that silently
+ * reopens on a window you chose a month ago is a screen whose numbers you misread.
+ */
+const window = ref<StatWindowKey>(DEFAULT_STAT_WINDOW)
+
+const segments = computed(() =>
+  STAT_WINDOWS.map((option) => ({ value: option.key, label: option.label })),
+)
+
+/**
+ * Where the history actually begins.
+ *
+ * Every window is clamped to this, so a thirty day window on an app used for six is measured
+ * over six rather than over twenty-four days nobody could have answered.
+ */
+const earliest = computed<CalendarDate>(() =>
+  habits.value.reduce<CalendarDate>(
+    (oldest, habit) => (isBefore(habit.createdOn, oldest) ? habit.createdOn : oldest),
+    today,
+  ),
+)
+
+const from = computed(() => windowStartFrom(statWindow(window.value), today, earliest.value))
+
 /** Streak and completion for one habit, in whichever terms suit its kind. */
 function summarise(habit: Habit) {
   if (isPositive(habit)) {
-    const stats = positiveStatistics(habit, entries.value, windowStart, today, today)
+    const stats = positiveStatistics(habit, entries.value, from.value, today, today)
 
     return {
       streak: stats.currentStreak,
@@ -65,7 +98,12 @@ const rows = computed(() =>
  * than effort.
  */
 const daysRecorded = computed(
-  () => new Set(currentEntries(entries.value).map((entry) => entry.date)).size,
+  () =>
+    new Set(
+      currentEntries(entries.value)
+        .filter((entry) => !isBefore(entry.date, from.value))
+        .map((entry) => entry.date),
+    ).size,
 )
 
 const bestRun = computed(() => rows.value.reduce((best, row) => Math.max(best, row.best), 0))
@@ -83,35 +121,111 @@ const committedHours = computed(() =>
 const headline = computed(() => [
   { label: 'habits tracked', value: String(live.value.length) },
   { label: 'days recorded', value: String(daysRecorded.value) },
-  { label: 'best run ever', value: String(bestRun.value) },
+  { label: 'best run', value: String(bestRun.value) },
   { label: 'hours a week booked', value: String(committedHours.value) },
 ])
+
+const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
+
+function weekdayName(weekday: number): string {
+  return WEEKDAY_NAMES[weekday - 1] ?? '?'
+}
+
+/**
+ * How the whole week goes, across everything being tracked.
+ *
+ * The most actionable number here and the one a streak cannot give you. A streak says how
+ * long you have kept something up; it does not say what to change. "Worst day: Tuesday, 41%"
+ * does — you go and look at your Tuesdays.
+ */
+const week = computed(() => {
+  const perDay = new Map<number, { answered: number; kept: number }>()
+
+  for (const habit of live.value) {
+    for (const day of weekdayBreakdown(habit, entries.value, from.value, today).days) {
+      const tally = perDay.get(day.weekday) ?? { answered: 0, kept: 0 }
+
+      perDay.set(day.weekday, {
+        answered: tally.answered + day.answered,
+        kept: tally.kept + day.kept,
+      })
+    }
+  }
+
+  return [1, 2, 3, 4, 5, 6, 7].map((weekday) => {
+    const tally = perDay.get(weekday) ?? { answered: 0, kept: 0 }
+
+    return {
+      weekday,
+      name: weekdayName(weekday),
+      answered: tally.answered,
+      rate: tally.answered === 0 ? undefined : tally.kept / tally.answered,
+    }
+  })
+})
+
+/**
+ * The weekdays answered often enough to say anything about.
+ *
+ * The same threshold the per-habit breakdown uses, applied again here because this figure is
+ * an aggregate across habits and the threshold does not survive the addition: a Monday
+ * answered once and a Tuesday answered once add up to two answered weekdays, and calling one
+ * of them your best day is reading a pattern off two data points.
+ */
+const readableWeekdays = computed(() =>
+  week.value.filter((day) => day.answered >= MINIMUM_ANSWERED_DAYS),
+)
+
+/**
+ * The two ends of the week, when there are two ends to name.
+ *
+ * Absent on a flat week, where best and worst would be the same number wearing two labels,
+ * and absent when only one weekday is readable — the sort then puts the same day at both
+ * ends, which the equality check below catches.
+ */
+const extremes = computed(() => {
+  const sorted = [...readableWeekdays.value].sort(
+    (left, right) => (right.rate ?? 0) - (left.rate ?? 0),
+  )
+  const best = sorted[0]
+  const worst = sorted.at(-1)
+
+  if (!best || !worst || best.rate === worst.rate) return undefined
+
+  return { best, worst }
+})
+
+function percent(rate: number | undefined): string {
+  return rate === undefined ? '—' : `${Math.round(rate * 100)}%`
+}
 </script>
 
 <template>
   <div class="safe-top">
     <BackLink to="/habits" label="Habits" />
-    <header class="pt-2 pb-4">
+    <header class="pt-2 pb-3">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Statistics</h1>
-      <p class="text-sm text-ink-muted">The last six months across everything you track</p>
+      <p class="text-sm text-ink-muted">Everything you track, over a window you choose</p>
     </header>
+
+    <SegmentedControl v-model="window" :segments="segments" label="How far back to measure" />
 
     <div
       v-if="isLoading && habitsData === undefined"
-      class="flex justify-center py-12 text-ink-subtle"
+      class="mt-5 flex justify-center py-12 text-ink-subtle"
     >
       <AppSpinner :size="24" label="Loading statistics" />
     </div>
 
     <p
       v-else-if="!live.length"
-      class="rounded-card border border-dashed border-line p-8 text-center text-sm text-ink-muted"
+      class="mt-5 rounded-card border border-dashed border-line p-8 text-center text-sm text-ink-muted"
     >
       Nothing to measure yet. Create a habit and this fills in as you record days.
     </p>
 
     <template v-else>
-      <section class="grid grid-cols-2 gap-2" aria-label="Overall">
+      <section class="mt-4 grid grid-cols-2 gap-2" aria-label="Overall">
         <div
           v-for="figure in headline"
           :key="figure.label"
@@ -119,6 +233,58 @@ const headline = computed(() => [
         >
           <p class="tabular text-2xl leading-none font-semibold text-ink">{{ figure.value }}</p>
           <p class="mt-1 text-xs text-ink-muted">{{ figure.label }}</p>
+        </div>
+      </section>
+
+      <section class="mt-5" aria-labelledby="weekday-heading">
+        <h2
+          id="weekday-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        >
+          Across the week
+        </h2>
+
+        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+          <!--
+            A bar per weekday rather than a sentence alone. The sentence tells you the answer;
+            the bars let you disagree with it, which is what stops a single figure from being
+            taken on faith.
+          -->
+          <ul class="flex items-end gap-1.5" aria-label="Rate by day of the week">
+            <li
+              v-for="day in week"
+              :key="day.weekday"
+              class="flex flex-1 flex-col items-center gap-1"
+            >
+              <span class="tabular text-[0.5625rem] text-ink-subtle">{{ percent(day.rate) }}</span>
+              <span
+                class="flex h-16 w-full items-end rounded-cell bg-surface-sunken"
+                role="img"
+                :aria-label="`${day.name}: ${
+                  day.answered === 0
+                    ? 'nothing answered'
+                    : `${percent(day.rate)} of ${day.answered} days`
+                }`"
+              >
+                <span
+                  class="w-full rounded-cell bg-done transition-[height] duration-300"
+                  :style="{ height: `${Math.max((day.rate ?? 0) * 100, day.answered ? 4 : 0)}%` }"
+                />
+              </span>
+              <span class="text-[0.625rem] text-ink-muted">{{ day.name }}</span>
+            </li>
+          </ul>
+
+          <p v-if="extremes" class="mt-3 text-xs text-ink">
+            Best day
+            <span class="font-medium">{{ extremes.best.name }}</span>
+            ({{ percent(extremes.best.rate) }}), worst
+            <span class="font-medium">{{ extremes.worst.name }}</span>
+            ({{ percent(extremes.worst.rate) }}).
+          </p>
+          <p v-else class="mt-3 text-xs text-ink-muted">
+            Not enough answered days yet to call one day better than another.
+          </p>
         </div>
       </section>
 
@@ -161,8 +327,8 @@ const headline = computed(() => [
       </section>
 
       <p class="mt-4 text-xs text-ink-subtle">
-        Days recorded counts days you answered, not answers written, so correcting the same day
-        twice does not flatter the total.
+        Rates are measured over days you answered, not over every day in the window, so time away
+        from the app is not counted against you. Days recorded counts days, not answers written.
       </p>
     </template>
   </div>

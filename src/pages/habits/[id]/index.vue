@@ -2,17 +2,20 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { addDays, todayIn } from '@shared/domain/calendar-date'
+import { addDays, type CalendarDate, toDate, todayIn } from '@shared/domain/calendar-date'
 import BackLink from '@shared/ui/BackLink.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
+import { usePreferences } from '@core/preferences-store'
 import { isMeasured, isNegative, isPositive } from '@modules/habits/domain/habit'
+import { currentEntries } from '@modules/habits/domain/habit-entry'
 import { useHabitEntries, useHabits } from '@modules/habits/application/habit-queries'
 import {
   dailyMarks,
   negativeStatistics,
   positiveStatistics,
 } from '@modules/stats/domain/habit-statistics'
+import { weekdayBreakdown } from '@modules/stats/domain/weekday-breakdown'
 import { describeFrequency } from '@modules/habits/ui/frequency-label'
 import HabitHeatmap from '@modules/stats/ui/HabitHeatmap.vue'
 
@@ -20,6 +23,7 @@ import HabitHeatmap from '@modules/stats/ui/HabitHeatmap.vue'
 const WINDOW_DAYS = 182
 
 const route = useRoute()
+const preferences = usePreferences()
 const { data: habitsData, isLoading } = useHabits()
 const { data: entriesData } = useHabitEntries()
 
@@ -117,6 +121,71 @@ const lastRelapse = computed(() => {
 
   return negativeStatistics(current, entries.value, today).lastRelapse
 })
+
+/**
+ * The plain facts about the habit, in one place.
+ *
+ * The figures above are performance; this is identity. Someone opening a habit after a month
+ * away needs to be told what they signed up for before any percentage means anything — and
+ * "since 3 March" is the number that turns a completion rate into a judgement you can make.
+ */
+const summary = computed(() => {
+  const current = habit.value
+
+  if (!current) return []
+
+  const answered = new Set(
+    currentEntries(entries.value)
+      .filter((entry) => entry.habitId === current.id)
+      .map((entry) => entry.date),
+  ).size
+
+  return [
+    { label: 'Schedule', value: description.value },
+    { label: 'Tracking since', value: longDate(current.createdOn) },
+    { label: 'Days answered', value: String(answered) },
+    ...(current.archivedOn ? [{ label: 'Archived', value: longDate(current.archivedOn) }] : []),
+    ...(isPositive(current) && current.usualTime !== undefined
+      ? [{ label: 'Usual time', value: preferences.formatClock(current.usualTime) }]
+      : []),
+    ...(isPositive(current) && current.usualDurationMinutes !== undefined
+      ? [{ label: 'Usual length', value: `${current.usualDurationMinutes} min` }]
+      : []),
+  ]
+})
+
+function longDate(date: CalendarDate): string {
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(toDate(date))
+}
+
+const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
+
+/**
+ * How this one habit goes across the week.
+ *
+ * The screen already shows *when* it went well, day by day, in the heatmap. This says
+ * *which days* go well, which is the version you can act on: a heatmap of six months is a
+ * pattern you have to spot, and this is the same pattern already spotted.
+ */
+const week = computed(() => {
+  const current = habit.value
+
+  if (!current) return undefined
+
+  return weekdayBreakdown(current, entries.value, windowStart, today)
+})
+
+function percent(rate: number | undefined): string {
+  return rate === undefined ? '—' : `${Math.round(rate * 100)}%`
+}
+
+function weekdayName(weekday: number): string {
+  return WEEKDAY_NAMES[weekday - 1] ?? '?'
+}
 </script>
 
 <template>
@@ -164,6 +233,79 @@ const lastRelapse = computed(() => {
         >
           <p class="tabular text-2xl leading-none font-semibold text-ink">{{ figure.value }}</p>
           <p class="mt-1 text-xs text-ink-muted">{{ figure.label }}</p>
+        </div>
+      </section>
+
+      <section class="mt-5" aria-labelledby="summary-heading">
+        <h2
+          id="summary-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        >
+          What this is
+        </h2>
+
+        <dl class="rounded-card border border-line bg-surface px-4 shadow-card">
+          <div
+            v-for="row in summary"
+            :key="row.label"
+            class="flex items-baseline justify-between gap-3 border-b border-line py-3 last:border-b-0"
+          >
+            <dt class="shrink-0 text-xs text-ink-muted">{{ row.label }}</dt>
+            <dd class="min-w-0 truncate text-right text-xs font-medium text-ink">
+              {{ row.value }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="mt-5" aria-labelledby="weekday-heading">
+        <h2
+          id="weekday-heading"
+          class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+        >
+          Across the week
+        </h2>
+
+        <div class="rounded-card border border-line bg-surface p-4 shadow-card">
+          <ul class="flex items-end gap-1.5" aria-label="Rate by day of the week">
+            <li
+              v-for="day in week?.days ?? []"
+              :key="day.weekday"
+              class="flex flex-1 flex-col items-center gap-1"
+            >
+              <span class="tabular text-[0.5625rem] text-ink-subtle">{{ percent(day.rate) }}</span>
+              <span
+                class="flex h-16 w-full items-end rounded-cell bg-surface-sunken"
+                role="img"
+                :aria-label="`${weekdayName(day.weekday)}: ${
+                  day.answered === 0
+                    ? 'nothing answered'
+                    : `${percent(day.rate)} of ${day.answered} days`
+                }`"
+              >
+                <span
+                  class="w-full rounded-cell bg-done transition-[height] duration-300"
+                  :style="{ height: `${Math.max((day.rate ?? 0) * 100, day.answered ? 4 : 0)}%` }"
+                />
+              </span>
+              <span class="text-[0.625rem] text-ink-muted">{{ weekdayName(day.weekday) }}</span>
+            </li>
+          </ul>
+
+          <!--
+            Said only when there is something to say. A best and a worst off two answers is
+            arithmetic wearing the clothes of a finding, and the domain already refuses it.
+          -->
+          <p v-if="week?.best && week?.worst" class="mt-3 text-xs text-ink">
+            Best day
+            <span class="font-medium">{{ weekdayName(week.best.weekday) }}</span>
+            ({{ percent(week.best.rate) }}), worst
+            <span class="font-medium">{{ weekdayName(week.worst.weekday) }}</span>
+            ({{ percent(week.worst.rate) }}).
+          </p>
+          <p v-else class="mt-3 text-xs text-ink-muted">
+            Not enough answered days yet to call one day better than another.
+          </p>
         </div>
       </section>
 

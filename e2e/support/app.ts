@@ -29,10 +29,24 @@ export async function open(page: Page, path = '/'): Promise<void> {
 export interface HabitDraft {
   /** How long it usually takes, in minutes, when the test needs the builder to know. */
   readonly usualDurationMinutes?: number
+  /**
+   * Track an amount rather than done-or-not.
+   *
+   * Worth having in a helper because a measured habit is the only kind a test can *record* a
+   * day for without a pointer gesture: it opens a dialog with a number in it, while a
+   * "did it" habit is completed by swiping its row.
+   */
+  readonly measuredIn?: string
 }
 
 export async function createHabit(page: Page, name: string, draft: HabitDraft = {}): Promise<void> {
   await open(page, '/habits/new')
+
+  if (draft.measuredIn !== undefined) {
+    await page.getByText('Measured', { exact: true }).click()
+    await page.getByLabel('Unit').fill(draft.measuredIn)
+  }
+
   await page.locator('#habit-name').fill(name)
 
   if (draft.usualDurationMinutes !== undefined) {
@@ -43,6 +57,28 @@ export async function createHabit(page: Page, name: string, draft: HabitDraft = 
 
   await page.getByRole('button', { name: 'Create' }).click()
   await expect(page).not.toHaveURL(/\/habits\/new$/)
+}
+
+/**
+ * Records an amount for a measured habit on today, which is a real answered day.
+ *
+ * Waits for the sheet to close before returning, and that wait is the whole point of it being
+ * a helper. Saving writes to IndexedDB and then refetches; a test that navigated away on the
+ * click alone would sometimes leave before the write landed, and would then fail on a later
+ * assertion about data it had every reason to expect. It passed alone and failed in a full
+ * run, which is the shape that costs an afternoon.
+ */
+export async function recordAmount(page: Page, name: string, amount: number): Promise<void> {
+  await open(page, '/')
+  await page.getByRole('button', { name: `Log ${name}` }).click()
+  await page.getByLabel(/^Amount in /).fill(String(amount))
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await expect(page.getByRole('dialog', { name: 'Record an amount' })).toBeHidden()
+  // The row reads back the amount only once the refetch has landed, so this is the write
+  // being visible rather than merely requested.
+  await expect(page.getByRole('button', { name: `Log ${name}` })).toBeVisible()
+  await expect(page.getByText(String(amount), { exact: false }).first()).toBeVisible()
 }
 
 export interface RoutineDraft {
