@@ -115,18 +115,38 @@ There is one now, and it fails on exactly the reported bug when the fix is undon
 - [ ] Revisit if the next round of gesture defects is recognition rather than geometry —
       multi-touch, momentum, or nested scrollers would each be a real argument for a library
 
-### A "did it" habit can only be completed by swiping
+### Actions that were reachable only by gesture
 
-Found while writing browser tests, and worth fixing on its own account rather than for the
-tests. A measured habit has a dialog, so it can be recorded with a tap; a "did it" habit is
-completed **only** by swiping its row. There is no button, so the most common action in the
-app is unreachable by keyboard, by a screen reader, and by anyone whose hands do not do
-swipes reliably.
+- [x] **Giving a habit an hour.** Dragging a chip out of the drawer was the only way to place
+      one on the ruler, which made the single thing the day screen exists for unavailable to a
+      keyboard, to a screen reader, and to plenty of hands. Each chip now carries a control
+      that opens the same sheet a placed card opens — the sheet could always write an hour
+      through its Starts field, it simply could not be opened for a duty that had none yet.
+      Dragging stays; it is the fast path and it is good, it just is not the only one
+- [x] Recorded here earlier as "a did-it habit can only be completed by swiping". **That was
+      wrong.** The row has always carried a `Mark <habit>` button with `aria-pressed`, and it
+      works by keyboard. The claim came from grepping for the wrong strings rather than from
+      driving the screen, which is exactly the mistake a browser test exists to prevent — and
+      one now covers it
 
-- [ ] An ordinary control on the row that records the day. The swipe stays — it is the fast
-      path and it is good — but it must not be the only path
-- [ ] It also unblocks the tests: recording a day end to end currently requires a measured
-      habit, because that is the only kind a test can answer without a pointer gesture
+### Found by whole-journey tests over rich data — all fixed
+
+Three defects that every single-feature test passed straight through, because none of them
+belonged to a feature. They are recorded here because the *shape* of each is worth
+recognising again.
+
+- [x] **Archiving a routine did nothing at all.** `archiveRoutine` spreads a record read from
+      the query cache, so `habitIds` stayed a Vue proxy, and IndexedDB refuses to clone a
+      proxy: `DataCloneError`, write lost, no message. Invisible to the unit suite because
+      `fake-indexeddb` clones permissively and accepts what a browser rejects. Fixed at the
+      boundary rather than in the six callers who each had to remember and did not: the
+      storage adapter now snapshots every record to plain data on the way in
+- [x] **The floating tab bar covered the last control of every list.** `safe-bottom pb-28` on
+      the app shell — both write `padding-bottom`, so one was silently dropped and the
+      clearance never applied. However far you scrolled, the last button sat under the bar.
+      Fixed by making the extra additive (`--space-below`) so the two cannot fight again
+- [x] A `step` beside a `min` on the occurrence sheet's minute field, the same browser
+      validity trap already fixed on the habit form
 
 ### Reported and not yet fixed
 
