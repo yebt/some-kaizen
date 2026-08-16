@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 
 import { PiniaColada } from '@pinia/colada'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -13,7 +13,6 @@ import { PLATFORM_KEY, type PlatformServices } from '@core/platform-context'
 import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
-import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import {
   createCompletedHabit,
   createMeasuredHabit,
@@ -1738,43 +1737,13 @@ describe('a sheet opened from a card', () => {
   })
 })
 
-describe('bringing a day already arranged onto this one', () => {
+describe('filling a day from another day or from a routine', () => {
   /*
    * DAY is Monday 2026-03-09, so the Monday before it is 2026-03-02 and the day before it is
    * Sunday 2026-03-08.
    */
   const LAST_MONDAY = '2026-03-02'
   const YESTERDAY = '2026-03-08'
-
-  /** Mounts the day and hands back the feedback store, which is where the preview is asked. */
-  async function renderWithFeedback(date: string = DAY) {
-    const pinia = createPinia()
-
-    setActivePinia(pinia)
-    platform = stubPlatform()
-
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/day/:date', component: DayPage }],
-    })
-
-    await router.push(`/day/${date}`)
-    await router.isReady()
-
-    const wrapper = mount(DayPage, {
-      global: {
-        plugins: [pinia, PiniaColada, router],
-        provide: {
-          [PERSISTENCE_KEY as symbol]: persistence,
-          [PLATFORM_KEY as symbol]: platform,
-        },
-      },
-    })
-
-    await flushPromises()
-
-    return { wrapper, feedback: useFeedback() }
-  }
 
   function placedOn(habitId: ReturnType<typeof newIdentifier>, date: string, at: number) {
     return scheduleAt(
@@ -1793,175 +1762,361 @@ describe('bringing a day already arranged onto this one', () => {
     await flushPromises()
   }
 
-  async function bring(page: Awaited<ReturnType<typeof renderWithFeedback>>) {
-    const button = page.wrapper.findAll('button').find((node) => node.text().trim() === 'Bring it')
+  function named(wrapper: Awaited<ReturnType<typeof renderDay>>, label: string) {
+    const button = wrapper.findAll('button').find((node) => node.text().trim() === label)
 
-    if (!button) throw new Error(`No offer to bring a plan. Saw: ${page.wrapper.text()}`)
+    if (!button) throw new Error(`No control labelled ${label}. Saw: ${wrapper.text()}`)
 
-    await button.trigger('click')
+    return button
+  }
+
+  /** Opens the preview the way the screen offers it. */
+  async function openPreview(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    await named(wrapper, 'Bring a plan').trigger('click')
     await flushPromises()
   }
 
-  it('offers nothing when neither candidate day was ever arranged', async () => {
-    const habit = meditate()
+  function sourceField(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.find('[aria-label="The day to bring a plan from"]')
+  }
 
-    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+  describe('the suggestion', () => {
+    it('says nothing when neither candidate day was ever arranged', async () => {
+      await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditate()] })
 
-    expect((await renderDay()).text()).not.toContain('was arranged')
+      expect((await renderDay()).text()).not.toContain('was arranged')
+    })
+
+    it('names the same weekday last week when it holds something', async () => {
+      const habit = meditate()
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      })
+
+      expect((await renderDay()).text()).toContain('was arranged')
+    })
+
+    it('stops suggesting once everything worth bringing is already here', async () => {
+      const habit = meditate()
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60), placedOn(habit.id, DAY, 9 * 60)],
+      })
+
+      expect((await renderDay()).text()).not.toContain('was arranged')
+    })
   })
 
-  it('offers the same weekday last week, naming it', async () => {
-    const habit = meditate()
+  describe('the preview', () => {
+    it('opens on the day the app suggests, so the common case is one tap', async () => {
+      const habit = meditate()
 
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [habit],
-      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+
+      expect(sourceField(wrapper).element).toHaveProperty('value', LAST_MONDAY)
     })
 
-    expect((await renderDay()).text()).toContain('was arranged')
+    it('names what would arrive rather than only counting it', async () => {
+      const habit = meditate()
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+
+      expect(wrapper.find('dialog[aria-label="Bring a plan from another day"]').text()).toContain(
+        'Meditate',
+      )
+    })
+
+    it('names what would stay out, and why', async () => {
+      // Carrying a Sunday plan onto a Monday must drop the Sunday-only habits rather than
+      // schedule them, and it has to say which before anything is written.
+      const sundayOnly = createCompletedHabit({
+        id: newIdentifier(),
+        name: 'Long walk',
+        frequency: onWeekdays([7]),
+        createdOn: CREATED_ON,
+      })
+      const anyDay = meditate()
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [sundayOnly, anyDay],
+        instances: [
+          placedOn(sundayOnly.id, YESTERDAY, 10 * 60),
+          placedOn(anyDay.id, YESTERDAY, 7 * 60),
+        ],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+
+      const dialog = wrapper.find('dialog[aria-label="Bring a plan from another day"]')
+
+      expect(dialog.text()).toContain('Stays out')
+      expect(dialog.text()).toContain('Long walk')
+    })
+
+    it('follows the field, so two candidate days can be compared before committing', async () => {
+      // The difference between a preview and a warning: you can look at both answers.
+      const habit = meditate()
+      const other = createCompletedHabit({
+        id: newIdentifier(),
+        name: 'Read',
+        frequency: frequency('daily', 1),
+        createdOn: CREATED_ON,
+      })
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit, other],
+        instances: [
+          placedOn(habit.id, LAST_MONDAY, 7 * 60),
+          placedOn(other.id, YESTERDAY, 20 * 60),
+        ],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+      await sourceField(wrapper).setValue(YESTERDAY)
+
+      const dialog = wrapper.find('dialog[aria-label="Bring a plan from another day"]')
+
+      expect(dialog.text()).toContain('Read')
+      expect(dialog.text()).not.toContain('Meditate')
+    })
+
+    it('refuses to bring a day onto itself, which would be a copy of nothing', async () => {
+      const habit = meditate()
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+      await sourceField(wrapper).setValue(DAY)
+
+      expect(named(wrapper, 'Bring it').attributes('disabled')).toBeDefined()
+    })
+
+    it('writes nothing while it is only being looked at', async () => {
+      const habit = meditate()
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+      await settled()
+
+      expect((await persistence.instances.all()).filter((one) => one.date === DAY)).toEqual([])
+    })
   })
 
-  it('brings the occurrences over at the times they had', async () => {
-    const habit = meditate()
+  describe('bringing it', () => {
+    it('brings the occurrences over at the times they had', async () => {
+      const habit = meditate()
 
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [habit],
-      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+      await named(wrapper, 'Bring it').trigger('click')
+      await settled()
+
+      const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
+
+      expect(stored).toHaveLength(1)
+      expect(stored[0]).toMatchObject({ habitId: habit.id, startsAt: 7 * 60 })
     })
 
-    const page = await renderWithFeedback()
+    it('does not schedule a habit onto a weekday it does not name', async () => {
+      const sundayOnly = createCompletedHabit({
+        id: newIdentifier(),
+        name: 'Long walk',
+        frequency: onWeekdays([7]),
+        createdOn: CREATED_ON,
+      })
+      const anyDay = meditate()
 
-    await bring(page)
-    page.feedback.resolve(true)
-    await settled()
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [sundayOnly, anyDay],
+        instances: [
+          placedOn(sundayOnly.id, YESTERDAY, 10 * 60),
+          placedOn(anyDay.id, YESTERDAY, 7 * 60),
+        ],
+      })
 
-    const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
+      const wrapper = await renderDay()
 
-    expect(stored).toHaveLength(1)
-    expect(stored[0]).toMatchObject({ habitId: habit.id, startsAt: 7 * 60 })
+      await openPreview(wrapper)
+      await named(wrapper, 'Bring it').trigger('click')
+      await settled()
+
+      const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
+
+      expect(stored.map((one) => one.habitId)).toEqual([anyDay.id])
+    })
+
+    it('leaves a habit already on this day exactly where it was put', async () => {
+      const habit = meditate()
+      const other = createCompletedHabit({
+        id: newIdentifier(),
+        name: 'Read',
+        frequency: frequency('daily', 1),
+        createdOn: CREATED_ON,
+      })
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit, other],
+        instances: [
+          placedOn(habit.id, LAST_MONDAY, 7 * 60),
+          placedOn(other.id, LAST_MONDAY, 20 * 60),
+          placedOn(habit.id, DAY, 9 * 60),
+        ],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+      await named(wrapper, 'Bring it').trigger('click')
+      await settled()
+
+      const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
+
+      expect(stored.find((one) => one.habitId === habit.id)).toMatchObject({ startsAt: 9 * 60 })
+      expect(stored.find((one) => one.habitId === other.id)).toMatchObject({ startsAt: 20 * 60 })
+    })
+
+    it('closes the preview once it has been acted on', async () => {
+      const habit = meditate()
+
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+      })
+
+      const wrapper = await renderDay()
+
+      await openPreview(wrapper)
+      await named(wrapper, 'Bring it').trigger('click')
+      await settled()
+
+      expect(
+        wrapper.find('dialog[aria-label="Bring a plan from another day"]').attributes('open'),
+      ).toBeUndefined()
+    })
   })
 
-  it('writes nothing when the preview is declined', async () => {
-    // The offer is a question, and answering no has to leave the day exactly as it was.
-    const habit = meditate()
+  describe('building a routine into this day', () => {
+    function morning(habitIds: ReturnType<typeof newIdentifier>[]) {
+      return createRoutine({
+        id: newIdentifier(),
+        name: 'Morning',
+        habitIds,
+        createdOn: CREATED_ON,
+      })
+    }
 
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [habit],
-      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+    it('is not offered when no routine has anything in it', async () => {
+      // Asserted on the control rather than on the page text: the sheet stays mounted while
+      // shut, so its own title is in the document either way and a text search would pass
+      // whether or not the way in exists.
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [meditate()],
+        routines: [morning([])],
+      })
+
+      const wrapper = await renderDay()
+
+      expect(
+        wrapper.findAll('button').some((node) => node.text().trim() === 'Build a routine'),
+      ).toBe(false)
     })
 
-    const page = await renderWithFeedback()
+    it('offers the routines that have steps', async () => {
+      const habit = meditate()
 
-    await bring(page)
-    page.feedback.resolve(false)
-    await settled()
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        routines: [morning([habit.id])],
+      })
 
-    expect((await persistence.instances.all()).filter((one) => one.date === DAY)).toEqual([])
-  })
+      const wrapper = await renderDay()
 
-  it('names in the preview the habits it will not bring', async () => {
-    // Carrying a Sunday plan onto a Monday must drop the Sunday-only habits rather than
-    // schedule them, and it has to say which before anything is written.
-    const sundayOnly = createCompletedHabit({
-      id: newIdentifier(),
-      name: 'Long walk',
-      frequency: onWeekdays([7]),
-      createdOn: CREATED_ON,
-    })
-    const anyDay = meditate()
+      await named(wrapper, 'Build a routine').trigger('click')
+      await flushPromises()
 
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [sundayOnly, anyDay],
-      instances: [
-        placedOn(sundayOnly.id, YESTERDAY, 10 * 60),
-        placedOn(anyDay.id, YESTERDAY, 7 * 60),
-      ],
+      expect(wrapper.find('dialog[aria-label="Build a routine into this day"]').text()).toContain(
+        'Morning',
+      )
     })
 
-    const page = await renderWithFeedback()
+    it('takes the day being looked at to the builder, not today', async () => {
+      // The whole reason for a way in from here. Landing on today would make someone retype
+      // the one thing the screen already knew.
+      const habit = meditate()
+      const routine = morning([habit.id])
 
-    await bring(page)
+      await replaceDataset(persistence, {
+        ...EMPTY_DATASET,
+        habits: [habit],
+        routines: [routine],
+      })
 
-    expect(page.feedback.request?.message).toContain('Long walk')
-    expect(page.feedback.request?.message).toContain('does not belong on this day')
-  })
+      const wrapper = await renderDay()
 
-  it('does not schedule a habit onto a weekday it does not name', async () => {
-    const sundayOnly = createCompletedHabit({
-      id: newIdentifier(),
-      name: 'Long walk',
-      frequency: onWeekdays([7]),
-      createdOn: CREATED_ON,
+      await named(wrapper, 'Build a routine').trigger('click')
+      await flushPromises()
+      await wrapper
+        .find('dialog[aria-label="Build a routine into this day"]')
+        .findAll('button')
+        .find((node) => node.text().includes('Morning'))
+        ?.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.vm.$router.currentRoute.value.fullPath).toBe(
+        `/routines/build/${routine.id}?on=${DAY}`,
+      )
     })
-    const anyDay = meditate()
-
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [sundayOnly, anyDay],
-      instances: [
-        placedOn(sundayOnly.id, YESTERDAY, 10 * 60),
-        placedOn(anyDay.id, YESTERDAY, 7 * 60),
-      ],
-    })
-
-    const page = await renderWithFeedback()
-
-    await bring(page)
-    page.feedback.resolve(true)
-    await settled()
-
-    const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
-
-    expect(stored.map((one) => one.habitId)).toEqual([anyDay.id])
-  })
-
-  it('stops offering once the day has been arranged', async () => {
-    // Everything worth bringing is already here, so the line takes itself away rather than
-    // sitting there inviting a second import that would do nothing.
-    const habit = meditate()
-
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [habit],
-      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60), placedOn(habit.id, DAY, 9 * 60)],
-    })
-
-    expect((await renderDay()).text()).not.toContain('was arranged')
-  })
-
-  it('leaves a habit already on this day exactly where it was put', async () => {
-    const habit = meditate()
-    const other = createCompletedHabit({
-      id: newIdentifier(),
-      name: 'Read',
-      frequency: frequency('daily', 1),
-      createdOn: CREATED_ON,
-    })
-
-    await replaceDataset(persistence, {
-      ...EMPTY_DATASET,
-      habits: [habit, other],
-      instances: [
-        placedOn(habit.id, LAST_MONDAY, 7 * 60),
-        placedOn(other.id, LAST_MONDAY, 20 * 60),
-        placedOn(habit.id, DAY, 9 * 60),
-      ],
-    })
-
-    const page = await renderWithFeedback()
-
-    await bring(page)
-    page.feedback.resolve(true)
-    await settled()
-
-    const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
-    const kept = stored.find((one) => one.habitId === habit.id)
-
-    expect(kept).toMatchObject({ startsAt: 9 * 60 })
-    expect(stored.find((one) => one.habitId === other.id)).toMatchObject({ startsAt: 20 * 60 })
   })
 })

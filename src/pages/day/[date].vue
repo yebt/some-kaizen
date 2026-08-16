@@ -43,7 +43,10 @@ import {
   spanFor,
 } from '@modules/planning/domain/day-agenda'
 import { carryPlan, sourceDayFor } from '@modules/planning/domain/carried-plan'
+import { stepsFor } from '@modules/planning/domain/routine-plan'
 import { groupByRoutine, hasArrangement } from '@modules/planning/domain/routine-agenda'
+import { isRoutineActiveOn } from '@modules/habits/domain/routine'
+import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import {
   hasReminder,
@@ -140,39 +143,101 @@ const carryable = computed(() =>
       }),
 )
 
-const carryLabel = computed(() =>
-  carryFrom.value === undefined
-    ? ''
-    : new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(
-        toDate(carryFrom.value),
-      ),
-)
+function longDate(date: CalendarDate): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(toDate(date))
+}
+
+const carryLabel = computed(() => (carryFrom.value === undefined ? '' : longDate(carryFrom.value)))
+
+/**
+ * The day the preview is currently reading from, as the date field's own string.
+ *
+ * One dialog serves both routes into this — the day the app suggests and a day you name
+ * yourself — because they differ only in what the field starts at. Two previews would be two
+ * chances to describe the same act differently.
+ */
+const carryPick = ref('')
+const carryOpen = ref(false)
+
+const carryPreview = computed(() => {
+  if (!carryPick.value) return undefined
+
+  let from: CalendarDate
+
+  try {
+    from = calendarDate(carryPick.value)
+  } catch {
+    // A half typed date is a moment mid-edit, not an error to report.
+    return undefined
+  }
+
+  /*
+   * The same day on both sides needs no guard here, and having one would be a second answer
+   * to a question already settled. Everything on the source day is by definition already on
+   * the target day, so it all reads as kept and nothing is carried — which is exactly what
+   * "bring today onto today" should do.
+   */
+  return carryPlan({ from, to: day.value, habits: habits.value, instances: instances.value })
+})
+
+/** The habit behind a carried occurrence, so the preview can name it rather than count it. */
+function nameOf(habitId: Identifier): string {
+  return habits.value.find((habit) => habit.id === habitId)?.name ?? 'A habit'
+}
+
+function openCarry() {
+  carryPick.value = carryFrom.value ?? addDays(day.value, -1)
+  carryOpen.value = true
+}
 
 async function bringPlanForward() {
-  const plan = carryable.value
+  const plan = carryPreview.value
 
   if (!plan?.carried.length) return
 
-  const dropped = plan.dropped.length
-    ? ` ${plan.dropped.map((habit) => habit.name).join(', ')} ${
-        plan.dropped.length === 1 ? 'does not' : 'do not'
-      } belong on this day, so ${plan.dropped.length === 1 ? 'it stays' : 'they stay'} out.`
-    : ''
-
-  const kept = plan.kept.length ? ` Everything already on this day is left as it is.` : ''
-
-  const accepted = await feedback.confirm({
-    title: `Bring ${carryLabel.value} here?`,
-    message: `${plan.carried.length} ${
-      plan.carried.length === 1 ? 'habit arrives' : 'habits arrive'
-    } at the times they had.${dropped}${kept}`,
-    confirmLabel: 'Bring it',
-  })
-
-  if (!accepted) return
-
   await carry.mutateAsync(plan.carried)
+  carryOpen.value = false
   feedback.notify('Plan brought forward', 'success')
+}
+
+/**
+ * Routines that could be built into this day.
+ *
+ * Filtered to the ones with steps left, because offering to build an empty routine is
+ * offering to do nothing, and to the ones still in use — an archived routine is one you said
+ * you were not arranging days with.
+ */
+const buildOpen = ref(false)
+
+const buildable = computed(() =>
+  routines.value
+    .filter((routine) => isRoutineActiveOn(routine, day.value))
+    .map((routine) => ({ routine, steps: stepsFor(routine, habits.value) }))
+    .filter((row) => row.steps.length)
+    .sort(
+      (left, right) =>
+        (left.routine.anchorTime ?? Infinity) - (right.routine.anchorTime ?? Infinity),
+    ),
+)
+
+const buildActions = computed<readonly SheetAction[]>(() =>
+  buildable.value.map((row) => ({
+    key: row.routine.id,
+    label: row.routine.name,
+    description: `${row.steps.length} ${row.steps.length === 1 ? 'step' : 'steps'}`,
+  })),
+)
+
+async function runBuild(key: string) {
+  buildOpen.value = false
+
+  // The day travels with the link, so the builder opens on the day you were looking at
+  // rather than on today — which is the whole reason for a way in from here.
+  await router.push(`/routines/build/${key}?on=${day.value}`)
 }
 
 /**
@@ -1015,36 +1080,128 @@ function trackHover(event: PointerEvent) {
     </header>
 
     <!--
-      Offered only when there is genuinely something to bring, and named rather than hinted.
-      A permanent button would be one more thing to ignore; a line that appears on exactly the
-      days it applies to teaches the feature at the moment it is useful, and takes itself away
-      once the day has been arranged.
+      Two ways to fill this day without placing a card at a time, and a line above them on the
+      days where one of them has an obvious answer.
+
+      The suggestion is a sentence rather than a button of its own: it says what is available
+      and takes itself away once the day is arranged, while the actions below stay put so
+      neither of them is a thing you have to discover twice.
     -->
-    <div
-      v-if="carryable?.carried.length"
-      class="mb-4 flex items-center gap-3 rounded-card border border-line bg-surface p-3"
-    >
-      <div class="min-w-0 flex-1">
-        <p class="text-xs font-medium text-ink">{{ carryLabel }} was arranged.</p>
-        <p class="text-[0.625rem] text-ink-muted">
-          Bring it here and
-          {{
-            carryable.carried.length === 1
-              ? '1 habit arrives'
-              : `${carryable.carried.length} habits arrive`
-          }}
-          at the times they had.
-        </p>
+    <div v-if="carryable?.carried.length || buildable.length" class="mb-4">
+      <p v-if="carryable?.carried.length" class="mb-2 text-xs text-ink-muted">
+        <span class="font-medium text-ink">{{ carryLabel }}</span> was arranged.
+        {{
+          carryable.carried.length === 1
+            ? '1 habit could arrive'
+            : `${carryable.carried.length} habits could arrive`
+        }}
+        at the times they had.
+      </p>
+      <div class="flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-full border border-line-strong px-3.5 py-2 text-xs font-medium text-ink"
+          @click="openCarry"
+        >
+          Bring a plan
+        </button>
+        <button
+          v-if="buildable.length"
+          type="button"
+          class="flex-1 rounded-full border border-line-strong px-3.5 py-2 text-xs font-medium text-ink"
+          @click="buildOpen = true"
+        >
+          Build a routine
+        </button>
       </div>
-      <button
-        type="button"
-        class="shrink-0 rounded-full border border-line-strong px-3.5 py-2 text-xs font-medium text-ink disabled:opacity-60"
-        :disabled="carry.isLoading.value"
-        @click="bringPlanForward"
-      >
-        Bring it
-      </button>
     </div>
+
+    <!--
+      The preview is the dialog, not a sentence in a confirmation.
+
+      It recomputes as the day is changed, so you can look at two candidates before committing
+      to either — which is the difference between a preview and a warning.
+    -->
+    <AppDialog :open="carryOpen" label="Bring a plan from another day" @dismiss="carryOpen = false">
+      <h2 class="text-base font-semibold text-ink">Bring a plan here</h2>
+
+      <label class="mt-3 block text-xs font-medium text-ink-muted">
+        From
+        <input
+          v-model="carryPick"
+          type="date"
+          :max="addDays(day, -1)"
+          aria-label="The day to bring a plan from"
+          class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm font-normal text-ink"
+        />
+      </label>
+
+      <p v-if="!carryPreview" class="mt-3 text-xs text-ink-muted">
+        Choose a day to see what it holds.
+      </p>
+
+      <template v-else>
+        <p v-if="!carryPreview.carried.length" class="mt-3 text-xs text-ink-muted">
+          Nothing on that day can come here.
+        </p>
+
+        <div v-else class="mt-3">
+          <p class="text-xs font-medium text-ink">
+            {{
+              carryPreview.carried.length === 1
+                ? '1 habit arrives'
+                : `${carryPreview.carried.length} habits arrive`
+            }}
+          </p>
+          <p class="mt-0.5 text-xs text-ink-muted">
+            {{ carryPreview.carried.map((one) => nameOf(one.habitId)).join(', ') }}
+          </p>
+        </div>
+
+        <!-- Named rather than silently omitted: a step that is not coming is a decision. -->
+        <div v-if="carryPreview.dropped.length" class="mt-3">
+          <p class="text-xs font-medium text-ink">Stays out</p>
+          <p class="mt-0.5 text-xs text-ink-muted">
+            {{ carryPreview.dropped.map((habit) => habit.name).join(', ') }} —
+            {{ carryPreview.dropped.length === 1 ? 'it does not' : 'they do not' }} belong on this
+            day.
+          </p>
+        </div>
+
+        <div v-if="carryPreview.kept.length" class="mt-3">
+          <p class="text-xs font-medium text-ink">Left as it is</p>
+          <p class="mt-0.5 text-xs text-ink-muted">
+            {{ carryPreview.kept.map((habit) => habit.name).join(', ') }} — already on this day.
+          </p>
+        </div>
+      </template>
+
+      <div class="mt-5 flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
+          @click="carryOpen = false"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="flex-1 rounded-full bg-ink px-4 py-2.5 text-sm font-medium text-ink-inverse disabled:opacity-60"
+          :disabled="!carryPreview?.carried.length || carry.isLoading.value"
+          @click="bringPlanForward"
+        >
+          Bring it
+        </button>
+      </div>
+    </AppDialog>
+
+    <ActionSheet
+      :open="buildOpen"
+      title="Build a routine into this day"
+      :actions="buildActions"
+      @select="runBuild"
+      @dismiss="buildOpen = false"
+    />
 
     <div
       v-if="habitsLoading && habitsData === undefined"

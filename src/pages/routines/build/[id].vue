@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { todayIn } from '@shared/domain/calendar-date'
+import { type CalendarDate, calendarDate, todayIn } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
 import { formatTime, parseTime } from '@shared/domain/time-of-day'
 import AppIcon from '@shared/ui/AppIcon.vue'
@@ -43,8 +43,26 @@ const routine = computed(() =>
 const habits = computed(() => habitsData.value ?? [])
 const isLoading = computed(() => routinesLoading.value || habitsLoading.value)
 
-/** The day being filled. Not always today: tomorrow's morning is worth arranging tonight. */
-const date = ref(todayIn())
+/**
+ * The day being filled. Not always today: tomorrow's morning is worth arranging tonight.
+ *
+ * Taken from the link when it carries one, which is how arriving from a day screen lands on
+ * that day rather than on today. A bad value in a hand edited URL falls back to today instead
+ * of leaving the field empty and the form unsubmittable.
+ */
+const date = ref(dayFromLink() ?? todayIn())
+
+function dayFromLink(): CalendarDate | undefined {
+  const raw = route.query.on
+
+  if (typeof raw !== 'string') return undefined
+
+  try {
+    return calendarDate(raw)
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * Where the sequence begins.

@@ -3,21 +3,21 @@ import { expect, test, type Page } from '@playwright/test'
 import { createHabit, createRoutine, open } from './support/app'
 
 /**
- * Bringing a day already arranged onto one that is not, driven the way a person drives it.
+ * Filling a day from another day, or from a routine, driven the way a person drives it.
  *
- * Which day is chosen, and which habits may not be carried, are proved by unit tests. What a
- * browser adds is what those cannot see: that the offer appears on the day it applies to and
- * nowhere else, that the preview is a dialog a person can actually decline, and that the
- * cards are on the timeline afterwards.
+ * Which day is chosen and which habits may not be carried are proved by unit tests. What a
+ * browser adds is what those cannot see: that the way in is on the day screen, that the
+ * preview is a real dialog whose numbers follow the field, and that the cards are on the
+ * timeline afterwards.
  */
 
 /**
  * Two days a week apart, both in the future.
  *
  * Relative to today rather than fixed, for two reasons. A habit is not active before the day
- * it was created, so a fixed pair of dates in the past would have everything correctly
- * dropped and the test would prove the opposite of what it claims. And being a week apart
- * makes them the same weekday by construction, which is the rule being exercised.
+ * it was created, so a fixed pair of past dates would have everything correctly dropped and
+ * the test would prove the opposite of what it claims. And being a week apart makes them the
+ * same weekday by construction, which is the rule being exercised.
  */
 function daysFromToday(amount: number): string {
   const date = new Date()
@@ -34,11 +34,7 @@ function daysFromToday(amount: number): string {
 const SOURCE = daysFromToday(1)
 const TARGET = daysFromToday(8)
 
-/**
- * Arranges a day the only way the app can do it without a drag: by building a routine into it.
- *
- * Reaching into storage would be quicker and would stop testing the thing this file is for.
- */
+/** Arranges a day the only way the app can without a drag: by building a routine into it. */
 async function arrange(page: Page, date: string): Promise<void> {
   await open(page, '/routines')
   await page.getByRole('button', { name: 'Actions for Morning' }).click()
@@ -55,36 +51,56 @@ async function setUp(page: Page): Promise<void> {
   await arrange(page, SOURCE)
 }
 
-test('no offer appears on a day with nothing behind it', async ({ page }) => {
-  await createHabit(page, 'Meditate')
+test('the day says when another day is worth copying, and stops once it is not', async ({
+  page,
+}) => {
+  await setUp(page)
+
+  await open(page, `/day/${TARGET}`)
+  await expect(page.getByText('was arranged')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Bring a plan' }).click()
+  await page.getByRole('button', { name: 'Bring it', exact: true }).click()
+
+  await expect(page.getByRole('button', { name: 'Adjust Meditate' })).toBeVisible()
 
   await open(page, `/day/${TARGET}`)
 
   await expect(page.getByText('was arranged')).toHaveCount(0)
 })
 
-test('the same weekday last week is offered, and brought over on request', async ({ page }) => {
+test('the preview opens on the suggested day and names what would arrive', async ({ page }) => {
   await setUp(page)
 
   await open(page, `/day/${TARGET}`)
-  await expect(page.getByText('was arranged')).toBeVisible()
+  await page.getByRole('button', { name: 'Bring a plan' }).click()
 
-  await page.getByRole('button', { name: 'Bring it', exact: true }).click()
-  // The second is the confirmation's, raised over the page by the feedback host.
-  await page.getByRole('button', { name: 'Bring it', exact: true }).last().click()
-
-  // On this day's timeline now, at the hour it had on the other one.
-  await expect(page.getByRole('button', { name: 'Adjust Meditate' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Set the exact time of Meditate' })).toContainText(
-    '07:00',
+  await expect(page.getByLabel('The day to bring a plan from')).toHaveValue(SOURCE)
+  await expect(page.getByText('1 habit arrives')).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Bring a plan from another day' })).toContainText(
+    'Meditate',
   )
 })
 
-test('declining the preview leaves the day exactly as it was', async ({ page }) => {
+test('the preview follows the field, so a different day can be named', async ({ page }) => {
   await setUp(page)
 
   await open(page, `/day/${TARGET}`)
-  await page.getByRole('button', { name: 'Bring it', exact: true }).click()
+  await page.getByRole('button', { name: 'Bring a plan' }).click()
+
+  // A day nothing was ever put on holds nothing to bring, and the dialog says so rather than
+  // offering a button that would do nothing.
+  await page.getByLabel('The day to bring a plan from').fill(daysFromToday(3))
+
+  await expect(page.getByText('Nothing on that day can come here')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Bring it', exact: true })).toBeDisabled()
+})
+
+test('cancelling the preview leaves the day exactly as it was', async ({ page }) => {
+  await setUp(page)
+
+  await open(page, `/day/${TARGET}`)
+  await page.getByRole('button', { name: 'Bring a plan' }).click()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
 
   await expect(page.getByRole('button', { name: 'Adjust Meditate' })).toHaveCount(0)
@@ -92,15 +108,29 @@ test('declining the preview leaves the day exactly as it was', async ({ page }) 
   await expect(page.getByText('was arranged')).toBeVisible()
 })
 
-test('the offer takes itself away once the day has been arranged', async ({ page }) => {
-  await setUp(page)
+test('a routine can be built into the day being looked at, without retyping it', async ({
+  page,
+}) => {
+  await createHabit(page, 'Meditate', { usualDurationMinutes: 20 })
+  await createRoutine(page, { name: 'Morning', habits: ['Meditate'], anchorTime: '07:00' })
 
   await open(page, `/day/${TARGET}`)
-  await page.getByRole('button', { name: 'Bring it', exact: true }).click()
-  await page.getByRole('button', { name: 'Bring it', exact: true }).last().click()
+  await page.getByRole('button', { name: 'Build a routine' }).click()
+  await page.getByRole('button', { name: /^Morning/ }).click()
+
+  // The day travelled with the link, which is the entire reason for a way in from here.
+  await expect(page.getByLabel('The day to build into')).toHaveValue(TARGET)
+
+  await page.getByRole('button', { name: 'Build the day' }).click()
+
+  await expect(page).toHaveURL(new RegExp(`/day/${TARGET}$`))
   await expect(page.getByRole('button', { name: 'Adjust Meditate' })).toBeVisible()
+})
+
+test('no routine with steps means no offer to build one', async ({ page }) => {
+  await createHabit(page, 'Meditate')
 
   await open(page, `/day/${TARGET}`)
 
-  await expect(page.getByText('was arranged')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Build a routine' })).toHaveCount(0)
 })
