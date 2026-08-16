@@ -32,6 +32,33 @@ export interface Collection<T> {
   clear(): Promise<void>
 }
 
+/**
+ * A plain snapshot of a record, safe for IndexedDB to clone.
+ *
+ * This is the boundary where a value stops being something the UI holds and becomes
+ * something the disk holds, and it is the only place that can be relied on to enforce it.
+ *
+ * The screens read their records from a query cache, so what they hand back is wrapped in
+ * Vue's reactivity. Spreading one — `{ ...routine, archivedOn: today }` is the ordinary way
+ * to write a change — copies the top level and leaves every nested array and object as a
+ * proxy underneath. A proxy cannot be structured cloned, so the write fails with
+ * `DataCloneError` and the change is silently lost.
+ *
+ * That shipped. Archiving a routine did nothing at all, because its `habitIds` array arrived
+ * as a proxy, and nothing in the test suite could see it: `fake-indexeddb` clones with its
+ * own permissive implementation and accepts what a browser refuses. Asking every caller to
+ * remember is what was already being done, and it is what failed.
+ *
+ * A JSON round trip rather than `structuredClone`, which fails on the same proxies, or a
+ * recursive `toRaw`, which would drag Vue into the storage adapter. Everything stored here is
+ * already JSON-safe by construction — the backup format is exactly this serialisation, and
+ * every value is a string, a number, a boolean, a plain object or an array of those. Keys
+ * that are present and undefined are dropped, which reads back identically to absent.
+ */
+function storable<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 export function createCollection<T>(
   database: IDBDatabase,
   storeName: StoreName,
@@ -74,7 +101,7 @@ export function createCollection<T>(
     async put(id, value) {
       const store = transaction('readwrite')
 
-      store.put({ id, value, updatedAt: now() } satisfies StoredRecord<T>)
+      store.put({ id, value: storable(value), updatedAt: now() } satisfies StoredRecord<T>)
 
       return committed(store)
     },
@@ -86,7 +113,7 @@ export function createCollection<T>(
       const timestamp = now()
 
       for (const record of records) {
-        store.put({ id: record.id, value: record.value, updatedAt: timestamp })
+        store.put({ id: record.id, value: storable(record.value), updatedAt: timestamp })
       }
 
       return committed(store)
@@ -127,7 +154,7 @@ export function createCollection<T>(
       }
 
       for (const record of records) {
-        store.put({ id: record.id, value: record.value, updatedAt: timestamp })
+        store.put({ id: record.id, value: storable(record.value), updatedAt: timestamp })
       }
 
       return committed(store)

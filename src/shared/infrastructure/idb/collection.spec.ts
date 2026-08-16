@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 
 import { beforeEach, describe, expect, it } from 'vitest'
+import { reactive } from 'vue'
 
 import { type Collection, createCollection } from './collection'
 import { fromRequest, openDatabase, STORE, type StoredRecord } from './database'
@@ -242,5 +243,82 @@ describe('replaceAll', () => {
     await notes.replaceAll([])
 
     expect(await notes.all()).toEqual([])
+  })
+})
+
+describe('records arriving from the screens', () => {
+  interface Grouped {
+    readonly title: string
+    readonly members: string[]
+    readonly detail: { readonly depth: number }
+  }
+
+  let grouped: Collection<Grouped>
+
+  beforeEach(() => {
+    grouped = createCollection<Grouped>(database, STORE.routines, () => clock)
+  })
+
+  function routine(): Grouped {
+    return { title: 'Morning', members: ['one', 'two'], detail: { depth: 1 } }
+  }
+
+  it('stores one wrapped in reactivity, which is what every screen hands it', async () => {
+    /*
+     * The regression that matters, and one this suite could not previously see.
+     *
+     * Screens read their records from a query cache, so what they hand back is reactive, and
+     * the ordinary way to write a change — spread the record, replace one field — copies the
+     * top level while leaving every nested array and object a proxy underneath. A real
+     * browser refuses to structured clone a proxy: the write fails with `DataCloneError` and
+     * the change is silently lost. Archiving a routine did exactly nothing for this reason,
+     * because its `habitIds` arrived as a proxy.
+     *
+     * `fake-indexeddb` clones permissively and accepts the proxy either way, so watching the
+     * write succeed proves nothing here. What is asserted is the *shape* that reaches the
+     * store — plain arrays and objects, detached from the original — which is true in both
+     * and is what the browser actually requires.
+     */
+    const live = reactive(routine())
+    const edited = { ...live, title: 'Evening' }
+
+    await grouped.put('a', edited)
+
+    const stored = await grouped.get('a')
+
+    expect(stored).toEqual({ ...routine(), title: 'Evening' })
+    expect(stored?.members).not.toBe(edited.members)
+    expect(Object.getPrototypeOf(stored?.members ?? {})).toBe(Array.prototype)
+  })
+
+  it('detaches the copy, so editing the original afterwards rewrites nothing', async () => {
+    // A record handed to storage is a value, not a live reference. Sharing the array would
+    // let a later edit on screen quietly change history nobody asked to change.
+    const original = routine()
+
+    await grouped.put('a', original)
+    original.members.push('three')
+
+    expect((await grouped.get('a'))?.members).toEqual(['one', 'two'])
+  })
+
+  it('detaches every record written as a set', async () => {
+    await grouped.putMany([
+      { id: 'a', value: reactive(routine()) },
+      { id: 'b', value: reactive({ ...routine(), title: 'Evening' }) },
+    ])
+
+    const stored = await grouped.all()
+
+    expect(stored.map((one) => one.members)).toEqual([
+      ['one', 'two'],
+      ['one', 'two'],
+    ])
+  })
+
+  it('detaches records written by a wholesale replace', async () => {
+    await grouped.replaceAll([{ id: 'a', value: reactive(routine()) }])
+
+    expect((await grouped.all())[0]).toEqual(routine())
   })
 })
