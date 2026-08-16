@@ -153,13 +153,21 @@ function isPressed(id: Identifier) {
 
     <header class="flex items-center justify-between pt-2 pb-1">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Routines</h1>
-      <RouterLink
-        to="/routines/new"
-        class="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-xs font-medium text-ink-inverse"
-      >
-        <AppIcon name="plus" :size="14" />
-        New
-      </RouterLink>
+      <span class="flex items-center gap-2">
+        <RouterLink
+          to="/routines/presets"
+          class="rounded-full border border-line-strong px-3.5 py-2 text-xs font-medium text-ink-muted"
+        >
+          Examples
+        </RouterLink>
+        <RouterLink
+          to="/routines/new"
+          class="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-xs font-medium text-ink-inverse"
+        >
+          <AppIcon name="plus" :size="14" />
+          New
+        </RouterLink>
+      </span>
     </header>
     <p class="pb-4 text-sm text-ink-muted">
       Parts of the day, in the order you do them. Today groups itself under their names instead of
@@ -174,13 +182,27 @@ function isPressed(id: Identifier) {
     </div>
 
     <template v-else>
-      <p
+      <!--
+        The empty state is the one place a preset is genuinely wanted, so it is offered here
+        rather than hidden behind a menu. "Name a part of your day" is a reasonable request
+        only for someone who already knows the answer; everyone else closes the form.
+      -->
+      <div
         v-if="!rows.length"
         class="rounded-card border border-dashed border-line p-8 text-center text-sm text-ink-muted"
       >
-        No routines yet. Name a part of your day — Morning, Deep work, Wind down — and put the
-        habits you do then in the order you do them.
-      </p>
+        <p>
+          No routines yet. Name a part of your day — Morning, Deep work, Wind down — and put the
+          habits you do then in the order you do them.
+        </p>
+        <RouterLink
+          to="/routines/presets"
+          class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-line-strong px-4 py-2.5 text-xs font-medium text-ink"
+        >
+          Start from a worked example
+          <AppIcon name="chevron-right" :size="14" />
+        </RouterLink>
+      </div>
 
       <TransitionGroup
         v-else

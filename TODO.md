@@ -24,15 +24,17 @@ fourteen rows.
       and labels the heading, and is deliberately *not* handed down to the habits inside, which
       would stack them all on one minute of the ruler. Spreading them needs durations, which is
       the routine builder's job and where this anchor becomes its start time
-- [ ] **A library of routine presets to import from.** Not a store in the paid sense: a set of
-      routines somebody can start from instead of facing an empty form — *20/20/20*, *the calm
-      15*, *the focused 45*, *wind down*. Importing one creates the routine **and the habits it
-      needs**, which is the part that makes it worth doing and also the part that needs care:
-      a preset must merge with what already exists rather than duplicating a "Meditate" that
-      is already there. Ships bundled with the app first, since offline-first means a library
-      that only works online is a library that mostly does not work. A shared or downloadable
-      one can come later, and would need a way to read a routine someone else wrote without
-      trusting it
+- [x] **A library of routine presets to import from.** Four bundled: *the calm 15*,
+      *20/20/20*, *the focused 45*, *wind down*. Importing one creates the routine **and the
+      habits it needs**, and the merge is the whole difficulty: a habit of the same name is
+      taken in with its history rather than duplicated, and it leaves whichever routine had it
+      in the same write. Matched ignoring case and spacing. Archived habits are deliberately
+      *not* matched — archiving was a decision to stop, and reviving one as a side effect of
+      importing a template would quietly undo it. What lands is ordinary habits and an
+      ordinary routine, with the preset's lengths on them so the builder works immediately.
+      The screen says what it will create and what it will reuse, by name, before you tap
+- [ ] A shared or downloadable library. Needs a way to read a routine someone else wrote
+      without trusting it, which the bundled one never had to answer
 
 ### A habit's usual hour
 The question this answers: today every occurrence is placed on its own day, so a habit that
@@ -132,8 +134,7 @@ For a morning routine it is by far the fastest of the three.
       the wrong place to be standing when you are looking at a day
 
 ### Presets and categories
-- [ ] Preset routines to start from — see the routine preset library under **Routines** above,
-      which is where that item now lives
+- [x] Preset routines to start from — built; see the routine preset library under **Routines**
 - [ ] A browsable, categorised habit-ideas list (health, focus, home, mind…)
 - [ ] Reuse the same list in the app's empty state: a first habit is the hardest one
 - [ ] Categories earn their keep **only if statistics group by them**. Otherwise it is a
