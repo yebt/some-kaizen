@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 
+import BackLink from '@shared/ui/BackLink.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import type { Habit } from '@modules/habits/domain/habit'
 import { useSaveHabit } from '@modules/habits/application/habit-queries'

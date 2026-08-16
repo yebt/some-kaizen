@@ -2,6 +2,7 @@
 import { useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 
+import BackLink from '@shared/ui/BackLink.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import type { BlockTime } from '@modules/block-time/domain/block-time'
 import { useSaveBlockTime } from '@modules/block-time/application/block-time-queries'

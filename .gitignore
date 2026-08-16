@@ -39,3 +39,9 @@ __screenshots__/
 *.timestamp-*-*.mjs
 /.atl
 dist
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

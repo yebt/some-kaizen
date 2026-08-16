@@ -1,0 +1,21 @@
+// TSConfig for the Playwright suite, which runs in Node but drives a browser.
+{
+  "extends": "@tsconfig/node24/tsconfig.json",
+  "include": ["e2e/**/*.ts"],
+  "compilerOptions": {
+    "module": "preserve",
+    "moduleResolution": "bundler",
+
+    // DOM alongside Node, because anything passed to `page.evaluate` is written against the
+    // browser's globals even though the file around it runs in Node.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+
+    // Matches the app, so a helper that indexes into a list is made to say what it does when
+    // the list is short rather than pretending that cannot happen.
+    "noUncheckedIndexedAccess": true,
+
+    "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo"
+  }
+}

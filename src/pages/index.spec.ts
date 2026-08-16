@@ -3,7 +3,7 @@ import 'fake-indexeddb/auto'
 import { PiniaColada } from '@pinia/colada'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
@@ -76,8 +76,28 @@ async function renderToday() {
 }
 
 describe('with a populated day', () => {
+  /**
+   * A fixed Wednesday, at noon so no timezone can drag it onto a neighbouring date.
+   *
+   * The preview dataset is built around the real today, and the block it calls "Work" covers
+   * Monday to Friday. So the test asserting that Work appears passed all week and failed
+   * every Saturday and Sunday — a suite you learn to re-run instead of believe. Pinned rather
+   * than loosened, because "the day shows the blocks that apply to it" is the assertion worth
+   * keeping.
+   *
+   * Only `Date` is faked, and only for these tests. Timers stay real because IndexedDB
+   * resolves through them, and the gesture tests further down measure how long a press
+   * lasted against a clock that has to be the real one.
+   */
+  const A_WEDNESDAY = new Date(2026, 7, 12, 12)
+
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: A_WEDNESDAY, shouldAdvanceTime: true })
     await replaceDataset(persistence, buildPreviewDataset())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('renders without throwing', async () => {

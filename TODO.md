@@ -67,9 +67,18 @@ removing the element the finger has hold of. It cannot be tested here: jsdom has
 capture, so an event dispatched on a detached node still runs its listeners and any test for
 it passes either way.
 
-- [ ] A handful of real-browser gesture tests, Playwright against the built app. The cases
-      worth the setup are exactly the ones that keep breaking: carrying a chip out of the
-      drawer, and a card whose list refetches mid-drag
+- [x] The harness itself: Playwright against the **built** app, Chromium and Firefox, one
+      browser context per test so each starts on an empty database. Three things it settled
+      on the way in. The dev server is the wrong target — it serves every source file at its
+      own URL, and a route file called `[id]/index.vue` becomes a URL with brackets that
+      Firefox refuses to load, which is a difference in the tooling rather than in the
+      product. Reusing a running server is worse than slow: it skips the build and quietly
+      tests an older bundle, which it did, and a reintroduced defect passed. And a production
+      build strips Vue's warnings, so "fail on a console warning" catches nothing there —
+      assert the control is on the screen instead
+- [ ] A handful of real-browser gesture tests on top of it. The cases worth the setup are
+      exactly the ones that keep breaking: carrying a chip out of the drawer, and a card
+      whose list refetches mid-drag
 - [ ] Drive them with real touch, not a mouse. A hold that works with a pointer can still be
       stolen by a scroller on a finger, and CDP's synthetic touch events proved too unreliable
       here to tell the difference
