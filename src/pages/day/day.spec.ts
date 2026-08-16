@@ -22,6 +22,7 @@ import {
 } from '@modules/habits/domain/habit'
 import { createRoutine } from '@modules/habits/domain/routine'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
+import { impliedOccurrenceId } from '@modules/planning/domain/day-agenda'
 import { planInstance, scheduleAt } from '@modules/planning/domain/planned-instance'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -2118,5 +2119,100 @@ describe('filling a day from another day or from a routine', () => {
         `/routines/build/${routine.id}?on=${DAY}`,
       )
     })
+  })
+})
+
+describe('giving a habit an hour without a gesture', () => {
+  /*
+   * Dragging a chip out of the tray was the only way to place a habit on the ruler — which
+   * made the single thing this screen exists for unavailable to a keyboard, to a screen
+   * reader, and to anyone whose hands do not do a hold-and-drag reliably.
+   */
+  async function renderWithTray() {
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay()
+
+    return { wrapper, habit }
+  }
+
+  /** Lets the mutation, its invalidation and the refetch behind it all finish. */
+  async function settled() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  it('offers a plain control on every unplaced habit', async () => {
+    const { wrapper } = await renderWithTray()
+
+    expect(wrapper.find('[aria-label="Give Meditate an hour"]').exists()).toBe(true)
+  })
+
+  it('opens the same sheet a placed card opens', async () => {
+    const { wrapper } = await renderWithTray()
+
+    await wrapper.find('[aria-label="Give Meditate an hour"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('dialog[aria-label="Adjust this occurrence"]').text()).toContain('Meditate')
+  })
+
+  it('writes nothing merely for being opened', async () => {
+    // The same rule the sheet has always had: a curious tap must not leave an occurrence
+    // behind on a day nobody has actually planned.
+    const { wrapper } = await renderWithTray()
+
+    await wrapper.find('[aria-label="Give Meditate an hour"]').trigger('click')
+    await settled()
+
+    expect(await persistence.instances.all()).toEqual([])
+  })
+
+  it('places the habit at the hour typed into it', async () => {
+    const { wrapper, habit } = await renderWithTray()
+
+    await wrapper.find('[aria-label="Give Meditate an hour"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .find('dialog[aria-label="Adjust this occurrence"] input[type="time"]')
+      .setValue('07:30')
+    await settled()
+
+    const [stored] = await persistence.instances.all()
+
+    expect(stored).toMatchObject({ habitId: habit.id, startsAt: 7 * 60 + 30 })
+  })
+
+  it('takes the habit out of the tray once it has an hour', async () => {
+    const { wrapper } = await renderWithTray()
+
+    await wrapper.find('[aria-label="Give Meditate an hour"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .find('dialog[aria-label="Adjust this occurrence"] input[type="time"]')
+      .setValue('07:30')
+    await settled()
+
+    expect(wrapper.find('[aria-label="Give Meditate an hour"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Adjust Meditate"]').exists()).toBe(true)
+  })
+
+  it('gives it the identity the day derives, so it is not counted twice', async () => {
+    const { wrapper, habit } = await renderWithTray()
+
+    await wrapper.find('[aria-label="Give Meditate an hour"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .find('dialog[aria-label="Adjust this occurrence"] input[type="time"]')
+      .setValue('07:30')
+    await settled()
+
+    expect((await persistence.instances.all())[0]?.id).toBe(impliedOccurrenceId(habit.id, DAY, 0))
   })
 })

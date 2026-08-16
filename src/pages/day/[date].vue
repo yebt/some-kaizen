@@ -604,7 +604,16 @@ const editing = ref<Identifier | null>(null)
 /** Lengths worth offering. Anything finer is a drag on the ruler rather than a menu. */
 const DURATIONS: readonly number[] = [15, 30, 45, 60, 90, 120]
 
-const editingEntry = computed(() => timed.value.find((entry) => entry.key === editing.value))
+/**
+ * Searched across the whole day, not only the cards already on the ruler.
+ *
+ * Giving a habit an hour was reachable by dragging a chip out of the tray and nothing else,
+ * which made the one thing this screen exists for impossible with a keyboard, with a screen
+ * reader, or for anyone whose hands do not do a hold-and-drag reliably. The sheet was always
+ * capable of it — its Starts field writes through `scheduleAt` — it simply could not be
+ * opened for a duty that had no time yet.
+ */
+const editingEntry = computed(() => onThisDay.value.find((entry) => entry.key === editing.value))
 
 const editingInstance = computed(() => {
   const entry = editingEntry.value
@@ -1237,7 +1246,7 @@ function trackHover(event: PointerEvent) {
 
       <div
         v-if="untimed.length"
-        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-4 pb-4 transition-transform duration-200"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-4 [--space-below:1rem] transition-transform duration-200"
         :class="drag.isDragging.value ? 'translate-y-full' : 'translate-y-0'"
       >
         <div
@@ -1300,6 +1309,23 @@ function trackHover(event: PointerEvent) {
                   :style="surfaceStyle(row.entry.habit)"
                 >
                   {{ row.entry.habit.name }}
+                  <!--
+                    The way in that is not a gesture.
+
+                    Dragging is the fast path and it stays, but it cannot be the only one:
+                    a hold-and-drag is unavailable to a keyboard, to a screen reader, and to
+                    plenty of hands. This opens the same sheet a placed card opens, whose
+                    Starts field has always been able to write an hour.
+                  -->
+                  <button
+                    type="button"
+                    class="hit-area -mr-1 grid size-5 place-items-center rounded-full text-current opacity-50"
+                    :aria-label="`Give ${row.entry.habit.name} an hour`"
+                    @pointerdown.stop
+                    @click.stop="editing = row.entry.key"
+                  >
+                    <AppIcon name="clock" :size="12" />
+                  </button>
                   <button
                     type="button"
                     class="hit-area -mr-1 grid size-5 place-items-center rounded-full text-current opacity-50"
@@ -1338,7 +1364,7 @@ function trackHover(event: PointerEvent) {
       <div
         v-if="drag.isDragging.value"
         :data-drop-zone="TRAY_ZONE"
-        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md items-center justify-center px-4 pb-4 text-xs font-medium transition-colors"
+        class="safe-bottom fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md items-center justify-center px-4 [--space-below:1rem] text-xs font-medium transition-colors"
       >
         <span
           class="rounded-full border px-4 py-2 transition-colors"
@@ -1690,11 +1716,14 @@ function trackHover(event: PointerEvent) {
       </label>
 
       <template v-else>
+        <!--
+          No `step`. Beside a minimum of one it makes the browser's validity rule
+          "1, 6, 11, 16…", which marks an ordinary twenty minutes invalid.
+        -->
         <label class="mt-3 flex items-center gap-2 text-xs text-ink-muted">
           <input
             type="number"
             min="1"
-            step="5"
             aria-label="Minutes"
             class="tabular w-24 rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
             :value="editingInstance?.durationMinutes"
