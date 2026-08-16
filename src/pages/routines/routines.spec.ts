@@ -272,7 +272,10 @@ describe('creating a routine', () => {
     const wrapper = await render(NewRoutinePage)
 
     await wrapper.find('input[type="text"]').setValue('Wind down')
-    await wrapper.findAll('ul button')[0]?.trigger('click')
+    // By name, like everywhere else in this file: a positional pick reads whatever chip
+    // happens to be first, which stops being the one the assertion is about the moment the
+    // picker gains another habit.
+    await choose(wrapper, 'Stretch')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 

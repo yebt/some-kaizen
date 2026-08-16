@@ -103,6 +103,7 @@ defineExpose({ reject })
           v-model="start"
           type="time"
           required
+          aria-label="Starts at"
           class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
         />
       </label>
@@ -112,6 +113,7 @@ defineExpose({ reject })
           v-model="end"
           type="time"
           required
+          aria-label="Ends at"
           class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
         />
       </label>

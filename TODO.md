@@ -69,8 +69,10 @@ day's". The automatic pick has a priority order:
 - [x] Carried occurrences take the identity the target day derives, so a carried card merges
       with the duty already implied there instead of doubling it. Times and reminders come
       with them; an occurrence that never had a time still arrives without one
-- [ ] "Bring a specific day's" — today the source is chosen for you (same weekday last week,
-      failing that yesterday) and there is no way to name a different one
+- [x] "Bring a specific day's" — the preview is a dialog with a date field, so the day the app
+      suggests is only where it opens. It recomputes as the field changes, which is the
+      difference between a preview and a warning: you can look at two candidate days before
+      committing to either
 
 ### Gesture bugs jsdom cannot see
 
@@ -113,6 +115,19 @@ There is one now, and it fails on exactly the reported bug when the fix is undon
 - [ ] Revisit if the next round of gesture defects is recognition rather than geometry —
       multi-touch, momentum, or nested scrollers would each be a real argument for a library
 
+### A "did it" habit can only be completed by swiping
+
+Found while writing browser tests, and worth fixing on its own account rather than for the
+tests. A measured habit has a dialog, so it can be recorded with a tap; a "did it" habit is
+completed **only** by swiping its row. There is no button, so the most common action in the
+app is unreachable by keyboard, by a screen reader, and by anyone whose hands do not do
+swipes reliably.
+
+- [ ] An ordinary control on the row that records the day. The swipe stays — it is the fast
+      path and it is good — but it must not be the only path
+- [ ] It also unblocks the tests: recording a day end to end currently requires a measured
+      habit, because that is the only kind a test can answer without a pointer gesture
+
 ### Reported and not yet fixed
 
 Raised in one session and deliberately not attempted in it, because several of them were
@@ -140,8 +155,9 @@ For a morning routine it is by far the fastest of the three.
 - [x] A step that would *begin* after midnight is held back and named rather than folded onto
       the clock, where it would be drawn at the top of the same day, hours before the step it
       follows. A step that merely *ends* after midnight is fine and always was
-- [ ] A way in from the day screen itself — today you build from the routine list, which is
-      the wrong place to be standing when you are looking at a day
+- [x] A way in from the day screen itself. The day travels with the link, so the builder opens
+      on the day you were looking at rather than on today — landing on today would make
+      someone retype the one thing the screen already knew
 
 ### Presets and categories
 - [x] Preset routines to start from — built; see the routine preset library under **Routines**
@@ -161,10 +177,20 @@ For a morning routine it is by far the fastest of the three.
 - [ ] Colour and pattern stay. Pattern is what survives greyscale and colour blindness
 
 ### Stats worth reading
-- [ ] Data windows on every statistic: `[7d] [30d] [90d] [365d] [all] [custom]`
-- [ ] Day-of-week breakdown — *"best day: fr (88%), worst day: tu (41%)"*. The most
-      actionable number in init.Habits, and we already store everything it needs
-- [ ] Per-habit summary block: schedule, current and best streak, days tracked
+- [x] Data windows on every statistic: `[7d] [30d] [90d] [1y] [All]`. Clamped to where the
+      history actually begins, so a thirty day window on an app used for six is measured over
+      six — otherwise a rate is divided by days nobody could have answered and a new user's
+      first week reads as a failure. Not remembered between visits: it is a question you ask
+      of the data, not a preference about the app
+- [x] Day-of-week breakdown — *"Best day Mon (88%), worst Tue (41%)"*, on the overview and on
+      each habit's own page. Measured over days **answered**, not over every day in the
+      window, so time away from the app is not counted as failure. A weekday with no answers
+      reports nothing rather than zero. A weekday needs two answered days before it can be
+      named, and a flat week names neither end — otherwise it is arithmetic dressed as a
+      finding. A habit that names its days is not judged on the days it never claimed
+- [x] Per-habit summary block: schedule, tracking since, days answered, usual hour and length,
+      and the archive date when there is one
+- [ ] `[custom]` window, which is the one span above that is still missing
 
 ### Notes on an entry — done
 - [x] Optional `note`, trimmed, capped, and absent rather than empty

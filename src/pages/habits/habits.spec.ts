@@ -153,7 +153,7 @@ describe('creating a habit', () => {
 
     const wrapper = await render(NewHabitPage)
 
-    await wrapper.findAll('input[type="radio"]')[1]?.setValue()
+    await wrapper.find('input[type="radio"][value="measured"]').setValue()
     await wrapper.find('#habit-name').setValue('Drink water')
     await wrapper.find('input[aria-label="Unit"]').setValue('litres')
     await wrapper.find('form').trigger('submit')
@@ -169,7 +169,7 @@ describe('creating a habit', () => {
 
     const wrapper = await render(NewHabitPage)
 
-    await wrapper.findAll('input[type="radio"]')[2]?.setValue()
+    await wrapper.find('input[type="radio"][value="negative"]').setValue()
     await wrapper.find('#habit-name').setValue('Smoking')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -186,7 +186,7 @@ describe('creating a habit', () => {
 
     const wrapper = await render(NewHabitPage)
 
-    await wrapper.findAll('input[type="radio"]')[1]?.setValue()
+    await wrapper.find('input[type="radio"][value="measured"]').setValue()
     await wrapper.find('#habit-name').setValue('Drink water')
     await wrapper.find('input[aria-label="Unit"]').setValue('litres')
     // A goal below the minimum makes a partial day unreachable, so the model rejects it.
@@ -269,7 +269,7 @@ describe('creating a habit', () => {
 
     const wrapper = await render(NewHabitPage)
 
-    await wrapper.findAll('input[type="radio"]')[2]?.setValue()
+    await wrapper.find('input[type="radio"][value="negative"]').setValue()
 
     expect(
       wrapper.find('input[aria-label="The time of day this habit usually happens"]').exists(),

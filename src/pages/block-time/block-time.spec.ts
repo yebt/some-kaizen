@@ -64,11 +64,17 @@ async function render(component: typeof BlockTimePage | typeof NewBlockPage) {
   return wrapper
 }
 
-/** Reads a rendered input, failing loudly rather than optional-chaining into a cast. */
-function inputValue(wrapper: ReturnType<typeof mount>, selector: string, index: number): string {
-  const node = wrapper.findAll(selector)[index]
+/**
+ * The value of a field, chosen by its accessible name.
+ *
+ * By name rather than by position: the two time fields are indistinguishable by selector
+ * alone, and a test that reads "the first one" keeps passing while quietly reading a
+ * different field the moment the form gains another.
+ */
+function inputValue(wrapper: ReturnType<typeof mount>, label: string): string {
+  const node = wrapper.find(`input[aria-label="${label}"]`)
 
-  if (!node) throw new Error(`No ${selector} found at index ${index}.`)
+  if (!node.exists()) throw new Error(`No field labelled ${label}.`)
 
   return (node.element as HTMLInputElement).value
 }
@@ -163,8 +169,8 @@ describe('creating a block', () => {
     const wrapper = await render(NewBlockPage)
 
     await wrapper.find('#block-name').setValue('Sleep')
-    await wrapper.findAll('input[type="time"]')[0]?.setValue('23:00')
-    await wrapper.findAll('input[type="time"]')[1]?.setValue('07:00')
+    await wrapper.find('input[aria-label="Starts at"]').setValue('23:00')
+    await wrapper.find('input[aria-label="Ends at"]').setValue('07:00')
     await wrapper.find('form').trigger('submit')
     await settle()
 
@@ -179,8 +185,8 @@ describe('creating a block', () => {
     const wrapper = await render(NewBlockPage)
 
     await wrapper.find('#block-name').setValue('Meeting')
-    await wrapper.findAll('input[type="time"]')[0]?.setValue('10:00')
-    await wrapper.findAll('input[type="time"]')[1]?.setValue('11:00')
+    await wrapper.find('input[aria-label="Starts at"]').setValue('10:00')
+    await wrapper.find('input[aria-label="Ends at"]').setValue('11:00')
     await wrapper.find('form').trigger('submit')
     await settle()
 
@@ -195,8 +201,8 @@ describe('creating a block', () => {
     const wrapper = await render(NewBlockPage)
 
     await wrapper.find('#block-name').setValue('Commute')
-    await wrapper.findAll('input[type="time"]')[0]?.setValue('17:00')
-    await wrapper.findAll('input[type="time"]')[1]?.setValue('18:00')
+    await wrapper.find('input[aria-label="Starts at"]').setValue('17:00')
+    await wrapper.find('input[aria-label="Ends at"]').setValue('18:00')
     await wrapper.find('form').trigger('submit')
     await settle()
 
@@ -270,8 +276,8 @@ describe('editing a block', () => {
 
     const wrapper = await renderEdit(block.id)
 
-    expect(inputValue(wrapper, 'input[type="time"]', 0)).toBe('09:00')
-    expect(inputValue(wrapper, 'input[type="time"]', 1)).toBe('17:00')
+    expect(inputValue(wrapper, 'Starts at')).toBe('09:00')
+    expect(inputValue(wrapper, 'Ends at')).toBe('17:00')
   })
 
   it('prefills a span crossing midnight without turning it backwards', async () => {
@@ -287,8 +293,8 @@ describe('editing a block', () => {
 
     const wrapper = await renderEdit(sleep.id)
 
-    expect(inputValue(wrapper, 'input[type="time"]', 0)).toBe('23:00')
-    expect(inputValue(wrapper, 'input[type="time"]', 1)).toBe('07:00')
+    expect(inputValue(wrapper, 'Starts at')).toBe('23:00')
+    expect(inputValue(wrapper, 'Ends at')).toBe('07:00')
   })
 
   it('saves an unchanged block without reporting it as clashing with itself', async () => {
@@ -324,8 +330,8 @@ describe('editing a block', () => {
 
     const wrapper = await renderEdit(gym.id)
 
-    await wrapper.findAll('input[type="time"]')[0]?.setValue('10:00')
-    await wrapper.findAll('input[type="time"]')[1]?.setValue('11:00')
+    await wrapper.find('input[aria-label="Starts at"]').setValue('10:00')
+    await wrapper.find('input[aria-label="Ends at"]').setValue('11:00')
     await wrapper.find('form').trigger('submit')
     await settle()
 
