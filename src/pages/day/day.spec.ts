@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 
 import { PiniaColada } from '@pinia/colada'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -13,11 +13,13 @@ import { PLATFORM_KEY, type PlatformServices } from '@core/platform-context'
 import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
 import { interval, timeOfDay } from '@shared/domain/time-of-day'
+import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import {
   createCompletedHabit,
   createMeasuredHabit,
   frequency,
   measure,
+  onWeekdays,
 } from '@modules/habits/domain/habit'
 import { createRoutine } from '@modules/habits/domain/routine'
 import { createBlockTime } from '@modules/block-time/domain/block-time'
@@ -1733,5 +1735,233 @@ describe('a sheet opened from a card', () => {
     await settle()
 
     expect(wrapper.text()).toContain('needs an hour')
+  })
+})
+
+describe('bringing a day already arranged onto this one', () => {
+  /*
+   * DAY is Monday 2026-03-09, so the Monday before it is 2026-03-02 and the day before it is
+   * Sunday 2026-03-08.
+   */
+  const LAST_MONDAY = '2026-03-02'
+  const YESTERDAY = '2026-03-08'
+
+  /** Mounts the day and hands back the feedback store, which is where the preview is asked. */
+  async function renderWithFeedback(date: string = DAY) {
+    const pinia = createPinia()
+
+    setActivePinia(pinia)
+    platform = stubPlatform()
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/day/:date', component: DayPage }],
+    })
+
+    await router.push(`/day/${date}`)
+    await router.isReady()
+
+    const wrapper = mount(DayPage, {
+      global: {
+        plugins: [pinia, PiniaColada, router],
+        provide: {
+          [PERSISTENCE_KEY as symbol]: persistence,
+          [PLATFORM_KEY as symbol]: platform,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    return { wrapper, feedback: useFeedback() }
+  }
+
+  function placedOn(habitId: ReturnType<typeof newIdentifier>, date: string, at: number) {
+    return scheduleAt(
+      planInstance({ id: newIdentifier(), habitId, date: calendarDate(date), period: 'daily' }),
+      timeOfDay(at),
+    )
+  }
+
+  /** Lets the mutation, its invalidation and the refetch behind it all finish. */
+  async function settled() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  async function bring(page: Awaited<ReturnType<typeof renderWithFeedback>>) {
+    const button = page.wrapper.findAll('button').find((node) => node.text().trim() === 'Bring it')
+
+    if (!button) throw new Error(`No offer to bring a plan. Saw: ${page.wrapper.text()}`)
+
+    await button.trigger('click')
+    await flushPromises()
+  }
+
+  it('offers nothing when neither candidate day was ever arranged', async () => {
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    expect((await renderDay()).text()).not.toContain('was arranged')
+  })
+
+  it('offers the same weekday last week, naming it', async () => {
+    const habit = meditate()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+    })
+
+    expect((await renderDay()).text()).toContain('was arranged')
+  })
+
+  it('brings the occurrences over at the times they had', async () => {
+    const habit = meditate()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+    })
+
+    const page = await renderWithFeedback()
+
+    await bring(page)
+    page.feedback.resolve(true)
+    await settled()
+
+    const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
+
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ habitId: habit.id, startsAt: 7 * 60 })
+  })
+
+  it('writes nothing when the preview is declined', async () => {
+    // The offer is a question, and answering no has to leave the day exactly as it was.
+    const habit = meditate()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60)],
+    })
+
+    const page = await renderWithFeedback()
+
+    await bring(page)
+    page.feedback.resolve(false)
+    await settled()
+
+    expect((await persistence.instances.all()).filter((one) => one.date === DAY)).toEqual([])
+  })
+
+  it('names in the preview the habits it will not bring', async () => {
+    // Carrying a Sunday plan onto a Monday must drop the Sunday-only habits rather than
+    // schedule them, and it has to say which before anything is written.
+    const sundayOnly = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Long walk',
+      frequency: onWeekdays([7]),
+      createdOn: CREATED_ON,
+    })
+    const anyDay = meditate()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [sundayOnly, anyDay],
+      instances: [
+        placedOn(sundayOnly.id, YESTERDAY, 10 * 60),
+        placedOn(anyDay.id, YESTERDAY, 7 * 60),
+      ],
+    })
+
+    const page = await renderWithFeedback()
+
+    await bring(page)
+
+    expect(page.feedback.request?.message).toContain('Long walk')
+    expect(page.feedback.request?.message).toContain('does not belong on this day')
+  })
+
+  it('does not schedule a habit onto a weekday it does not name', async () => {
+    const sundayOnly = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Long walk',
+      frequency: onWeekdays([7]),
+      createdOn: CREATED_ON,
+    })
+    const anyDay = meditate()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [sundayOnly, anyDay],
+      instances: [
+        placedOn(sundayOnly.id, YESTERDAY, 10 * 60),
+        placedOn(anyDay.id, YESTERDAY, 7 * 60),
+      ],
+    })
+
+    const page = await renderWithFeedback()
+
+    await bring(page)
+    page.feedback.resolve(true)
+    await settled()
+
+    const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
+
+    expect(stored.map((one) => one.habitId)).toEqual([anyDay.id])
+  })
+
+  it('stops offering once the day has been arranged', async () => {
+    // Everything worth bringing is already here, so the line takes itself away rather than
+    // sitting there inviting a second import that would do nothing.
+    const habit = meditate()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      instances: [placedOn(habit.id, LAST_MONDAY, 7 * 60), placedOn(habit.id, DAY, 9 * 60)],
+    })
+
+    expect((await renderDay()).text()).not.toContain('was arranged')
+  })
+
+  it('leaves a habit already on this day exactly where it was put', async () => {
+    const habit = meditate()
+    const other = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Read',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+    })
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit, other],
+      instances: [
+        placedOn(habit.id, LAST_MONDAY, 7 * 60),
+        placedOn(other.id, LAST_MONDAY, 20 * 60),
+        placedOn(habit.id, DAY, 9 * 60),
+      ],
+    })
+
+    const page = await renderWithFeedback()
+
+    await bring(page)
+    page.feedback.resolve(true)
+    await settled()
+
+    const stored = (await persistence.instances.all()).filter((one) => one.date === DAY)
+    const kept = stored.find((one) => one.habitId === habit.id)
+
+    expect(kept).toMatchObject({ startsAt: 9 * 60 })
+    expect(stored.find((one) => one.habitId === other.id)).toMatchObject({ startsAt: 20 * 60 })
   })
 })

@@ -44,6 +44,22 @@ export function useBuildRoutine() {
   })
 }
 
+/**
+ * Brings a day already arranged onto one that is not.
+ *
+ * Saved as a set, because the thing being carried is an arrangement rather than a list of
+ * separate decisions, and half of one is not a smaller version of it.
+ */
+export function useCarryPlan() {
+  const persistence = usePersistence()
+  const cache = useQueryCache()
+
+  return useMutation({
+    mutation: (carried: readonly PlannedInstance[]) => persistence.instances.saveAll(carried),
+    onSettled: () => cache.invalidateQueries({ key: INSTANCES_KEY }, true),
+  })
+}
+
 export function useRemoveInstance() {
   const persistence = usePersistence()
   const cache = useQueryCache()

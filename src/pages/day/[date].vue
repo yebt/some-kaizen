@@ -42,6 +42,7 @@ import {
   impliedOccurrenceId,
   spanFor,
 } from '@modules/planning/domain/day-agenda'
+import { carryPlan, sourceDayFor } from '@modules/planning/domain/carried-plan'
 import { groupByRoutine, hasArrangement } from '@modules/planning/domain/routine-agenda'
 import { useBlockTime } from '@modules/block-time/application/block-time-queries'
 import {
@@ -57,6 +58,7 @@ import {
   withoutReminder,
 } from '@modules/planning/domain/planned-instance'
 import {
+  useCarryPlan,
   usePlannedInstances,
   useRemoveInstance,
   useSaveInstance,
@@ -89,6 +91,7 @@ const { data: blocksData } = useBlockTime()
 const { data: routinesData } = useRoutines()
 const saveInstance = useSaveInstance()
 const removeInstance = useRemoveInstance()
+const carry = useCarryPlan()
 const feedback = useFeedback()
 const preferences = usePreferences()
 const platform = usePlatform()
@@ -117,6 +120,60 @@ const dayLabel = computed(() =>
 )
 
 const hours = Array.from({ length: 24 }, (_, hour) => hour)
+
+/**
+ * The day this one could copy, when there is one worth copying.
+ *
+ * Offered rather than applied. A planner that fills days on its own is one you stop trusting
+ * about the past, because you can no longer tell what you decided from what it assumed.
+ */
+const carryFrom = computed(() => sourceDayFor(day.value, instances.value))
+
+const carryable = computed(() =>
+  carryFrom.value === undefined
+    ? undefined
+    : carryPlan({
+        from: carryFrom.value,
+        to: day.value,
+        habits: habits.value,
+        instances: instances.value,
+      }),
+)
+
+const carryLabel = computed(() =>
+  carryFrom.value === undefined
+    ? ''
+    : new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(
+        toDate(carryFrom.value),
+      ),
+)
+
+async function bringPlanForward() {
+  const plan = carryable.value
+
+  if (!plan?.carried.length) return
+
+  const dropped = plan.dropped.length
+    ? ` ${plan.dropped.map((habit) => habit.name).join(', ')} ${
+        plan.dropped.length === 1 ? 'does not' : 'do not'
+      } belong on this day, so ${plan.dropped.length === 1 ? 'it stays' : 'they stay'} out.`
+    : ''
+
+  const kept = plan.kept.length ? ` Everything already on this day is left as it is.` : ''
+
+  const accepted = await feedback.confirm({
+    title: `Bring ${carryLabel.value} here?`,
+    message: `${plan.carried.length} ${
+      plan.carried.length === 1 ? 'habit arrives' : 'habits arrive'
+    } at the times they had.${dropped}${kept}`,
+    confirmLabel: 'Bring it',
+  })
+
+  if (!accepted) return
+
+  await carry.mutateAsync(plan.carried)
+  feedback.notify('Plan brought forward', 'success')
+}
 
 /**
  * What the day owes, not merely what has been placed on it.
@@ -956,6 +1013,38 @@ function trackHover(event: PointerEvent) {
         </RouterLink>
       </div>
     </header>
+
+    <!--
+      Offered only when there is genuinely something to bring, and named rather than hinted.
+      A permanent button would be one more thing to ignore; a line that appears on exactly the
+      days it applies to teaches the feature at the moment it is useful, and takes itself away
+      once the day has been arranged.
+    -->
+    <div
+      v-if="carryable?.carried.length"
+      class="mb-4 flex items-center gap-3 rounded-card border border-line bg-surface p-3"
+    >
+      <div class="min-w-0 flex-1">
+        <p class="text-xs font-medium text-ink">{{ carryLabel }} was arranged.</p>
+        <p class="text-[0.625rem] text-ink-muted">
+          Bring it here and
+          {{
+            carryable.carried.length === 1
+              ? '1 habit arrives'
+              : `${carryable.carried.length} habits arrive`
+          }}
+          at the times they had.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="shrink-0 rounded-full border border-line-strong px-3.5 py-2 text-xs font-medium text-ink disabled:opacity-60"
+        :disabled="carry.isLoading.value"
+        @click="bringPlanForward"
+      >
+        Bring it
+      </button>
+    </div>
 
     <div
       v-if="habitsLoading && habitsData === undefined"

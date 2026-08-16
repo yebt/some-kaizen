@@ -57,10 +57,20 @@ day's". The automatic pick has a priority order:
 2. failing that, the previous day,
 3. in both cases filtered to the habits that actually apply to the target day.
 
-- [ ] Habits that name their weekdays make this interesting: pulling Monday's plan onto a
-      Tuesday must drop the Monday-only ones rather than schedule them wrongly
-- [ ] Pulling a plan is an explicit act with a preview, never a silent copy — a planner that
-      fills a day on its own is one you stop trusting about the past
+- [x] Habits that name their weekdays make this interesting: pulling Monday's plan onto a
+      Tuesday drops the Monday-only ones rather than scheduling them wrongly, and names them
+      in the preview. Archived habits and habits deleted since are dropped too
+- [x] Pulling a plan is an explicit act with a preview, never a silent copy. The offer appears
+      on the day it applies to, says what would arrive and what would not, and takes itself
+      away once the day is arranged
+- [x] Nothing already on the target day is touched. A decision made about today outranks one
+      made about a day that has been and gone, and an import that silently overwrites is one
+      nobody presses twice
+- [x] Carried occurrences take the identity the target day derives, so a carried card merges
+      with the duty already implied there instead of doubling it. Times and reminders come
+      with them; an occurrence that never had a time still arrives without one
+- [ ] "Bring a specific day's" — today the source is chosen for you (same weekday last week,
+      failing that yesterday) and there is no way to name a different one
 
 ### Gesture bugs jsdom cannot see
 
