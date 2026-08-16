@@ -115,6 +115,13 @@ declare module 'vue-router/auto-routes' {
       { id: ParamValue<false> },
       | never
     >,
+    '/routines/build/[id]': RouteRecordInfo<
+      '/routines/build/[id]',
+      '/routines/build/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
+      | never
+    >,
     '/routines/new': RouteRecordInfo<
       '/routines/new',
       '/routines/new',
@@ -240,6 +247,14 @@ declare module 'vue-router/auto-routes' {
     'src/pages/routines/[id].vue': {
       routes:
         | '/routines/[id]'
+      views:
+        | never
+      pathParamNames:
+        | 'id'
+    }
+    'src/pages/routines/build/[id].vue': {
+      routes:
+        | '/routines/build/[id]'
       views:
         | never
       pathParamNames:

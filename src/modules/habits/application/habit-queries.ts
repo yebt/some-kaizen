@@ -34,6 +34,24 @@ export function useSaveHabit() {
   })
 }
 
+/**
+ * Saves several habits as one act.
+ *
+ * The routine builder states how long each of its steps takes, which is a fact about the
+ * habits rather than about the day, and it states all of them at once. Writing them one at a
+ * time would invalidate and refetch once per step, redrawing the list underneath the person
+ * still reading it.
+ */
+export function useSaveHabits() {
+  const persistence = usePersistence()
+  const cache = useQueryCache()
+
+  return useMutation({
+    mutation: (habits: readonly Habit[]) => persistence.habits.saveAll(habits),
+    onSettled: () => cache.invalidateQueries({ key: HABITS_KEY }, true),
+  })
+}
+
 export function useArchiveHabit() {
   const persistence = usePersistence()
   const cache = useQueryCache()

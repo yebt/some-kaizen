@@ -38,6 +38,7 @@ function fullDataset(): Dataset {
     measure: measure('litres', 1, 2),
     createdOn: CREATED_ON,
     usualTime: timeOfDay(8 * 60),
+    usualDurationMinutes: 15,
   })
   const run = createCompletedHabit({
     id: newIdentifier(),
@@ -164,6 +165,16 @@ describe('a full round trip', () => {
     expect(restored.habits).toEqual(dataset.habits)
   })
 
+  it('returns how long a habit usually takes', () => {
+    const dataset = fullDataset()
+    const [restored] = roundTrip(dataset).habits
+
+    // Asserted on the field by name as well as through the deep comparison above, because a
+    // dropped optional field is exactly what a deep comparison of two objects built by the
+    // same code can miss when both sides lose it.
+    expect(restored).toMatchObject({ usualDurationMinutes: 15 })
+  })
+
   it('returns the hour a routine usually starts at', () => {
     const dataset = fullDataset()
 
@@ -238,6 +249,17 @@ describe('refusing a corrupted file', () => {
     })
 
     expect(() => parseBackup(file)).toThrow(InvalidTimeOfDayError)
+  })
+
+  it('rejects a length no card could be drawn at, rather than importing it', () => {
+    const file = corrupted((dataset) => {
+      const habits = dataset.habits as Array<Record<string, unknown>>
+      const first = habits[0]
+
+      if (first) first.usualDurationMinutes = 0
+    })
+
+    expect(() => parseBackup(file)).toThrow(InvalidTimeIntervalError)
   })
 
   it('rejects an impossible date', () => {

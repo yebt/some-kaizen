@@ -190,8 +190,10 @@ describe('creating a habit', () => {
     await wrapper.find('#habit-name').setValue('Drink water')
     await wrapper.find('input[aria-label="Unit"]').setValue('litres')
     // A goal below the minimum makes a partial day unreachable, so the model rejects it.
-    await wrapper.findAll('input[type="number"]')[1]?.setValue(5)
-    await wrapper.findAll('input[type="number"]')[2]?.setValue(1)
+    // Chosen by name rather than by position: adding any number field to the form ahead of
+    // these shifts the indices, and the test then sets two other fields and passes anyway.
+    await wrapper.find('input[aria-label="Minimum"]').setValue(5)
+    await wrapper.find('input[aria-label="Goal"]').setValue(1)
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
@@ -214,6 +216,35 @@ describe('creating a habit', () => {
     const [stored] = await persistence.habits.all()
 
     expect(stored).toMatchObject({ usualTime: 7 * 60 })
+  })
+
+  it('stores how long a habit usually takes', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Meditate')
+    await wrapper
+      .find('input[aria-label="How long this habit usually takes, in minutes"]')
+      .setValue('20')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).toMatchObject({ usualDurationMinutes: 20 })
+  })
+
+  it('stores no length at all when none is given', async () => {
+    // The half hour a card defaults to is a drawing size, not a claim about how long
+    // meditation takes. Storing it here would put a number on the habit nobody stated.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Meditate')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).not.toHaveProperty('usualDurationMinutes')
   })
 
   it('stores no usual hour at all when none is given', async () => {

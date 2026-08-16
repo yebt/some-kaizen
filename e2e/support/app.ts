@@ -26,9 +26,21 @@ export async function open(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#app')).not.toBeEmpty({ timeout: MOUNT_TIMEOUT_MS })
 }
 
-export async function createHabit(page: Page, name: string): Promise<void> {
+export interface HabitDraft {
+  /** How long it usually takes, in minutes, when the test needs the builder to know. */
+  readonly usualDurationMinutes?: number
+}
+
+export async function createHabit(page: Page, name: string, draft: HabitDraft = {}): Promise<void> {
   await open(page, '/habits/new')
   await page.locator('#habit-name').fill(name)
+
+  if (draft.usualDurationMinutes !== undefined) {
+    await page
+      .getByLabel('How long this habit usually takes, in minutes')
+      .fill(String(draft.usualDurationMinutes))
+  }
+
   await page.getByRole('button', { name: 'Create' }).click()
   await expect(page).not.toHaveURL(/\/habits\/new$/)
 }

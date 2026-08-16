@@ -149,6 +149,13 @@ const usualTime = ref(
     : '',
 )
 
+/** How long it takes, as the empty string when it has never been measured. */
+const usualDuration = ref(
+  props.initial && !isNegative(props.initial) && props.initial.usualDurationMinutes !== undefined
+    ? String(props.initial.usualDurationMinutes)
+    : '',
+)
+
 const unit = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.unit : '')
 const minimum = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.minimum : 1)
 const goal = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.goal : 2)
@@ -191,6 +198,7 @@ function build(): Habit {
   const positiveCore = {
     ...core,
     ...(usualTime.value ? { usualTime: parseTime(usualTime.value) } : {}),
+    ...(usualDuration.value ? { usualDurationMinutes: Number(usualDuration.value) } : {}),
   }
 
   const recurrence =
@@ -354,6 +362,43 @@ function submit() {
       </span>
     </label>
 
+    <!--
+      Left empty rather than defaulted to the half hour a card is drawn at. That default is a
+      sensible size for something nobody has measured; it is not a claim about how long this
+      takes, and printing it here would put a number in front of someone that they never said.
+
+      No `step` on the field, deliberately. A step of five alongside a minimum of one makes
+      the browser's own validity rule "1, 6, 11, 16…", so a perfectly ordinary ten minutes is
+      rejected — and rejected silently, by refusing to submit the whole form with no visible
+      reason. Any whole number of minutes is a real answer.
+    -->
+    <label v-if="isPositive" class="block text-xs font-medium text-ink-muted">
+      Usual length
+      <span class="font-normal text-ink-subtle">· optional</span>
+      <span class="mt-1.5 flex items-center gap-2">
+        <input
+          v-model="usualDuration"
+          type="number"
+          min="1"
+          placeholder="30"
+          aria-label="How long this habit usually takes, in minutes"
+          class="tabular w-24 rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm font-normal text-ink"
+        />
+        <span class="text-sm text-ink-muted">minutes</span>
+        <button
+          v-if="usualDuration"
+          type="button"
+          class="rounded-full border border-line-strong px-3 py-2 text-xs font-medium text-ink-muted"
+          @click="usualDuration = ''"
+        >
+          Clear
+        </button>
+      </span>
+      <span class="mt-1 block text-[0.625rem] text-ink-subtle">
+        What a routine counts forward from when it builds a day out of its steps.
+      </span>
+    </label>
+
     <fieldset v-if="kind === 'measured'" class="space-y-3">
       <legend class="mb-1.5 text-xs font-medium text-ink-muted">How it is measured</legend>
       <input
@@ -371,6 +416,7 @@ function submit() {
             type="number"
             min="0"
             step="any"
+            aria-label="Minimum"
             class="tabular mt-1 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
           />
         </label>
@@ -381,6 +427,7 @@ function submit() {
             type="number"
             min="0"
             step="any"
+            aria-label="Goal"
             class="tabular mt-1 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink"
           />
         </label>

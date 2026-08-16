@@ -116,8 +116,20 @@ A start time plus a list of steps with durations, cascading the clock forward. T
 to fill the day we already model**, next to dragging onto an hour and typing an exact time.
 For a morning routine it is by far the fastest of the three.
 
-- [ ] Builder screen: wake time, steps, durations, live cascading times
-- [ ] Writes real occurrences, not a separate kind of record
+- [x] Builder screen: start time, steps, durations, live cascading times. Reached from the
+      routine list, seeded from the routine's own anchor hour, and it builds onto any day
+      rather than only today
+- [x] Writes real occurrences, not a separate kind of record — and each carries the identity
+      the day would have derived anyway, so a build is an edit rather than a duplication and
+      the day never claims a habit is owed twice
+- [x] `usualDurationMinutes` on a habit, so the second build opens already filled in. A length
+      is a fact about the habit, not about one day, which is why the builder writes it back
+      there rather than only onto the occurrence
+- [x] A step that would *begin* after midnight is held back and named rather than folded onto
+      the clock, where it would be drawn at the top of the same day, hours before the step it
+      follows. A step that merely *ends* after midnight is fine and always was
+- [ ] A way in from the day screen itself — today you build from the routine list, which is
+      the wrong place to be standing when you are looking at a day
 
 ### Presets and categories
 - [ ] Preset routines to start from — see the routine preset library under **Routines** above,

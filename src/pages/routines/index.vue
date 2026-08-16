@@ -70,6 +70,11 @@ const actionsFor = computed<readonly SheetAction[]>(() => {
   const archived = menuFor.value?.archivedOn !== undefined
 
   return [
+    {
+      key: 'build',
+      label: 'Build into a day',
+      description: 'Say when it starts and how long each step takes',
+    },
     { key: 'edit', label: 'Edit', description: 'Name, habits, order, colour' },
     archived
       ? { key: 'restore', label: 'Use again', description: 'Start arranging today with it again' }
@@ -93,6 +98,12 @@ async function runAction(key: string) {
   menuFor.value = null
 
   if (!routine) return
+
+  if (key === 'build') {
+    await router.push(`/routines/build/${routine.id}`)
+
+    return
+  }
 
   if (key === 'edit') {
     await router.push(`/routines/${routine.id}`)

@@ -8,7 +8,7 @@ import {
   weekdaySet,
 } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
-import type { TimeOfDay } from '@shared/domain/time-of-day'
+import { assertDuration, type TimeOfDay } from '@shared/domain/time-of-day'
 
 /**
  * Whether the habit is something to build or something to quit.
@@ -88,6 +88,19 @@ export interface CompletedHabit extends HabitCore {
    * this", so a default would be the habit claiming an hour nobody chose.
    */
   readonly usualTime?: TimeOfDay
+  /**
+   * How long it usually takes, when that is known.
+   *
+   * The same argument as the hour above, one axis over. A routine builder cascades the clock
+   * forward through its steps, and it can only do that if each step has a length. Asking for
+   * those lengths every time you build a morning would make the fastest way to fill a day the
+   * slowest, so the answer is stated once on the habit and reused.
+   *
+   * Absent rather than the half hour an occurrence defaults to. That default is a sensible
+   * size for a card nobody has measured; it is not a claim about how long meditation takes,
+   * and storing it as one would put a number in front of someone that they never said.
+   */
+  readonly usualDurationMinutes?: number
 }
 
 export interface MeasuredHabit extends HabitCore {
@@ -108,6 +121,8 @@ export interface MeasuredHabit extends HabitCore {
    * this", so a default would be the habit claiming an hour nobody chose.
    */
   readonly usualTime?: TimeOfDay
+  /** How long it usually takes, when that is known. See {@link CompletedHabit.usualDurationMinutes}. */
+  readonly usualDurationMinutes?: number
 }
 
 export type PositiveHabit = CompletedHabit | MeasuredHabit
@@ -262,6 +277,7 @@ export interface CompletedHabitDraft extends Appearance {
   /** Kept when editing, so re-saving a retired habit does not quietly revive it. */
   readonly archivedOn?: CalendarDate
   readonly usualTime?: TimeOfDay
+  readonly usualDurationMinutes?: number
 }
 
 export interface MeasuredHabitDraft extends CompletedHabitDraft {
@@ -286,6 +302,7 @@ export function createCompletedHabit(draft: CompletedHabitDraft): CompletedHabit
     tracking: 'completed',
     frequency: draft.frequency,
     ...usualTimeOf(draft),
+    ...usualDurationOf(draft),
   }
 }
 
@@ -301,6 +318,7 @@ export function createMeasuredHabit(draft: MeasuredHabitDraft): MeasuredHabit {
     frequency: draft.frequency,
     measure: draft.measure,
     ...usualTimeOf(draft),
+    ...usualDurationOf(draft),
   }
 }
 
@@ -352,6 +370,21 @@ export function isMeasured(habit: Habit): habit is MeasuredHabit {
 /** Absent rather than present-and-undefined, so an unstated hour stores nothing at all. */
 function usualTimeOf(draft: { readonly usualTime?: TimeOfDay }): { usualTime?: TimeOfDay } {
   return draft.usualTime === undefined ? {} : { usualTime: draft.usualTime }
+}
+
+/**
+ * The same, for how long it takes, and validated on the way through.
+ *
+ * A length is checked here rather than trusted because this one reaches storage from a form,
+ * a backup file and a preset alike, and a zero or a fraction would only be discovered later
+ * by whatever tried to draw a card of that size.
+ */
+function usualDurationOf(draft: { readonly usualDurationMinutes?: number }): {
+  usualDurationMinutes?: number
+} {
+  return draft.usualDurationMinutes === undefined
+    ? {}
+    : { usualDurationMinutes: assertDuration(draft.usualDurationMinutes) }
 }
 
 /** Only the parts that were actually chosen, so an unstyled habit stores no empty fields. */

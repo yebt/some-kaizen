@@ -125,6 +125,13 @@ function readHabit(raw: unknown): Habit {
     createdOn,
     ...readAppearance(value),
     ...readOptionalTime(value.usualTime, 'usualTime'),
+    ...(value.usualDurationMinutes === undefined
+      ? {}
+      : {
+          usualDurationMinutes: assertDuration(
+            asNumber(value.usualDurationMinutes, 'usual duration'),
+          ),
+        }),
   })
 
   return archivedOn ? { ...built, archivedOn } : built
@@ -162,6 +169,7 @@ function buildHabit(
     name: string
     createdOn: CalendarDate
     usualTime?: TimeOfDay
+    usualDurationMinutes?: number
   } & Appearance,
 ): Habit {
   if (value.polarity === 'negative') return createNegativeHabit(core)
