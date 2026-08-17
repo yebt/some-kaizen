@@ -1001,6 +1001,21 @@ async function loosenEditing() {
   feedback.notify(`${habitFor(existing)?.name ?? 'It'} has no fixed time now`)
 }
 
+/**
+ * Takes the occurrence off the day altogether, from the sheet rather than by a gesture.
+ *
+ * Previously this was reachable only by dragging the card onto a strip at the bottom of the
+ * screen, so a day could be added to without a pointer but never subtracted from.
+ */
+async function dropEditing() {
+  const entry = editingEntry.value
+
+  editing.value = null
+  forgetLift()
+
+  if (entry) await dropChip(entry.duty)
+}
+
 /** The habit an occurrence belongs to, for a message that can name it. */
 function habitFor(instance: PlannedInstance): PositiveHabit | undefined {
   return habits.value.find((habit) => habit.id === instance.habitId)
@@ -1308,14 +1323,29 @@ function trackHover(event: PointerEvent) {
                   class="flex items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 py-2 text-xs font-medium text-ink shadow-card active:scale-95"
                   :style="surfaceStyle(row.entry.habit)"
                 >
-                  {{ row.entry.habit.name }}
                   <!--
-                    The way in that is not a gesture.
+                    A minimum width on the name, so there is always something to hold.
 
-                    Dragging is the fast path and it stays, but it cannot be the only one:
-                    a hold-and-drag is unavailable to a keyboard, to a screen reader, and to
-                    plenty of hands. This opens the same sheet a placed card opens, whose
-                    Starts field has always been able to write an hour.
+                    A touch target is at least 44px whatever size the icon inside it, and on a
+                    chip reading "Run" that target reached past the middle: holding the chip —
+                    the one gesture the drawer exists for — pressed the button instead. The
+                    name now keeps a thumb's width of its own.
+                  -->
+                  <span class="min-w-11">{{ row.entry.habit.name }}</span>
+                  <!--
+                    One control, not two, and this is not a style choice.
+
+                    A touch target is at least 44px however small the icon inside it, so two
+                    of them on a chip barely wider than that leave nothing to grab: on a chip
+                    reading "Run" the buttons covered the middle, and holding it — the one
+                    gesture the drawer exists for — pressed a button instead. Taking a habit
+                    off the day moved into the sheet this opens, which also gave that action
+                    its own way in: it was previously reachable only by dragging the card onto
+                    a strip at the bottom of the screen.
+
+                    Dragging is still the fast path. It just is not the only one, because a
+                    hold-and-drag is unavailable to a keyboard, to a screen reader, and to
+                    plenty of hands.
                   -->
                   <button
                     type="button"
@@ -1325,15 +1355,6 @@ function trackHover(event: PointerEvent) {
                     @click.stop="editing = row.entry.key"
                   >
                     <AppIcon name="clock" :size="12" />
-                  </button>
-                  <button
-                    type="button"
-                    class="hit-area -mr-1 grid size-5 place-items-center rounded-full text-current opacity-50"
-                    :aria-label="`Take ${row.entry.habit.name} off today`"
-                    @pointerdown.stop
-                    @click.stop="dropChip(row.entry.duty)"
-                  >
-                    <AppIcon name="ban" :size="12" />
                   </button>
                 </span>
               </DraggableItem>
@@ -1786,11 +1807,15 @@ function trackHover(event: PointerEvent) {
       </div>
 
       <!--
-        The way off the day, from the sheet that opens on the card itself. Everything else
-        here changes when a thing happens; this is the one that says it will not.
+        The two ways off, from the sheet that opens on the card itself. Everything else here
+        changes when a thing happens; these say it will not.
+
+        "Not today" used to be reachable only by dragging the card onto a strip at the bottom
+        of the screen, which made removing something from a day a gesture or nothing.
       -->
       <div class="mt-5 flex gap-2">
         <button
+          v-if="editingInstance?.startsAt !== undefined"
           type="button"
           class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-relapse"
           @click="loosenEditing"
@@ -1799,12 +1824,19 @@ function trackHover(event: PointerEvent) {
         </button>
         <button
           type="button"
-          class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
-          @click="editing = null"
+          class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-relapse"
+          @click="dropEditing"
         >
-          Done
+          Not today
         </button>
       </div>
+      <button
+        type="button"
+        class="mt-2 w-full rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
+        @click="editing = null"
+      >
+        Done
+      </button>
     </AppDialog>
 
     <DragGhost

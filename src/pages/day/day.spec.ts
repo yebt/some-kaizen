@@ -1393,10 +1393,18 @@ describe('a day with more than a drawer can show', () => {
     expect(wrapper.find('[data-drop-zone="tray"]').isVisible()).toBe(false)
   })
 
-  it('takes a habit off the day from the chip itself', async () => {
+  it('takes a habit off the day from the sheet the chip opens', async () => {
+    // The action used to be a second icon on the chip and moved into the sheet, because two
+    // touch targets on a chip that size left nothing of it to hold — and holding it is the
+    // one thing the drawer exists for.
     const wrapper = await openTray(await renderCrowded(2))
 
-    await wrapper.find('[aria-label^="Take Habit number 1"]').trigger('click')
+    await wrapper.find('[aria-label^="Give Habit number 1"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('dialog[aria-label="Adjust this occurrence"] button')
+      .find((node) => node.text() === 'Not today')
+      ?.trigger('click')
     await settle()
 
     // Nothing was ever placed, so there is no record to remove: the day owes this through
@@ -1553,7 +1561,7 @@ describe('carrying a chip out of the drawer', () => {
     expect(wrapper.find('[data-drop-zone="tray"]').exists()).toBe(false)
   })
 
-  it('keeps the remove badge from arming a drag', async () => {
+  it('keeps the chip’s own button from arming a drag', async () => {
     // It is a button, not a handle. A press that landed on it started the lift as well, and
     // the first movement then cancelled both.
     const habit = meditate()
@@ -1568,7 +1576,7 @@ describe('carrying a chip out of the drawer', () => {
       ?.trigger('click')
     await flushPromises()
 
-    const badge = wrapper.find('[aria-label^="Take Meditate"]')
+    const badge = wrapper.find('[aria-label^="Give Meditate"]')
 
     await badge.trigger('pointerdown')
     await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
