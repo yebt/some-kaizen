@@ -90,15 +90,29 @@ it passes either way.
       tests an older bundle, which it did, and a reintroduced defect passed. And a production
       build strips Vue's warnings, so "fail on a console warning" catches nothing there —
       assert the control is on the screen instead
-- [ ] A handful of real-browser gesture tests on top of it. The cases worth the setup are
-      exactly the ones that keep breaking: carrying a chip out of the drawer, and a card
-      whose list refetches mid-drag
-- [ ] Drive them with real touch, not a mouse. A hold that works with a pointer can still be
-      stolen by a scroller on a finger, and CDP's synthetic touch events proved too unreliable
-      here to tell the difference
-- [ ] Run them in Firefox as well as Chromium. A layout bug reported there could not be
-      reproduced in a scripted Chromium *or* Firefox — the difference was in the page around
-      the component, which only a real page reproduces
+- [x] Real-browser gesture tests, aimed at geometry rather than at recognition. Carrying a
+      chip out of the drawer onto an hour; a card carried by the point it was grabbed rather
+      than snapped to the finger; a press that moved first being left as a scroll; a card
+      dropped on the strip losing its hour and not its day. The one that earns the most is
+      simply that **what the gutter promised while the card was in the air is what was
+      written when it landed** — a drift between those two expressions was every timeline bug
+      this app has had, and it is invisible to a test that only checks the write
+- [x] Run them in Firefox as well as Chromium — both, on every one
+- [x] It found a regression the moment it ran, and one I had just introduced: the control
+      added to the chip so a habit could be placed without a gesture had taken the chip's
+      middle. A touch target is at least 44px whatever size the icon in it, so two of them on
+      a chip reading "Run" left nothing to hold. Now one control, and the name keeps a thumb's
+      width of its own. Taking a habit off the day moved into the sheet, which also gave
+      *that* a way in that is not a gesture — it was previously only reachable by dragging
+      onto a strip
+- [ ] **Real multi-step touch is still not driveable here.** `page.touchscreen` only taps, and
+      raw `Input.dispatchTouchEvent` over CDP never reached the page — the same unreliability
+      recorded the last time, reproduced independently. What is covered instead is the
+      contract that decides whether the browser steals the gesture at all: a chip declares
+      `touch-action: none`, a card declares `pan-y` so the day stays scrollable, and a card in
+      the air refuses `touchmove` through a listener rather than a declaration. Worth
+      revisiting if a driver appears; the untested remainder is whether a real finger's
+      scroller can still steal a hold
 
 ### On a gesture library
 

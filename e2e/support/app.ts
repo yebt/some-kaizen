@@ -37,6 +37,25 @@ export interface HabitDraft {
    * "did it" habit is completed by swiping its row.
    */
   readonly measuredIn?: string
+  /** `HH:mm`. The day then draws a card for it before anything has been planned. */
+  readonly usualTime?: string
+}
+
+/**
+ * Today as the app reckons it, which is the local date rather than the UTC one.
+ *
+ * `toISOString().slice(0, 10)` is the tempting one line version and is wrong for anyone east
+ * of Greenwich in the evening or west of it in the morning — the test would ask for a day the
+ * app is not on, and fail somewhere nobody is awake to see it.
+ */
+export function today(): string {
+  const now = new Date()
+
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
 }
 
 export async function createHabit(page: Page, name: string, draft: HabitDraft = {}): Promise<void> {
@@ -48,6 +67,10 @@ export async function createHabit(page: Page, name: string, draft: HabitDraft = 
   }
 
   await page.locator('#habit-name').fill(name)
+
+  if (draft.usualTime !== undefined) {
+    await page.getByLabel('The time of day this habit usually happens').fill(draft.usualTime)
+  }
 
   if (draft.usualDurationMinutes !== undefined) {
     await page
