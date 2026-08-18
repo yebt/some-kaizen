@@ -196,6 +196,10 @@ introduced by fixing something else in the same sitting.
 - [x] A hold is unreachable from a keyboard, so this is a shortcut and never the only route:
       every destination in the sheet is also a plain link on the habits screen. The context
       menu is bound too, which is the same gesture for a mouse and the one key that reaches it
+- [ ] **Left open on purpose.** A control with a common meaning and a hidden second one is
+      still diffuse, and the hold is not the last word on it. Going to a UX review before
+      anything else is tried; the shape of the whole shell — whether the bar belongs on
+      screens you drilled into at all — hangs off the same answer, so neither moves alone
 
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is
