@@ -66,6 +66,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/challenges/new': RouteRecordInfo<
+      '/challenges/new',
+      '/challenges/new',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/day/[date]': RouteRecordInfo<
       '/day/[date]',
       '/day/:date',
@@ -212,6 +219,14 @@ declare module 'vue-router/auto-routes' {
     'src/pages/challenges/index.vue': {
       routes:
         | '/challenges/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/challenges/new.vue': {
+      routes:
+        | '/challenges/new'
       views:
         | never
       pathParamNames:

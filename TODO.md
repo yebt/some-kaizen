@@ -331,7 +331,18 @@ For a morning routine it is by far the fastest of the three.
 - [x] The day you give up on one is left open rather than judged: giving up is a decision, not
       a failure of that day. It leaves the day's checklist immediately, though — having just
       decided to stop, being asked to tick five boxes all afternoon is the app not listening
-- [ ] A challenge of your own, rather than only the two bundled ones
+- [x] A challenge of your own, rather than only the two bundled ones. The presets are the
+      common answers, not the only ones — somebody with a coach, a physio or a rule of their
+      own has the same shape to describe, and offering that shape in two flavours made the
+      model look narrower than it is. Offered *above* the bundled two: buried underneath it
+      reads as the fallback for when neither of those fits, which is the wrong way round
+- [x] A blank row is a row you did not fill in, not a task with no name. The form starts with
+      three so it reads as a list without asking for three things, and drops the empty ones.
+      Refusing a programme with nothing in it at all is a different claim, and still made
+- [x] The rule is chosen with its cost written beside the switch, and the commitment is read
+      back live — "20 days of 3 things, every day" — which is what catches a 20 typed where
+      200 was meant. A confirmation afterwards catches that far too late: by then it is
+      agreeing to something rather than checking it. So there is no confirmation on this one
 
 ## Later
 

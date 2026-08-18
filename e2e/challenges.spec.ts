@@ -121,3 +121,40 @@ test('the habits underneath are untouched by any of it', async ({ page }) => {
   await expect(page.getByText('Meditate', { exact: true })).toBeVisible()
   await expect(page.getByText('75 Hard')).toHaveCount(0)
 })
+
+/**
+ * A programme somebody wrote themselves.
+ *
+ * The two bundled ones are the common answers, not the only ones — somebody with a coach or
+ * a rule of their own has exactly the same shape to describe. Driven in a browser because a
+ * list of rows that can be added to is the kind of thing that works in jsdom and fails on a
+ * real form, and because the day is the only place that proves it was really started.
+ */
+test('one written by hand runs like any other', async ({ page }) => {
+  await open(page, '/challenges')
+
+  await page.getByRole('link', { name: /Write your own/ }).click()
+
+  await page.getByLabel('Name').fill('Winter build')
+  await page.getByLabel('How many days').fill('20')
+  await page.getByRole('textbox', { name: 'Thing 1', exact: true }).fill('Swim')
+  await page.getByRole('textbox', { name: 'Thing 2', exact: true }).fill('Read ten pages')
+  await page.getByRole('button', { name: 'Add another thing' }).click()
+  await page.getByRole('textbox', { name: 'Thing 4', exact: true }).fill('Get outside')
+
+  // The commitment is read back while it is written, so a 20 typed where 200 was meant is
+  // caught before it is agreed to rather than after.
+  await expect(page.locator('[data-commitment]')).toContainText('20 days of 3 things')
+
+  await page.getByRole('button', { name: 'A missed day is just a missed day' }).click()
+  await page.getByRole('button', { name: 'Start it' }).click()
+
+  await expect(page).toHaveURL(/\/challenges$/)
+  await expect(page.getByLabel('Your programmes')).toContainText('Winter build')
+  await expect(page.getByLabel('Your programmes')).toContainText('Day 1 of 20')
+
+  // And it is on the day, which is the only place that proves it really started.
+  await open(page, '/')
+  await expect(page.getByText('Winter build')).toBeVisible()
+  await expect(page.getByText('Get outside')).toBeVisible()
+})

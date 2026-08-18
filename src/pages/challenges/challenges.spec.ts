@@ -254,3 +254,21 @@ describe('a programme already running', () => {
     expect((await render()).wrapper.text()).toContain('Given up on day 1')
   })
 })
+
+describe('writing one yourself', () => {
+  it('is offered beside the bundled two rather than under them', async () => {
+    // The presets are the common answers, not the only ones. A programme from a coach is the
+    // same shape, and hiding the way to describe it makes the model look narrower than it is.
+    const { wrapper } = await render()
+
+    const own = wrapper.find('a[href="/challenges/new"]')
+
+    expect(own.exists()).toBe(true)
+    expect(own.text()).toMatch(/your own/i)
+    // Above them, not below. Buried under two cards it reads as the fallback for when
+    // neither of those fits, which is the wrong way round.
+    expect(wrapper.html().indexOf('/challenges/new')).toBeLessThan(
+      wrapper.html().indexOf(HARD.name),
+    )
+  })
+})

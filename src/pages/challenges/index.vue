@@ -185,6 +185,27 @@ async function start(preset: ChallengePreset) {
           {{ rows.length ? 'Start another' : 'Start one' }}
         </h2>
 
+        <!--
+          Offered above the bundled two rather than below them.
+
+          The presets are the common answers, not the only ones, and a programme somebody was
+          given by a coach or wrote for themselves is the same shape — a fixed length, a fixed
+          daily set, a rule about missing one. Buried under two cards it reads as a fallback
+          for when neither of those fits, which is the wrong way round.
+        -->
+        <RouterLink
+          to="/challenges/new"
+          class="mb-2 flex items-center justify-between gap-3 rounded-card border border-dashed border-line-strong p-4 text-sm font-medium text-ink"
+        >
+          <span>
+            Write your own
+            <span class="block text-xs font-normal text-ink-muted">
+              Your days, your things, your rule about missing one
+            </span>
+          </span>
+          <AppIcon name="chevron-right" :size="16" />
+        </RouterLink>
+
         <ul class="space-y-2">
           <li
             v-for="preset in CHALLENGE_PRESETS"
