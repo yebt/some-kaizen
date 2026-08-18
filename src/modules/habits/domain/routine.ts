@@ -98,6 +98,7 @@ export function createRoutine(draft: RoutineDraft): Routine {
     archivedOn: draft.archivedOn,
     colour: draft.colour,
     pattern: draft.pattern,
+    symbol: draft.symbol,
   }
 }
 

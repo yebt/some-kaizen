@@ -7,8 +7,8 @@ import type { Identifier } from '@shared/domain/identifier'
 import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import HabitMark from '@shared/ui/HabitMark.vue'
 import BackLink from '@shared/ui/BackLink.vue'
-import { surfaceStyle } from '@shared/ui/appearance-style'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePreferences } from '@core/preferences-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
@@ -227,12 +227,7 @@ function isPressed(id: Identifier) {
           @pointerup="hold.release($event)"
           @pointercancel="hold.cancel()"
         >
-          <span
-            v-if="row.routine.colour"
-            class="size-8 shrink-0 rounded-full border border-line"
-            :style="surfaceStyle(row.routine)"
-            aria-hidden="true"
-          />
+          <HabitMark :appearance="row.routine" :size="32" />
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-ink">{{ row.routine.name }}</p>
             <p class="text-xs text-ink-muted">

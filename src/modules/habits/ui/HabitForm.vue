@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import type { PatternName } from '@shared/domain/appearance'
+import type { PatternName, SymbolName } from '@shared/domain/appearance'
 import { calendarDate, todayIn, type Weekday } from '@shared/domain/calendar-date'
 import type { HexColour } from '@shared/domain/colour'
 import { newIdentifier } from '@shared/domain/identifier'
@@ -164,6 +164,7 @@ const minimum = ref(props.initial && isMeasured(props.initial) ? props.initial.m
 const goal = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.goal : 2)
 const colour = ref<HexColour | undefined>(props.initial?.colour)
 const pattern = ref<PatternName | undefined>(props.initial?.pattern)
+const symbol = ref<SymbolName | undefined>(props.initial?.symbol)
 const error = ref<string | null>(null)
 
 const isPositive = computed(() => kind.value !== 'negative')
@@ -193,6 +194,7 @@ function build(): Habit {
     archivedOn: props.initial?.archivedOn,
     colour: colour.value,
     pattern: pattern.value,
+    symbol: symbol.value,
   }
 
   if (kind.value === 'negative') return createNegativeHabit(core)
@@ -468,7 +470,7 @@ function submit() {
       <legend class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase">
         Appearance
       </legend>
-      <AppearancePicker v-model:colour="colour" v-model:pattern="pattern" />
+      <AppearancePicker v-model:colour="colour" v-model:pattern="pattern" v-model:symbol="symbol" />
     </fieldset>
 
     <p v-if="error" role="alert" class="rounded-cell bg-relapse-soft p-3 text-xs text-relapse">

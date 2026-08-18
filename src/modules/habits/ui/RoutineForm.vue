@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import type { PatternName } from '@shared/domain/appearance'
+import type { PatternName, SymbolName } from '@shared/domain/appearance'
 import { todayIn } from '@shared/domain/calendar-date'
 import type { HexColour } from '@shared/domain/colour'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
@@ -44,6 +44,7 @@ const anchorTime = ref(
 
 const colour = ref<HexColour | undefined>(props.initial?.colour)
 const pattern = ref<PatternName | undefined>(props.initial?.pattern)
+const symbol = ref<SymbolName | undefined>(props.initial?.symbol)
 const error = ref<string | null>(null)
 
 /**
@@ -111,6 +112,7 @@ function submit() {
         archivedOn: props.initial?.archivedOn,
         colour: colour.value,
         pattern: pattern.value,
+        symbol: symbol.value,
       }),
     )
   } catch (caught) {
@@ -254,7 +256,7 @@ defineExpose({ reject })
       </span>
     </label>
 
-    <AppearancePicker v-model:colour="colour" v-model:pattern="pattern" />
+    <AppearancePicker v-model:colour="colour" v-model:pattern="pattern" v-model:symbol="symbol" />
 
     <p v-if="error" class="rounded-cell bg-relapse-soft p-3 text-xs text-relapse" role="alert">
       {{ error }}

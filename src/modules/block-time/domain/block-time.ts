@@ -70,6 +70,7 @@ export function createBlockTime(draft: BlockTimeDraft): BlockTime {
     // Only the parts actually chosen, so an unstyled block stores no empty fields.
     ...(draft.colour ? { colour: draft.colour } : {}),
     ...(draft.pattern ? { pattern: draft.pattern } : {}),
+    ...(draft.symbol ? { symbol: draft.symbol } : {}),
     id: draft.id,
     name: blockName(draft.name),
     span: draft.span,

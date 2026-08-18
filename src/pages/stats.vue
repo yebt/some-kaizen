@@ -5,8 +5,8 @@ import { type CalendarDate, calendarDate, isBefore, todayIn } from '@shared/doma
 import AppIcon from '@shared/ui/AppIcon.vue'
 import BackLink from '@shared/ui/BackLink.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import HabitMark from '@shared/ui/HabitMark.vue'
 import SegmentedControl from '@shared/ui/SegmentedControl.vue'
-import { surfaceStyle } from '@shared/ui/appearance-style'
 import { type Habit, isNegative, isPositive } from '@modules/habits/domain/habit'
 import { currentEntries } from '@modules/habits/domain/habit-entry'
 import { useHabitEntries, useHabits } from '@modules/habits/application/habit-queries'
@@ -361,12 +361,7 @@ function percent(rate: number | undefined): string {
               :to="`/habits/${row.habit.id}`"
               class="flex items-center gap-3 rounded-card border border-line bg-surface p-4 shadow-card"
             >
-              <span
-                v-if="row.habit.colour"
-                class="size-8 shrink-0 rounded-full border border-line"
-                :style="surfaceStyle(row.habit)"
-                aria-hidden="true"
-              />
+              <HabitMark :appearance="row.habit" :size="32" />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-ink">{{ row.habit.name }}</p>
                 <p class="tabular text-xs text-ink-muted">

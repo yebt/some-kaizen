@@ -1,6 +1,22 @@
 import {
   Ban,
+  Armchair,
+  BookOpen,
+  Brain,
+  Coins,
+  Dumbbell,
+  Footprints,
+  GraduationCap,
+  House,
   Lightbulb,
+  Utensils,
+  Users,
+  Moon,
+  Music,
+  PersonStanding,
+  Smartphone,
+  Droplet,
+  PenLine,
   MoreHorizontal,
   Bell,
   ChartNoAxesColumn,
@@ -15,6 +31,8 @@ import {
   User,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
+
+import type { SymbolName } from '@shared/domain/appearance'
 
 /**
  * The app's icon set, mapped from what an icon *means* here to the Lucide component.
@@ -43,6 +61,32 @@ export const ICONS = {
   bell: Bell,
   /** An idea, on the screen that offers habits worth considering. */
   idea: Lightbulb,
-} satisfies Record<string, Component>
+}
+
+/**
+ * The symbol a habit can wear, mapped from what it *means* to the drawing.
+ *
+ * Kept apart from `ICONS` on purpose. Those are the app's own furniture — a chevron, a gear,
+ * a tick — and this is somebody's choice about their own habit. Mixing them would let a
+ * redraw of the settings gear silently change what a habit looks like.
+ */
+export const SYMBOL_ICONS = {
+  run: Footprints,
+  walk: PersonStanding,
+  strength: Dumbbell,
+  stretch: Armchair,
+  water: Droplet,
+  food: Utensils,
+  sleep: Moon,
+  read: BookOpen,
+  write: PenLine,
+  learn: GraduationCap,
+  breathe: Brain,
+  music: Music,
+  money: Coins,
+  home: House,
+  people: Users,
+  screen: Smartphone,
+} satisfies Record<SymbolName, Component> satisfies Record<string, Component>
 
 export type IconName = keyof typeof ICONS

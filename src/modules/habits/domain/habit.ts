@@ -460,6 +460,7 @@ function appearanceOf(draft: Appearance): Appearance {
   return {
     ...(draft.colour ? { colour: draft.colour } : {}),
     ...(draft.pattern ? { pattern: draft.pattern } : {}),
+    ...(draft.symbol ? { symbol: draft.symbol } : {}),
   }
 }
 

@@ -7,7 +7,7 @@ import type { Identifier } from '@shared/domain/identifier'
 import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
-import { surfaceStyle } from '@shared/ui/appearance-style'
+import HabitMark from '@shared/ui/HabitMark.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
 import { describeFrequency } from '@modules/habits/ui/frequency-label'
@@ -296,12 +296,7 @@ function isPressed(id: Identifier) {
         @pointercancel="hold.cancel()"
       >
         <div class="flex items-start gap-3">
-          <span
-            v-if="row.habit.colour"
-            class="mt-0.5 size-8 shrink-0 rounded-full border border-line"
-            :style="surfaceStyle(row.habit)"
-            aria-hidden="true"
-          />
+          <HabitMark :appearance="row.habit" :size="32" />
           <RouterLink :to="`/habits/${row.habit.id}`" class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-ink">
               {{ row.habit.name }}

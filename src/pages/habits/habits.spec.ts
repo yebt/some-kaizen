@@ -543,3 +543,87 @@ describe('the reason a habit was written down for', () => {
     expect((await render(HabitsPage)).text()).toContain('hold for actions')
   })
 })
+
+describe('the symbol a habit wears', () => {
+  it('is stored from the picker', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Read')
+    await wrapper.find('[aria-label="read"]').trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).toMatchObject({ symbol: 'read' })
+  })
+
+  it('stores none at all when none is chosen', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Read')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).not.toHaveProperty('symbol')
+  })
+
+  it('can be taken off again', async () => {
+    // A picker you cannot back out of is one people stop touching.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Read')
+    await wrapper.find('[aria-label="read"]').trigger('click')
+    await wrapper.find('[aria-label="No symbol"]').trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).not.toHaveProperty('symbol')
+  })
+
+  it('is drawn on the row even for a habit with no colour', async () => {
+    // Plenty of people will choose a symbol and leave the palette alone, and a mark that
+    // only appears once a colour is set would look like the picker had not worked.
+    const read = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Read',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+      symbol: 'read',
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [read] })
+
+    const wrapper = await render(HabitsPage)
+
+    // Found through the mark itself rather than through any drawing on the row: a row is
+    // full of icons — the actions button, the chevron — so "there is an svg here" is true
+    // whatever the mark does.
+    const mark = wrapper.find('[data-habit-mark]')
+
+    expect(mark.exists()).toBe(true)
+    expect(mark.find('svg').exists()).toBe(true)
+  })
+
+  it('leaves a habit with neither colour nor symbol unmarked', async () => {
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Read',
+          frequency: frequency('daily', 1),
+          createdOn: CREATED_ON,
+        }),
+      ],
+    })
+
+    const wrapper = await render(HabitsPage)
+
+    expect(wrapper.find('[data-habit-mark]').exists()).toBe(false)
+  })
+})

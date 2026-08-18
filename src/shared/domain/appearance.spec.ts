@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { InvalidPatternError, PALETTE, PATTERNS, patternName } from './appearance'
+import {
+  InvalidPatternError,
+  InvalidSymbolError,
+  PALETTE,
+  PATTERNS,
+  patternName,
+  SYMBOLS,
+  symbolName,
+} from './appearance'
 import { contrastRatio, CONTRAST_AA_LARGE, readableInkOn } from './colour'
 
 describe('patternName', () => {
@@ -39,5 +47,26 @@ describe('the palette', () => {
 
       expect(contrastRatio(previous, current)).not.toBeCloseTo(1, 1)
     }
+  })
+})
+
+describe('the symbols a habit can wear', () => {
+  it('accepts every one it offers', () => {
+    for (const name of SYMBOLS) expect(symbolName(name)).toBe(name)
+  })
+
+  it('refuses anything else rather than storing a blank hole', () => {
+    // An unknown symbol reaches every screen that draws the habit, where it is nothing at all.
+    expect(() => symbolName('unicorn')).toThrow(InvalidSymbolError)
+  })
+
+  it('names the offer in the complaint, so the fix is on the screen', () => {
+    expect(() => symbolName('unicorn')).toThrow(/run/)
+  })
+
+  it('stays small enough to choose from', () => {
+    // A picker of four hundred icons is a decision nobody wants to make and most abandon.
+    expect(SYMBOLS.length).toBeLessThanOrEqual(24)
+    expect(new Set(SYMBOLS).size).toBe(SYMBOLS.length)
   })
 })

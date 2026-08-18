@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { PALETTE, PATTERNS, type PatternName } from '@shared/domain/appearance'
+import {
+  PALETTE,
+  PATTERNS,
+  type PatternName,
+  SYMBOLS,
+  type SymbolName,
+} from '@shared/domain/appearance'
 import { contrastRatio, type HexColour, readableInkOn } from '@shared/domain/colour'
+import { SYMBOL_ICONS } from './icons'
 
 import { surfaceStyle } from './appearance-style'
 
 const colour = defineModel<HexColour | undefined>('colour')
 const pattern = defineModel<PatternName | undefined>('pattern')
+const symbol = defineModel<SymbolName | undefined>('symbol')
 
 const PATTERN_LABELS: Record<PatternName, string> = {
   solid: 'Solid',
@@ -58,6 +66,40 @@ const preview = computed(() => surfaceStyle({ colour: colour.value, pattern: pat
           :aria-pressed="colour === option"
           @click="colour = option"
         />
+      </div>
+    </div>
+
+    <!--
+      Offered before the colour, because it is the part that does the recognising. A drawn set
+      at one stroke weight rather than emoji: an emoji is a different typeface on every
+      platform, so a list styled on one phone is a different list on the next, and several of
+      them carry a skin tone and a gender nobody chose.
+    -->
+    <div>
+      <p class="mb-1.5 text-xs font-medium text-ink-muted">Symbol</p>
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          class="hit-area grid size-9 place-items-center rounded-full border text-xs text-ink-muted transition-colors"
+          :class="symbol === undefined ? 'border-ink' : 'border-line'"
+          aria-label="No symbol"
+          :aria-pressed="symbol === undefined"
+          @click="symbol = undefined"
+        >
+          —
+        </button>
+        <button
+          v-for="option in SYMBOLS"
+          :key="option"
+          type="button"
+          class="hit-area grid size-9 place-items-center rounded-full border transition-colors"
+          :class="symbol === option ? 'border-ink text-ink' : 'border-line text-ink-muted'"
+          :aria-label="option"
+          :aria-pressed="symbol === option"
+          @click="symbol = option"
+        >
+          <component :is="SYMBOL_ICONS[option]" :size="16" :stroke-width="1.75" />
+        </button>
       </div>
     </div>
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { InvalidSymbolError } from '@shared/domain/appearance'
 import { calendarDate, InvalidCalendarDateError } from '@shared/domain/calendar-date'
 import { InvalidIdentifierError, newIdentifier } from '@shared/domain/identifier'
 import {
@@ -40,6 +41,7 @@ function fullDataset(): Dataset {
     usualTime: timeOfDay(8 * 60),
     usualDurationMinutes: 15,
     description: 'The one that makes every other one easier.',
+    symbol: 'water',
   })
   const run = createCompletedHabit({
     id: newIdentifier(),
@@ -174,6 +176,12 @@ describe('a full round trip', () => {
     expect(restored).toMatchObject({ description: 'The one that makes every other one easier.' })
   })
 
+  it('returns the symbol a habit was given', () => {
+    const [restored] = roundTrip(fullDataset()).habits
+
+    expect(restored).toMatchObject({ symbol: 'water' })
+  })
+
   it('returns how long a habit usually takes', () => {
     const dataset = fullDataset()
     const [restored] = roundTrip(dataset).habits
@@ -280,6 +288,18 @@ describe('refusing a corrupted file', () => {
     })
 
     expect(() => parseBackup(file)).toThrow(InvalidBackupError)
+  })
+
+  it('rejects a symbol the app cannot draw', () => {
+    // Importing one would leave a habit whose mark is a blank hole on every screen.
+    const file = corrupted((dataset) => {
+      const habits = dataset.habits as Array<Record<string, unknown>>
+      const first = habits[0]
+
+      if (first) first.symbol = 'unicorn'
+    })
+
+    expect(() => parseBackup(file)).toThrow(InvalidSymbolError)
   })
 
   it('rejects an impossible date', () => {

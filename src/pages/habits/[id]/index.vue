@@ -5,7 +5,7 @@ import { useRoute } from 'vue-router'
 import { addDays, type CalendarDate, toDate, todayIn } from '@shared/domain/calendar-date'
 import BackLink from '@shared/ui/BackLink.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
-import { surfaceStyle } from '@shared/ui/appearance-style'
+import HabitMark from '@shared/ui/HabitMark.vue'
 import { usePreferences } from '@core/preferences-store'
 import { isMeasured, isNegative, isPositive } from '@modules/habits/domain/habit'
 import { currentEntries } from '@modules/habits/domain/habit-entry'
@@ -207,12 +207,7 @@ function weekdayName(weekday: number): string {
 
     <template v-else>
       <header class="flex items-start gap-3 pt-2 pb-4">
-        <span
-          v-if="habit.colour"
-          class="mt-1 size-10 shrink-0 rounded-full border border-line"
-          :style="surfaceStyle(habit)"
-          aria-hidden="true"
-        />
+        <HabitMark :appearance="habit" :size="40" class="mt-1" />
         <div class="min-w-0 flex-1">
           <h1 class="truncate text-2xl font-semibold tracking-tight text-ink">{{ habit.name }}</h1>
           <p class="text-sm text-ink-muted">{{ description }}</p>

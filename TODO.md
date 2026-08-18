@@ -227,10 +227,17 @@ For a morning routine it is by far the fastest of the three.
       question it had just answered for you
 
 ### Icons
-- [ ] An icon per habit, alongside the colour and pattern it already has
-- [ ] Drawn set, one stroke weight. Not emoji: an emoji is a different typeface on every
-      platform and carries a skin tone and a gender nobody chose
-- [ ] Colour and pattern stay. Pattern is what survives greyscale and colour blindness
+- [x] A symbol per habit, alongside the colour and pattern, on routines and block time too
+- [x] Drawn set, one stroke weight, sixteen of them. Not emoji: an emoji is a different
+      typeface on every platform, so a list styled on one phone is a different list on the
+      next, and several carry a skin tone and a gender nobody chose. Kept deliberately small —
+      a picker of four hundred icons is a decision most people abandon
+- [x] Colour and pattern stay, and a symbol does not replace either. A symbol says *which*
+      habit; a pattern says *this one differs from that one* even when the colours have
+      collapsed into the same grey
+- [x] The mark draws with a symbol alone, a colour alone, or both, and stays absent when
+      neither is set. Plenty of people will choose one and leave the other, and a mark that
+      needed both would read as the picker not having worked
 
 ### Stats worth reading
 - [x] Data windows on every statistic: `[7d] [30d] [90d] [1y] [All]`. Clamped to where the

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import type { PatternName } from '@shared/domain/appearance'
+import type { PatternName, SymbolName } from '@shared/domain/appearance'
 import { todayIn, type Weekday } from '@shared/domain/calendar-date'
 import type { HexColour } from '@shared/domain/colour'
 import { newIdentifier } from '@shared/domain/identifier'
@@ -29,6 +29,7 @@ const end = ref(props.initial ? formatTime(endOf(props.initial.span)) : '17:00')
 const days = ref<Weekday[]>([...(props.initial?.weekdays ?? [1, 2, 3, 4, 5])])
 const colour = ref<HexColour | undefined>(props.initial?.colour)
 const pattern = ref<PatternName | undefined>(props.initial?.pattern)
+const symbol = ref<SymbolName | undefined>(props.initial?.symbol)
 const error = ref<string | null>(null)
 
 /** Shown live, because "23:00 to 07:00 is eight hours" is worth confirming before saving. */
@@ -67,6 +68,7 @@ function submit() {
         archivedOn: props.initial?.archivedOn,
         colour: colour.value,
         pattern: pattern.value,
+        symbol: symbol.value,
       }),
     )
   } catch (caught) {
@@ -150,7 +152,7 @@ defineExpose({ reject })
       <legend class="mb-2 text-xs font-semibold tracking-wide text-ink-muted uppercase">
         Appearance
       </legend>
-      <AppearancePicker v-model:colour="colour" v-model:pattern="pattern" />
+      <AppearancePicker v-model:colour="colour" v-model:pattern="pattern" v-model:symbol="symbol" />
     </fieldset>
 
     <p v-if="error" role="alert" class="rounded-cell bg-relapse-soft p-3 text-xs text-relapse">

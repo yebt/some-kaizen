@@ -43,8 +43,63 @@ export function patternName(value: string): PatternName {
   return value as PatternName
 }
 
-/** How a habit or a block is drawn. Both parts are optional; neither one is required. */
+/**
+ * The symbols a habit can wear.
+ *
+ * A drawn set at one stroke weight, not emoji. An emoji is a different typeface on every
+ * platform — the same character is a flat glyph on one phone and a glossy cartoon on
+ * another, so a list styled on one device is a different list on the next. Several of them
+ * also carry a skin tone and a gender nobody chose, which is a statement to put beside
+ * "Meditate" without being asked.
+ *
+ * Deliberately a small set. A picker of four hundred icons is a decision nobody wants to
+ * make and most people abandon; these are the shapes habits actually take, and the point of
+ * an icon here is recognising a row at a glance rather than expressing anything.
+ */
+export const SYMBOLS = [
+  'run',
+  'walk',
+  'strength',
+  'stretch',
+  'water',
+  'food',
+  'sleep',
+  'read',
+  'write',
+  'learn',
+  'breathe',
+  'music',
+  'money',
+  'home',
+  'people',
+  'screen',
+] as const
+
+export type SymbolName = (typeof SYMBOLS)[number]
+
+export class InvalidSymbolError extends Error {
+  constructor(readonly value: string) {
+    super(`"${value}" is not a symbol, expected one of ${SYMBOLS.join(', ')}.`)
+    this.name = 'InvalidSymbolError'
+  }
+}
+
+export function symbolName(value: string): SymbolName {
+  if (!SYMBOLS.includes(value as SymbolName)) throw new InvalidSymbolError(value)
+
+  return value as SymbolName
+}
+
+/**
+ * How a habit or a block is drawn. Every part is optional; none is required.
+ *
+ * Colour and pattern stay exactly as they were. Pattern is what survives greyscale and
+ * colour blindness, and a symbol does not replace it: a symbol says *which* habit, a pattern
+ * says *this one is different from that one* even when the colours have collapsed into the
+ * same grey.
+ */
 export interface Appearance {
   readonly colour?: HexColour
   readonly pattern?: PatternName
+  readonly symbol?: SymbolName
 }

@@ -1,4 +1,4 @@
-import { type Appearance, patternName } from '@shared/domain/appearance'
+import { type Appearance, patternName, symbolName } from '@shared/domain/appearance'
 import { calendarDate, type CalendarDate } from '@shared/domain/calendar-date'
 import { hexColour } from '@shared/domain/colour'
 import { identifier, type Identifier } from '@shared/domain/identifier'
@@ -162,6 +162,9 @@ function readAppearance(value: Record<string, unknown>): Appearance {
     ...(value.pattern === undefined
       ? {}
       : { pattern: patternName(asString(value.pattern, 'A pattern must be text.')) }),
+    ...(value.symbol === undefined
+      ? {}
+      : { symbol: symbolName(asString(value.symbol, 'A symbol must be text.')) }),
   }
 }
 
