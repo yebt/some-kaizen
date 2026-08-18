@@ -10,6 +10,7 @@ import AppSpinner from '@shared/ui/AppSpinner.vue'
 import HabitMark from '@shared/ui/HabitMark.vue'
 import BackLink from '@shared/ui/BackLink.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { usePlatform } from '@core/platform-context'
 import { usePreferences } from '@core/preferences-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
 import { isPositive } from '@modules/habits/domain/habit'
@@ -20,6 +21,7 @@ import {
   useSaveRoutines,
 } from '@modules/habits/application/habit-queries'
 import { archiveRoutine, restoreRoutine, type Routine } from '@modules/habits/domain/routine'
+import { sharedRoutineFileName, writeSharedRoutine } from '@modules/habits/domain/routine-share'
 
 const router = useRouter()
 const { data: routinesData, isLoading } = useRoutines()
@@ -28,6 +30,7 @@ const saveRoutines = useSaveRoutines()
 const removeRoutine = useRemoveRoutine()
 const feedback = useFeedback()
 const preferences = usePreferences()
+const files = usePlatform().files
 
 const routines = computed(() => routinesData.value ?? [])
 const habits = computed(() => (habitsData.value ?? []).filter(isPositive))
@@ -76,6 +79,11 @@ const actionsFor = computed<readonly SheetAction[]>(() => {
       description: 'Say when it starts and how long each step takes',
     },
     { key: 'edit', label: 'Edit', description: 'Name, habits, order, colour' },
+    {
+      key: 'share',
+      label: 'Share',
+      description: 'A file with the names and lengths in it, and nothing of yours',
+    },
     archived
       ? { key: 'restore', label: 'Use again', description: 'Start arranging today with it again' }
       : {
@@ -107,6 +115,21 @@ async function runAction(key: string) {
 
   if (key === 'edit') {
     await router.push(`/routines/${routine.id}`)
+
+    return
+  }
+
+  if (key === 'share') {
+    /*
+     * What goes out is a recipe, not a record.
+     *
+     * Names, lengths and an hour — no identifiers, no dates, no history, and none of the
+     * habits that are not in this routine. That is what makes it safe to hand to somebody,
+     * and it is also what makes it safe for them to open: there is nothing in the file that
+     * could name, replace or revive anything already on their device.
+     */
+    await files.save(sharedRoutineFileName(routine), writeSharedRoutine(routine, habits.value))
+    feedback.notify(`${routine.name} written out`, 'success')
 
     return
   }

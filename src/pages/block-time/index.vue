@@ -8,6 +8,7 @@ import { endOf } from '@shared/domain/time-of-day'
 import ActionSheet, { type SheetAction } from '@shared/ui/ActionSheet.vue'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
+import BackLink from '@shared/ui/BackLink.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
@@ -112,6 +113,8 @@ function isPressed(id: Identifier) {
 
 <template>
   <div class="safe-top">
+    <BackLink to="/habits" label="Habits" />
+
     <header class="flex items-center justify-between pt-2 pb-1">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Block time</h1>
       <RouterLink

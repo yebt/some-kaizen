@@ -33,8 +33,25 @@ fourteen rows.
       importing a template would quietly undo it. What lands is ordinary habits and an
       ordinary routine, with the preset's lengths on them so the builder works immediately.
       The screen says what it will create and what it will reuse, by name, before you tap
-- [ ] A shared or downloadable library. Needs a way to read a routine someone else wrote
-      without trusting it, which the bundled one never had to answer
+- [x] **Sharing one, and opening one somebody sent.** The trust model is the *shape of the
+      document* rather than a check performed on it: a shared routine is a recipe, not a
+      record. Names, lengths and an hour go out; identifiers, dates, archive flags, entries
+      and habit ids do not. So there is nothing in the file that could name, replace or
+      revive anything on the device it lands on, and nothing on the way back in to sanitise
+- [x] Which is why it reads into a `RoutinePreset` rather than a `Routine`. The preset import
+      already mints every identifier locally, matches habits by name, and says what it will
+      create and reuse before writing. A stranger's routine goes through exactly the door a
+      bundled one does, because it is exactly as trusted — which is to say, not at all
+- [x] Refusing rather than repairing. A four hundred character name or a negative length is a
+      broken document, and cutting it to size would import something nobody wrote. The one
+      exception is the anchor hour: losing it costs an ordering, and throwing away four good
+      steps over a decoration would be the strictness doing more damage than the fault
+- [x] The key is minted on reading and never taken from the document, or a file could put
+      somebody else's writing under a name this app vouches for
+- [x] Proved as a round trip in a real browser: written out through a download, opened again
+      through a file picker, on the same device — the harshest version, since that is where
+      anything able to address what is already here would show
+- [ ] A library to browse, rather than a file to be handed. Needs somewhere to put it
 
 ### A habit's usual hour
 The question this answers: today every occurrence is placed on its own day, so a habit that

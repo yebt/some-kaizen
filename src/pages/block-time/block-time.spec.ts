@@ -399,3 +399,17 @@ describe('the clock preference', () => {
     expect(wrapper.text()).toContain('9:00 AM – 5:00 PM')
   })
 })
+
+describe('every screen you drilled into', () => {
+  it('says the way back out, which the blocks list alone did not', async () => {
+    // Reached from habits and from settings, and the only list in the app with no way out
+    // written on it. A way out you have to already know about is one somebody does not have.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(BlockTimePage)
+
+    const out = wrapper.findAll('button').filter((node) => node.text().includes('Habits'))
+
+    expect(out).toHaveLength(1)
+  })
+})

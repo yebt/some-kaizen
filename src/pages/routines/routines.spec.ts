@@ -8,6 +8,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
+import { PLATFORM_KEY, type PlatformServices } from '@core/platform-context'
 import { calendarDate } from '@shared/domain/calendar-date'
 import { timeOfDay } from '@shared/domain/time-of-day'
 import { type Identifier, newIdentifier } from '@shared/domain/identifier'
@@ -29,7 +30,30 @@ beforeEach(async () => {
   persistence = await createPersistence(`routines-spec-${databaseCounter}`)
 })
 
+/** Records what the screen wrote out, which is the only way to read a shared routine back. */
+function stubPlatform(): PlatformServices & { saved: { name: string; contents: string }[] } {
+  const saved: { name: string; contents: string }[] = []
+
+  return {
+    saved,
+    files: {
+      save: async (name, contents) => {
+        saved.push({ name, contents })
+      },
+      pick: async () => null,
+    },
+    reminders: {
+      ensurePermission: async () => 'unsupported',
+      sync: async () => undefined,
+    },
+  }
+}
+
+let platform: ReturnType<typeof stubPlatform>
+
 async function render(component: typeof RoutinesPage | typeof NewRoutinePage) {
+  platform = stubPlatform()
+
   const instance = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -45,7 +69,10 @@ async function render(component: typeof RoutinesPage | typeof NewRoutinePage) {
   const wrapper = mount(component, {
     global: {
       plugins: [createPinia(), PiniaColada, instance],
-      provide: { [PERSISTENCE_KEY as symbol]: persistence },
+      provide: {
+        [PERSISTENCE_KEY as symbol]: persistence,
+        [PLATFORM_KEY as symbol]: platform,
+      },
     },
   })
 
@@ -360,5 +387,53 @@ describe('the hour a routine starts', () => {
     await flushPromises()
 
     expect((await persistence.routines.all())[0]).not.toHaveProperty('anchorTime')
+  })
+})
+
+/** Chooses an action from the sheet by its label, which is what a finger has to aim at. */
+async function pick(wrapper: ReturnType<typeof mount>, label: string) {
+  const action = wrapper
+    .findAll('dialog[open] button')
+    .find((button) => button.text().startsWith(label))
+
+  if (!action) throw new Error(`No action labelled ${label}.`)
+
+  await action.trigger('click')
+
+  for (let round = 0; round < 3; round += 1) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+describe('handing one to somebody else', () => {
+  it('writes out the names, the lengths and the hour, and nothing else', async () => {
+    const stretch = habitNamed('Stretch')
+    const routine = createRoutine({
+      id: newIdentifier(),
+      name: 'Morning',
+      habitIds: [stretch.id],
+      createdOn: CREATED_ON,
+      anchorTime: timeOfDay(7 * 60),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [stretch], routines: [routine] })
+
+    const wrapper = await render(RoutinesPage)
+
+    await wrapper.get('[aria-label="Actions for Morning"]').trigger('click')
+    await pick(wrapper, 'Share')
+
+    const [written] = platform.saved
+
+    expect(written?.name).toBe('some-kaisen-routine-morning.json')
+
+    // The trust model is what is *absent*. A shared routine carries no identifiers and no
+    // dates, so there is nothing in it that could name, replace or revive anything on the
+    // device it lands on — which is why the reading side has nothing to sanitise.
+    expect(written?.contents).toContain('Stretch')
+    expect(written?.contents).not.toContain(stretch.id)
+    expect(written?.contents).not.toContain(routine.id)
+    expect(written?.contents).not.toContain(CREATED_ON)
   })
 })

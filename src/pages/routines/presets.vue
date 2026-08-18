@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { todayIn } from '@shared/domain/calendar-date'
@@ -8,6 +8,7 @@ import AppIcon from '@shared/ui/AppIcon.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
 import BackLink from '@shared/ui/BackLink.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { usePlatform } from '@core/platform-context'
 import { usePreferences } from '@core/preferences-store'
 import {
   useHabits,
@@ -17,6 +18,7 @@ import {
 } from '@modules/habits/application/habit-queries'
 import { presetMinutes, ROUTINE_PRESETS } from '@modules/habits/domain/preset-library'
 import { importPreset, type RoutinePreset } from '@modules/habits/domain/routine-preset'
+import { readSharedRoutine } from '@modules/habits/domain/routine-share'
 
 /**
  * Routines to start from, instead of a blank form.
@@ -31,6 +33,7 @@ import { importPreset, type RoutinePreset } from '@modules/habits/domain/routine
 const router = useRouter()
 const feedback = useFeedback()
 const preferences = usePreferences()
+const files = usePlatform().files
 
 const { data: habitsData, isLoading: habitsLoading } = useHabits()
 const { data: routinesData, isLoading: routinesLoading } = useRoutines()
@@ -57,13 +60,46 @@ function planFor(preset: RoutinePreset) {
  * uses 2 you already have" are different offers and only one of them is true. Someone who
  * already meditates should be able to see that their meditation is what goes in.
  */
+/**
+ * A routine somebody else wrote, once one has been opened.
+ *
+ * It joins the bundled ones rather than getting a flow of its own, and that is the trust
+ * model rather than a saving of effort. What arrives is a *preset*: names, lengths and an
+ * hour, with no identifiers, no dates and no way of addressing a single thing already on this
+ * device. The import below then mints every identifier here, matches habits by name and says
+ * what it will create and reuse before writing anything — so a stranger's routine goes
+ * through exactly the door a bundled one does, because it is exactly as trusted.
+ */
+const shared = ref<RoutinePreset | null>(null)
+
 const rows = computed(() =>
-  ROUTINE_PRESETS.map((preset) => {
+  [...(shared.value ? [shared.value] : []), ...ROUTINE_PRESETS].map((preset) => {
     const plan = planFor(preset)
 
-    return { preset, minutes: presetMinutes(preset), reused: plan.reused.length }
+    return {
+      preset,
+      minutes: presetMinutes(preset),
+      reused: plan.reused.length,
+      fromFile: preset === shared.value,
+    }
   }),
 )
+
+async function openShared() {
+  const text = await files.pick()
+
+  // Backing out of a picker is not a failure and has nothing to say about it.
+  if (!text) return
+
+  try {
+    shared.value = readSharedRoutine(text)
+  } catch (error) {
+    feedback.notify(
+      error instanceof Error ? error.message : 'That file could not be read.',
+      'danger',
+    )
+  }
+}
 
 function countOf(created: number, reused: number): string {
   const parts = [
@@ -109,10 +145,20 @@ async function add(preset: RoutinePreset) {
     <header class="pt-2 pb-1">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Start from a routine</h1>
     </header>
-    <p class="pb-5 text-sm text-ink-muted">
+    <p class="pb-3 text-sm text-ink-muted">
       Worked examples to copy and then argue with. What lands is ordinary habits and an ordinary
       routine — edit or throw away any of it afterwards.
     </p>
+
+    <button
+      type="button"
+      class="mb-5 flex w-full items-center justify-center gap-1.5 rounded-full border border-dashed border-line-strong px-4 py-2.5 text-xs font-medium text-ink-muted"
+      aria-label="Open a shared routine"
+      @click="openShared"
+    >
+      <AppIcon name="plus" :size="14" />
+      Open one somebody sent you
+    </button>
 
     <div
       v-if="isLoading && habitsData === undefined"
@@ -130,6 +176,14 @@ async function add(preset: RoutinePreset) {
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <h2 class="text-sm font-medium text-ink">{{ row.preset.name }}</h2>
+            <!--
+              Said out loud on the row. Somebody about to take a stranger's routine deserves
+              to know what it can and cannot do, and "it cannot touch what you already have"
+              is both true and the only thing they would want to ask.
+            -->
+            <p v-if="row.fromFile" class="mt-0.5 text-[0.625rem] text-ink-subtle">
+              From a file. It can add habits and reuse yours by name, and nothing else.
+            </p>
             <p class="mt-0.5 text-xs text-ink-muted">{{ row.preset.summary }}</p>
           </div>
           <span class="tabular shrink-0 text-xs text-ink-subtle">{{ row.minutes }} min</span>
