@@ -120,3 +120,27 @@ test('the day timeline renders and can be left again', async ({ page }) => {
 
   expect(complaints).toEqual([])
 })
+
+/**
+ * The reported journey, in a real browser, because only a real browser has a history stack.
+ *
+ * Walking to tomorrow and back to today used to leave two entries behind, so the way out at
+ * the top — which says Today, and prefers going back to pushing so that arriving from a list
+ * returns you to that list — went to tomorrow. The label promised one thing and did another.
+ */
+test('walking through days and leaving lands home, not on a day you passed through', async ({
+  page,
+}) => {
+  await createHabit(page, 'Meditate')
+
+  await open(page, '/')
+  await page.getByRole('link', { name: 'Open the timeline' }).click()
+  await expect(page).toHaveURL(/\/day\//)
+
+  await page.getByRole('link', { name: 'Next day' }).click()
+  await page.getByRole('link', { name: 'Previous day' }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+
+  await expect(page).toHaveURL(/\/(index\.html)?(\?.*)?$/)
+  await expect(page.getByRole('link', { name: 'Open the timeline' })).toBeVisible()
+})

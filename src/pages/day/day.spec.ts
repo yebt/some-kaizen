@@ -69,17 +69,27 @@ function stubPlatform(): PlatformServices & { asked: { permission: number } } {
 }
 
 let platform: ReturnType<typeof stubPlatform>
+let router: ReturnType<typeof createRouter>
 
 async function renderDay(date: string = DAY) {
   platform = stubPlatform()
 
-  const router = createRouter({
+  router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/day/:date', component: DayPage }],
+    routes: [
+      { path: '/day/:date', component: DayPage },
+      // Home is registered so a test can tell "went back to where you came from" apart from
+      // "went back to the day you were looking at a moment ago".
+      { path: '/', component: { template: '<p>Home</p>' } },
+    ],
   })
 
-  await router.push(`/day/${date}`)
+  // Arrived at from somewhere, the way a day always is. The first navigation a router makes
+  // replaces rather than pushes, so a spec that opened straight onto the day would have no
+  // history behind it and could not tell a push from a replace.
+  await router.push('/')
   await router.isReady()
+  await router.push(`/day/${date}`)
 
   const wrapper = mount(DayPage, {
     global: {
@@ -104,6 +114,34 @@ function meditate() {
     createdOn: CREATED_ON,
   })
 }
+
+describe('moving between days', () => {
+  /**
+   * Walking to another day replaces this one in history instead of stacking behind it.
+   *
+   * The arrows do not go anywhere new: they re-address the screen you are already on. Left
+   * as pushes, three taps leave three days piled up, and the way out at the top — which says
+   * Today, and goes back through history when there is history — lands on the day you were
+   * looking at a moment ago instead. The label would be lying.
+   */
+  it('leaves the way you came in where it was', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await renderDay()
+
+    await wrapper.get('[aria-label="Next day"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[aria-label="Previous day"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe(`/day/${DAY}`)
+
+    router.back()
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+})
 
 describe('the timeline', () => {
   it('renders a drop zone for the ruler', async () => {

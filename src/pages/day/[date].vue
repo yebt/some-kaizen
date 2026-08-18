@@ -579,7 +579,7 @@ function pressState(key: string) {
  */
 const pageSwipe = useSwipePage({
   onSwipe: (direction) => {
-    void router.push(`/day/${addDays(day.value, direction === 'right' ? -1 : 1)}`)
+    void router.replace(`/day/${addDays(day.value, direction === 'right' ? -1 : 1)}`)
   },
 })
 
@@ -1168,7 +1168,15 @@ function trackHover(event: PointerEvent) {
         <p class="text-sm text-ink-muted">{{ dayLabel }}</p>
       </div>
       <div class="flex gap-3">
+        <!--
+          Replacing rather than pushing, here and on the way forward and on the sideways
+          swipe. Another day is not another destination: it is this screen re-addressed, the
+          way scrubbing a calendar is. Pushed, a walk of three days leaves three entries piled
+          behind you, and the way out above — which says Today — would take you to the day you
+          were looking at a moment ago instead. Whatever you came in from stays one step away.
+        -->
         <RouterLink
+          replace
           :to="`/day/${addDays(day, -1)}`"
           class="hit-area grid size-8 place-items-center rounded-full border border-line-strong text-ink-muted"
           aria-label="Previous day"
@@ -1176,6 +1184,7 @@ function trackHover(event: PointerEvent) {
           <AppIcon name="chevron-left" :size="16" />
         </RouterLink>
         <RouterLink
+          replace
           :to="`/day/${addDays(day, 1)}`"
           class="hit-area grid size-8 place-items-center rounded-full border border-line-strong text-ink-muted"
           aria-label="Next day"

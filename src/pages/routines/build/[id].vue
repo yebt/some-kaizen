@@ -167,7 +167,9 @@ async function submit() {
   if (remembered.length) await saveHabits.mutateAsync(remembered)
 
   feedback.notify(`${current.name} built into ${date.value}`, 'success')
-  await router.push(`/day/${date.value}`)
+  // Replaced, not pushed: this form is finished, and the way back out of the day it built
+  // should not lead into a form whose work is already done and would be done again.
+  await router.replace(`/day/${date.value}`)
 }
 </script>
 
