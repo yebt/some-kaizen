@@ -24,9 +24,22 @@ test('the window control is offered, and starts somewhere that can have moved', 
 
   await open(page, '/stats')
 
-  await expect(page.getByRole('tab')).toHaveCount(5)
+  await expect(page.getByRole('tab')).toHaveCount(6)
   // A year barely shifts, so opening on one would make the screen look the same every time.
   await expect(page.getByRole('tab', { name: '30d' })).toHaveAttribute('aria-selected', 'true')
+})
+
+test('a window with ends of its own can be picked, and only it shows them', async ({ page }) => {
+  await createHabit(page, 'Meditate')
+
+  await open(page, '/stats')
+
+  await expect(page.getByLabel('Measure from')).toHaveCount(0)
+
+  await page.getByRole('tab', { name: 'Pick' }).click()
+
+  await expect(page.getByLabel('Measure from')).toBeVisible()
+  await expect(page.getByLabel('Measure to')).toBeVisible()
 })
 
 test('the window is wired to the figures, not decorative', async ({ page }) => {

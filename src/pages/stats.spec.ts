@@ -116,7 +116,7 @@ describe('the window', () => {
 
     const labels = (await render()).findAll('[role="tab"]').map((node) => node.text().trim())
 
-    expect(labels).toEqual(['7d', '30d', '90d', '1y', 'All'])
+    expect(labels).toEqual(['7d', '30d', '90d', '1y', 'All', 'Pick'])
   })
 
   it('opens on a span that can actually have moved since last time', async () => {
@@ -329,5 +329,97 @@ describe('the per-habit list', () => {
     })
 
     expect((await render()).text()).toContain('Nothing to measure yet')
+  })
+})
+
+describe('a window whose ends are chosen', () => {
+  it('shows its two ends only once it is the one chosen', async () => {
+    // A pair of date fields under "30d" would be two controls arguing about one question.
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habitNamed('Meditate')] })
+
+    const wrapper = await render()
+
+    expect(wrapper.find('[aria-label="Measure from"]').exists()).toBe(false)
+
+    await choose(wrapper, 'Pick')
+
+    expect(wrapper.find('[aria-label="Measure from"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Measure to"]').exists()).toBe(true)
+  })
+
+  it('measures only the days between the two ends', async () => {
+    const habit = habitNamed('Meditate')
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      entries: [on(habit, '2026-08-11', true), on(habit, '2026-06-11', true)],
+    })
+
+    const wrapper = await render()
+
+    await choose(wrapper, 'Pick')
+    await wrapper.find('[aria-label="Measure from"]').setValue('2026-08-01')
+    await wrapper.find('[aria-label="Measure to"]').setValue('2026-08-12')
+    await flushPromises()
+
+    expect(figure(wrapper, 'days recorded')).toBe('1')
+  })
+
+  it('leaves out a day past the end it was given', async () => {
+    // The whole point of an end: "how did June go" must not quietly include August.
+    const habit = habitNamed('Meditate')
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      entries: [on(habit, '2026-08-11', true), on(habit, '2026-06-11', true)],
+    })
+
+    const wrapper = await render()
+
+    await choose(wrapper, 'Pick')
+    await wrapper.find('[aria-label="Measure from"]').setValue('2026-06-01')
+    await wrapper.find('[aria-label="Measure to"]').setValue('2026-06-30')
+    await flushPromises()
+
+    expect(figure(wrapper, 'days recorded')).toBe('1')
+  })
+
+  it('shows the whole history until an end is actually typed', async () => {
+    // Choosing the window and nothing else shows everything rather than nothing, which is
+    // the more useful half-answer.
+    const habit = habitNamed('Meditate')
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      entries: [on(habit, '2026-08-11', true), on(habit, '2026-06-11', true)],
+    })
+
+    const wrapper = await render()
+
+    await choose(wrapper, 'Pick')
+
+    expect(figure(wrapper, 'days recorded')).toBe('2')
+  })
+
+  it('reads ends given the wrong way round as the span between them', async () => {
+    const habit = habitNamed('Meditate')
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [habit],
+      entries: [on(habit, '2026-08-11', true)],
+    })
+
+    const wrapper = await render()
+
+    await choose(wrapper, 'Pick')
+    await wrapper.find('[aria-label="Measure from"]').setValue('2026-08-12')
+    await wrapper.find('[aria-label="Measure to"]').setValue('2026-08-01')
+    await flushPromises()
+
+    expect(figure(wrapper, 'days recorded')).toBe('1')
   })
 })

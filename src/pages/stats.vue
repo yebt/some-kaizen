@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { type CalendarDate, isBefore, todayIn } from '@shared/domain/calendar-date'
+import { type CalendarDate, calendarDate, isBefore, todayIn } from '@shared/domain/calendar-date'
 import AppIcon from '@shared/ui/AppIcon.vue'
 import BackLink from '@shared/ui/BackLink.vue'
 import AppSpinner from '@shared/ui/AppSpinner.vue'
@@ -14,10 +14,10 @@ import { useBlockTime } from '@modules/block-time/application/block-time-queries
 import { negativeStatistics, positiveStatistics } from '@modules/stats/domain/habit-statistics'
 import {
   DEFAULT_STAT_WINDOW,
+  rangeFor,
   STAT_WINDOWS,
   type StatWindowKey,
   statWindow,
-  windowStartFrom,
 } from '@modules/stats/domain/stat-window'
 import { MINIMUM_ANSWERED_DAYS, weekdayBreakdown } from '@modules/stats/domain/weekday-breakdown'
 
@@ -59,12 +59,43 @@ const earliest = computed<CalendarDate>(() =>
   ),
 )
 
-const from = computed(() => windowStartFrom(statWindow(window.value), today, earliest.value))
+/**
+ * The two ends a chosen window is given, as the fields' own strings.
+ *
+ * Empty until somebody types, and the domain reads an empty end as "the whole history" and
+ * "today" — so choosing the window and choosing nothing else shows everything rather than
+ * nothing, which is the more useful half-answer.
+ */
+const chosenFrom = ref('')
+const chosenTo = ref('')
+
+function readDate(value: string): CalendarDate | undefined {
+  if (!value) return undefined
+
+  try {
+    return calendarDate(value)
+  } catch {
+    // A half typed date is a moment mid-edit, not an error to report.
+    return undefined
+  }
+}
+
+const range = computed(() =>
+  rangeFor(statWindow(window.value), today, earliest.value, {
+    from: readDate(chosenFrom.value),
+    to: readDate(chosenTo.value),
+  }),
+)
+
+const from = computed(() => range.value.from)
+const to = computed(() => range.value.to)
+
+const isChosen = computed(() => statWindow(window.value).chosen === true)
 
 /** Streak and completion for one habit, in whichever terms suit its kind. */
 function summarise(habit: Habit) {
   if (isPositive(habit)) {
-    const stats = positiveStatistics(habit, entries.value, from.value, today, today)
+    const stats = positiveStatistics(habit, entries.value, from.value, to.value, today)
 
     return {
       streak: stats.currentStreak,
@@ -101,7 +132,8 @@ const daysRecorded = computed(
   () =>
     new Set(
       currentEntries(entries.value)
-        .filter((entry) => !isBefore(entry.date, from.value))
+        // Both ends, now that one of the windows can end before today.
+        .filter((entry) => !isBefore(entry.date, from.value) && !isBefore(to.value, entry.date))
         .map((entry) => entry.date),
     ).size,
 )
@@ -142,7 +174,7 @@ const week = computed(() => {
   const perDay = new Map<number, { answered: number; kept: number }>()
 
   for (const habit of live.value) {
-    for (const day of weekdayBreakdown(habit, entries.value, from.value, today).days) {
+    for (const day of weekdayBreakdown(habit, entries.value, from.value, to.value).days) {
       const tally = perDay.get(day.weekday) ?? { answered: 0, kept: 0 }
 
       perDay.set(day.weekday, {
@@ -209,6 +241,33 @@ function percent(rate: number | undefined): string {
     </header>
 
     <SegmentedControl v-model="window" :segments="segments" label="How far back to measure" />
+
+    <!--
+      Shown only for the window that has ends to choose. A pair of date fields sitting under
+      "30d" would be two controls arguing about the same question.
+    -->
+    <div v-if="isChosen" class="mt-2 flex gap-2">
+      <label class="flex-1 text-xs font-medium text-ink-muted">
+        From
+        <input
+          v-model="chosenFrom"
+          type="date"
+          :max="today"
+          aria-label="Measure from"
+          class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm font-normal text-ink"
+        />
+      </label>
+      <label class="flex-1 text-xs font-medium text-ink-muted">
+        To
+        <input
+          v-model="chosenTo"
+          type="date"
+          :max="today"
+          aria-label="Measure to"
+          class="tabular mt-1.5 w-full rounded-cell border border-line-strong bg-surface px-3 py-2.5 text-sm font-normal text-ink"
+        />
+      </label>
+    </div>
 
     <div
       v-if="isLoading && habitsData === undefined"

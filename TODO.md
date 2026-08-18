@@ -246,7 +246,14 @@ For a morning routine it is by far the fastest of the three.
       finding. A habit that names its days is not judged on the days it never claimed
 - [x] Per-habit summary block: schedule, tracking since, days answered, usual hour and length,
       and the archive date when there is one
-- [ ] `[custom]` window, which is the one span above that is still missing
+- [x] `[Pick]` — a window with both ends chosen by hand, which is a different question from
+      the others. They all end today and answer "how is it going"; this one answers "how did
+      March go" or "what happened while I was ill", and that needs an end as well as a start
+      or it is just a longer default. Both ends clamped: a start before the history begins and
+      an end after today each divide a rate by days nobody could have answered — and a window
+      left open into next month would report a completion rate falling every morning. Ends
+      given the wrong way round are read as the span between them rather than refused, because
+      two date fields invite it and the meaning is unambiguous
 
 ### Notes on an entry — done
 - [x] Optional `note`, trimmed, capped, and absent rather than empty

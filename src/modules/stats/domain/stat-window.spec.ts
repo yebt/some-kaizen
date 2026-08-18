@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import { calendarDate } from '@shared/domain/calendar-date'
 
-import { DEFAULT_STAT_WINDOW, STAT_WINDOWS, statWindow, windowStartFrom } from './stat-window'
+import {
+  DEFAULT_STAT_WINDOW,
+  rangeFor,
+  STAT_WINDOWS,
+  statWindow,
+  windowStartFrom,
+} from './stat-window'
 
 const TODAY = calendarDate('2026-03-30')
 const LONG_AGO = calendarDate('2020-01-01')
@@ -44,5 +50,54 @@ describe('where a window starts', () => {
 
   it('leaves a window alone when the history is longer than it', () => {
     expect(windowStartFrom(statWindow('30d'), TODAY, LONG_AGO)).toBe(calendarDate('2026-03-01'))
+  })
+})
+
+describe('the span a window covers', () => {
+  it('ends today for every window counted back from it', () => {
+    expect(rangeFor(statWindow('30d'), TODAY, LONG_AGO)).toEqual({
+      from: calendarDate('2026-03-01'),
+      to: TODAY,
+    })
+  })
+
+  it('takes both ends from the chooser when the window is a chosen one', () => {
+    expect(
+      rangeFor(statWindow('custom'), TODAY, LONG_AGO, {
+        from: calendarDate('2026-03-01'),
+        to: calendarDate('2026-03-15'),
+      }),
+    ).toEqual({ from: calendarDate('2026-03-01'), to: calendarDate('2026-03-15') })
+  })
+
+  it('reads ends given the wrong way round as the span between them', () => {
+    // Two date fields invite it, the meaning is unambiguous, and refusing would be the app
+    // being pedantic about something it understood perfectly.
+    expect(
+      rangeFor(statWindow('custom'), TODAY, LONG_AGO, {
+        from: calendarDate('2026-03-15'),
+        to: calendarDate('2026-03-01'),
+      }),
+    ).toEqual({ from: calendarDate('2026-03-01'), to: calendarDate('2026-03-15') })
+  })
+
+  it('never starts before the history does', () => {
+    const started = calendarDate('2026-03-10')
+
+    expect(
+      rangeFor(statWindow('custom'), TODAY, started, { from: calendarDate('2020-01-01') }).from,
+    ).toBe(started)
+  })
+
+  it('never ends after today, so a rate cannot fall on days nobody could answer', () => {
+    // A window left open into next month would report a completion rate dropping every
+    // morning, for days that have not happened.
+    expect(
+      rangeFor(statWindow('custom'), TODAY, LONG_AGO, { to: calendarDate('2027-01-01') }).to,
+    ).toBe(TODAY)
+  })
+
+  it('falls back to the whole history when neither end is chosen', () => {
+    expect(rangeFor(statWindow('custom'), TODAY, LONG_AGO)).toEqual({ from: LONG_AGO, to: TODAY })
   })
 })
