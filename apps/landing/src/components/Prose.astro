@@ -1,0 +1,81 @@
+---
+interface Props {
+  readonly title: string
+  readonly standfirst: string
+  readonly updated: string
+}
+
+const { title, standfirst, updated } = Astro.props
+---
+
+<article class="sheet doc">
+  <header class="doc__head">
+    <h1>{title}</h1>
+    <p class="lede">{standfirst}</p>
+    <p class="data">Last changed {updated}</p>
+  </header>
+  <hr class="rule" />
+  <div class="doc__body">
+    <slot />
+  </div>
+</article>
+
+<style>
+  .doc {
+    padding-block: clamp(3rem, 7vw, 5rem);
+  }
+
+  .doc h1 {
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
+  }
+
+  .doc__head {
+    display: grid;
+    gap: 1rem;
+    max-width: 46ch;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+
+  .doc__body {
+    padding-top: clamp(2rem, 4vw, 3rem);
+    max-width: 68ch;
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .doc__body :global(h2) {
+    font-size: clamp(1.25rem, 2vw, 1.625rem);
+    margin-top: 1.75rem;
+  }
+
+  .doc__body :global(h2:first-child) {
+    margin-top: 0;
+  }
+
+  .doc__body :global(p),
+  .doc__body :global(li) {
+    max-width: 68ch;
+  }
+
+  .doc__body :global(ul) {
+    margin: 0;
+    padding-left: 1.25rem;
+    display: grid;
+    gap: 0.625rem;
+  }
+
+  .doc__body :global(li)::marker {
+    color: var(--gold-deep);
+  }
+
+  .doc__body :global(strong) {
+    font-weight: 600;
+  }
+
+  .doc__body :global(a) {
+    color: var(--ink);
+    text-decoration-color: var(--gold);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1.5px;
+  }
+</style>

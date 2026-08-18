@@ -385,6 +385,21 @@ consumer rather than a reimplementation.
       else. An import of a Vue component does not resolve — a boundary rather than a note
       asking people to be careful. `bun run build` at the root builds both, so a reorder that
       breaks the site turns red in the same run that made it
+- [x] **The site itself.** An annotated field guide rather than a hero with three feature
+      cards: every image is a photograph of the running application with the exact pixels a
+      sentence is about pointed at, in gold, with the pins standing outside the shot. Produced
+      by `capture.spec.ts` driving the real app through its own import, so nothing on the page
+      is a drawing of an interface
+- [x] Five months of plausible history behind the screenshots. The bundled demo data is two
+      weeks old, which is right for somebody trying the app and wrong for a picture of its
+      statistics — a heatmap of a fortnight is a picture of an empty grid
+- [x] It loads nothing from anywhere else. The typeface is self-hosted, the images are local,
+      there is no analytics and no cookie. A privacy claim that fetched a font from a CDN to
+      make itself would be the page disproving its own headline
+- [x] Licence, terms and privacy pages, and the repository gains `LICENSE` and `NOTICE.md`.
+      AGPL-3.0-or-later, chosen because sync is planned and paid: under the ordinary GPL a
+      closed hosted fork would be legal. Its cost is written down rather than discovered —
+      Apple's terms conflict with the (A)GPL, so an AGPL-only iOS build could not ship there
 - [ ] Heatmap generator
 - [x] Habit ideas — the whole list rendered at build time from the tracker's own, so the page
       and the app's ideas screen cannot disagree. No JavaScript reaches the browser at all,

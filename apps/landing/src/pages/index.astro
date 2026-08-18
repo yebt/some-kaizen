@@ -1,13 +1,608 @@
 ---
 import Layout from '../layouts/Layout.astro'
+import Plate from '../components/Plate.astro'
+
+import hours from '../assets/plates/detail-hours.png'
+import quitting from '../assets/plates/detail-quitting.png'
+import plan from '../assets/plates/plan-top.png'
+import heatmap from '../assets/plates/detail-heatmap.png'
+import weekdays from '../assets/plates/detail-weekdays.png'
+import challenge from '../assets/plates/detail-challenge.png'
+import today from '../assets/plates/today.png'
 ---
 
 <Layout
-  title="some kaizen"
-  description="An offline-first habit tracker, and a few tools that need no account."
+  title="Some Kaizen — habits with a place in the day"
+  description="A habit tracker that gives every habit an hour on a real day, beside the sleep and work already on it. Offline, on your phone, with no account and no server."
 >
-  <main>
-    <h1>some kaizen</h1>
-    <p>Nothing here yet.</p>
-  </main>
+  <section class="sheet opening">
+    <div class="opening__say">
+      <h1>Give a habit an hour, not a checkbox.</h1>
+      <p class="lede">
+        Some Kaizen puts the hours already spoken for on the day first — sleep, work, the
+        commute — and then lets you drag a habit onto one that is actually free.
+      </p>
+      <div class="actions">
+        <a class="act" href="https://github.com/yebt/some-kaizen" rel="noopener">
+          Read the source
+        </a>
+        <a class="act act--quiet" href="#what">See what it does</a>
+      </div>
+      <p class="opening__status">
+        Android · free · open source · no account · nothing leaves the device
+      </p>
+    </div>
+
+    <div class="opening__plate">
+      <Plate
+        src={hours}
+        alt="The day timeline at seven in the morning: a shaded band of sleep ending, a card reading Meditate standing on the seven o'clock line, and a shaded band of work beginning at nine."
+        loading="eager"
+        callouts={[
+          {
+            x: 52,
+            y: 12,
+            toX: 104,
+            toY: 6,
+            what: 'Sleep is on the day, not around it.',
+            why: 'Blocks of time are things you already do. They cannot overlap each other, and a plan is checked against them rather than against an empty grid.',
+          },
+          {
+            x: 74,
+            y: 47,
+            toX: 104,
+            toY: 44,
+            what: 'The habit stands on an hour.',
+            why: 'Dragged there, resized by its lower edge. An occurrence that never gets an hour is still valid — it simply happens sometime that day.',
+          },
+          {
+            x: 26,
+            y: 87,
+            toX: 104,
+            toY: 92,
+            what: 'Work begins underneath it.',
+            why: 'Habits may overlap a block freely, because reading on a commute is a real plan and an app that refused it would be wrong about your life.',
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet band" id="what">
+    <div class="spread">
+      <div>
+        <h2>Three shapes, not one.</h2>
+        <p class="margin-note">
+          Most trackers have a single shape — done or not — and bend everything into it. Water
+          becomes a tick. Quitting becomes a tick you press on a day you did nothing. Three
+          separate shapes mean an impossible habit cannot be written down in the first place.
+        </p>
+      </div>
+
+      <div class="cols">
+        <article>
+          <h3>Did it</h3>
+          <p class="quiet">
+            Binary, and honest about it. You meditated or you did not, and the day says which.
+          </p>
+        </article>
+        <article>
+          <h3>Measured</h3>
+          <p class="quiet">
+            Carries a unit, a minimum and a goal. Reaching the minimum grades as a partial day,
+            because most of your water is not the same as none of it.
+          </p>
+        </article>
+        <article>
+          <h3>Quitting</h3>
+          <p class="quiet">
+            Never planned and never performed. Each finished day is judged the following
+            morning, which is the only moment the answer is actually known.
+          </p>
+        </article>
+      </div>
+    </div>
+
+    <div class="pair">
+      <Plate
+        src={quitting}
+        alt="A row reading Smoking, dated yesterday, asking did you avoid it, with Yes and No buttons."
+      />
+      <p class="quiet pair__note">
+        A quitting habit asks about <em>yesterday</em>. Asking at four in the afternoon whether
+        you will smoke tonight is asking somebody to predict themselves, and the answer costs
+        nothing to give and means nothing once given.
+      </p>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet band">
+    <div class="spread">
+      <div>
+        <h2>The week settles itself.</h2>
+        <p class="margin-note">
+          Three runs a week is a real intention, and Monday, Wednesday, Friday is a different
+          one. Both are describable here — and only one of them leaves you anything to decide.
+        </p>
+      </div>
+
+      <div class="plate-col">
+        <Plate
+          src={plan}
+          alt="The weekly board: a chip reading Run waiting for a day, and Tuesday holding Meditate at seven, Stretch at half past seven, Run at half past six and Read at half past nine."
+          callouts={[
+            {
+              x: 22,
+              y: 22,
+              toX: 108,
+              toY: 14,
+              what: 'Waiting for a day.',
+              why: 'A habit that asks for three times a week sits here until you say which days. Drag it onto one and it is settled.',
+            },
+            {
+              x: 62,
+              y: 66,
+              toX: 108,
+              toY: 74,
+              what: 'A day that already owes something.',
+              why: 'Named days settle themselves. Nobody has to drag Monday, Wednesday and Friday onto Monday, Wednesday and Friday.',
+            },
+          ]}
+        />
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet band">
+    <div class="spread">
+      <div>
+        <h2>Statistics that will not flatter you.</h2>
+        <p class="margin-note">
+          A number that only ever goes up is decoration. These are built to be able to say
+          something you would rather not read — and to say nothing at all when they do not yet
+          know.
+        </p>
+      </div>
+
+      <div class="stats">
+        <figure class="stats__item">
+          <img src={heatmap.src} alt="Six months of days as small squares, filled where the habit was done." />
+          <figcaption class="quiet">
+            Six months at a glance. A gap is a gap; nothing here is smoothed out.
+          </figcaption>
+        </figure>
+
+        <figure class="stats__item">
+          <img src={weekdays.src} alt="Seven bars, one per weekday, showing the rate for each." />
+          <figcaption class="quiet">
+            Rate by day of the week — measured over the days you actually answered. A weekday
+            you never answered reports nothing rather than zero, and no best day is named until
+            there is enough to name one.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet band">
+    <div class="spread">
+      <div>
+        <h2>The rule, before you agree to it.</h2>
+        <p class="margin-note">
+          75 Hard says miss one day and you go back to day one. That contradicts everything
+          else here, so it lives in its own container with its own rules and leaves the habits
+          underneath alone.
+        </p>
+      </div>
+
+      <div class="plate-col plate-col--narrow">
+        <Plate
+          src={challenge}
+          alt="A card reading 75 Hard, day 3 of 75, above five unticked tasks."
+          callouts={[
+            {
+              x: 60,
+              y: 18,
+              toX: 110,
+              toY: 6,
+              what: 'Every one today, or back to day one.',
+              why: 'Said while it is still true, and it stops being said once the day is safe. A programme that explained its rule only after applying it would be a trap.',
+            },
+            {
+              x: 20,
+              y: 62,
+              toX: 110,
+              toY: 78,
+              what: 'All of them, or none.',
+              why: 'Three of five at six in the evening is a real state and the screen shows it, but the day counts only when the list is finished.',
+            },
+          ]}
+        />
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet band">
+    <div class="spread">
+      <div>
+        <h2>What it does not do.</h2>
+        <p class="margin-note">
+          Not an oversight list. Each of these was considered and refused, and the reason
+          matters more than the absence.
+        </p>
+      </div>
+
+      <ul class="ledger">
+        <li>
+          <span class="ledger__what">
+            No points, levels or badges
+            <span class="ledger__why quiet">
+              A reward attached to something you already wanted reduces how much you want it
+              once the reward stops — and points lost for a relapse make lying the rational move.
+            </span>
+          </span>
+          <span class="ledger__value">refused</span>
+        </li>
+        <li>
+          <span class="ledger__what">
+            No account, no sign-up
+            <span class="ledger__why quiet">
+              There is nothing to sign in to. The data is in your phone's own storage and the
+              app has no server to send it to.
+            </span>
+          </span>
+          <span class="ledger__value">structural</span>
+        </li>
+        <li>
+          <span class="ledger__what">
+            No streak you can break
+            <span class="ledger__why quiet">
+              Days accumulate. A missed day is information, not an alarm, and it does not delete
+              the ones behind it.
+            </span>
+          </span>
+          <span class="ledger__value">by design</span>
+        </li>
+        <li>
+          <span class="ledger__what">
+            No adverts, no tracking, no analytics
+            <span class="ledger__why quiet">
+              The app makes no network requests of any kind. Neither does this page.
+            </span>
+          </span>
+          <span class="ledger__value">none</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet band">
+    <div class="spread">
+      <div>
+        <h2>Tools that need no install.</h2>
+        <p class="margin-note">
+          Built on the same code as the app, so they cannot quietly disagree with it. They hold
+          their state in your browser and send nothing anywhere.
+        </p>
+      </div>
+
+      <ul class="ledger tools">
+        <li>
+          <span class="ledger__what">
+            <a href="/tools/ideas">Habit ideas</a>
+            <span class="ledger__why quiet">
+              Small, ordinary, finishable habits, and the reason each one is worth doing. The
+              same list the app offers, read out of its own source.
+            </span>
+          </span>
+          <span class="ledger__value">open →</span>
+        </li>
+        <li>
+          <span class="ledger__what">
+            Heatmap generator
+            <span class="ledger__why quiet">
+              Tick days, export a picture of the year to keep or to post.
+            </span>
+          </span>
+          <span class="ledger__value">planned</span>
+        </li>
+        <li>
+          <span class="ledger__what">
+            Routine planner
+            <span class="ledger__why quiet">
+              A wake-up time and a list of steps, cascaded into real hours.
+            </span>
+          </span>
+          <span class="ledger__value">planned</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section class="sheet band closing">
+    <div class="spread">
+      <div>
+        <h2>Where it is, honestly.</h2>
+        <p class="margin-note">
+          Written down rather than implied, because a page that leaves this out is hoping you
+          will assume something better.
+        </p>
+
+        <figure class="closing__plate">
+          <Plate
+            src={today}
+            alt="The Today screen: a week strip, a 75 Hard programme part way through its tasks, and a row still to answer."
+            device
+          />
+          <figcaption class="data">
+            Today, in the app. Every picture on this page is a photograph of it running.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="closing__body">
+        <ul class="ledger">
+          <li>
+            <span class="ledger__what">Android, wrapped with Capacitor</span>
+            <span class="ledger__value">working</span>
+          </li>
+          <li>
+            <span class="ledger__what">iOS</span>
+            <span class="ledger__value">no build exists</span>
+          </li>
+          <li>
+            <span class="ledger__what">
+              A downloadable build
+              <span class="ledger__why quiet">
+                Not published yet. The APK goes to the repository's releases first, and a store
+                listing after that.
+              </span>
+            </span>
+            <span class="ledger__value">not yet</span>
+          </li>
+          <li>
+            <span class="ledger__what">
+              Sync between devices, and hosted backup
+              <span class="ledger__why quiet">
+                Planned, and it would be paid — running a server costs money and pretending
+                otherwise is how free things start reading your data instead. It will be
+                something you opt into. Nothing about the offline app depends on it. No price
+                and no date exist yet.
+              </span>
+            </span>
+            <span class="ledger__value">planned, paid</span>
+          </li>
+        </ul>
+
+        <div class="closing__act">
+          <p>
+            Until there is something to install, the honest thing to offer is the code. All of
+            it, including the parts that explain why each decision went the way it did.
+          </p>
+          <div class="actions">
+            <a class="act" href="https://github.com/yebt/some-kaizen" rel="noopener">
+              Read the source
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
 </Layout>
+
+<style>
+  .opening {
+    display: grid;
+    gap: clamp(2.5rem, 6vw, 4rem);
+    padding-block: clamp(3rem, 8vw, 6rem) clamp(3rem, 7vw, 5.5rem);
+    align-items: center;
+  }
+
+  @media (min-width: 62rem) {
+    .opening {
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: clamp(3rem, 8vw, 7rem);
+    }
+  }
+
+  .opening__say {
+    display: grid;
+    gap: 1.75rem;
+    justify-items: start;
+  }
+
+  .opening__status {
+    margin: 0;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    color: var(--ink-muted);
+  }
+
+  /* The first plate is a crop, so it wants a frame rather than a device edge. */
+  .opening__plate {
+    /* Room in the right margin for the pins to stand outside the shot. */
+    padding-right: clamp(2rem, 5vw, 4rem);
+  }
+
+  .band {
+    padding-block: clamp(3.5rem, 7vw, 5.5rem);
+  }
+
+  .cols {
+    display: grid;
+    gap: 2rem;
+  }
+
+  @media (min-width: 44rem) {
+    .cols {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 2.5rem;
+    }
+  }
+
+  .cols h3 {
+    padding-bottom: 0.625rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--gold);
+  }
+
+  .cols p {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+  }
+
+  .pair {
+    display: grid;
+    gap: 1.75rem;
+    margin-top: clamp(2.5rem, 5vw, 3.5rem);
+    align-items: center;
+  }
+
+  @media (min-width: 52rem) {
+    .pair {
+      grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+      gap: clamp(2rem, 5vw, 3.5rem);
+    }
+  }
+
+  .pair__note {
+    font-size: 1.0625rem;
+    max-width: 46ch;
+  }
+
+  /*
+   * The pins stand outside the photograph rather than on top of it. A number sitting on the
+   * interface it is pointing at hides the pixel the sentence is about, which is the one thing
+   * this whole arrangement exists to avoid.
+   */
+  .plate-col {
+    max-width: 30rem;
+    padding-right: clamp(2.5rem, 7vw, 5rem);
+  }
+
+  .plate-col--narrow {
+    max-width: 26rem;
+  }
+
+  .stats {
+    display: grid;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 46rem) {
+    .stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .stats__item {
+    margin: 0;
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+  }
+
+  .stats__item img {
+    width: 100%;
+    height: auto;
+    padding: 1.25rem;
+    border: 1px solid var(--rule);
+    border-radius: 1rem;
+    background: var(--paper-raised);
+  }
+
+  .stats__item figcaption {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  .ledger__what {
+    display: grid;
+    gap: 0.375rem;
+  }
+
+  .ledger__why {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    max-width: 58ch;
+    font-weight: 400;
+  }
+
+  .tools {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1px;
+    background: var(--rule);
+    border-block: 1px solid var(--rule);
+  }
+
+  .tools li,
+  .tools li > a {
+    display: grid;
+    gap: 0.5rem;
+    background: var(--paper);
+    padding: 1.5rem 0;
+    text-decoration: none;
+  }
+
+  .tools li > a {
+    padding: 0;
+  }
+
+  .tools li:has(> a) {
+    padding: 0;
+  }
+
+  .tools li > a {
+    padding: 1.5rem 0;
+  }
+
+  .tools li > a:hover h3 {
+    color: var(--gold-deep);
+  }
+
+  .tools p {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  .closing__body {
+    display: grid;
+    gap: 2.5rem;
+  }
+
+  .closing__act p {
+    font-size: 1.0625rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .closing__plate {
+    margin: 2.5rem 0 0;
+    display: grid;
+    gap: 0.875rem;
+    max-width: 15rem;
+  }
+
+  .tools :global(a) {
+    color: inherit;
+    text-decoration-color: var(--gold);
+    text-underline-offset: 3px;
+  }
+</style>

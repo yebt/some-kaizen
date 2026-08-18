@@ -106,6 +106,12 @@ apps/tracker/          the habit tracker: Vue, Capacitor, IndexedDB
 apps/landing/          the site: Astro, static, no server
 ```
 
+The site's imagery is produced rather than drawn. `bun run capture` inside `apps/tracker`
+drives the real application through its own import, against five months of generated history,
+and writes the plates into `apps/landing/src/assets/plates/`. It is deliberately excluded from
+`test:e2e`: it is a build step wearing a test harness's clothes, and left in the suite every
+ordinary run would rewrite the site and report a pass for having done it.
+
 **The domain has two consumers.** The site's tools run on the tracker's own rules — the same
 statistics windows, the same weekday breakdown, the same challenge progress — read straight
 out of `apps/tracker/src` through aliases in the site's config. There is one copy, because two

@@ -1,10 +1,16 @@
 ---
+import '../styles/global.css'
+
+import Mark from '../components/Mark.astro'
+
 interface Props {
   readonly title: string
   readonly description: string
 }
 
 const { title, description } = Astro.props
+
+const YEAR = 2026
 ---
 
 <!doctype html>
@@ -14,9 +20,198 @@ const { title, description } = Astro.props
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#f2f0ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191817" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      href="/fonts/archivo-variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
   </head>
   <body>
-    <slot />
+    <!--
+      THESIS: A day has a shape, and this page shows the application drawing it. It refuses the
+      hero-plus-three-feature-cards arrangement every tracker's site ships.
+      OWN-WORLD: The app's own warm ground and ink tiers, Archivo variable set expanded for
+      display, and one annotation ink — gold #c9a227 for leader lines, pins and rules, never
+      for text. Every image is a photograph of the running app on paper.
+      STORY: A visitor sees a real day with sleep and work already on it, understands habits
+      are placed onto hours rather than ticked off a list, believes it because nothing here is
+      a drawing, and goes to the source.
+      FIRST VIEWPORT: masthead rule; left, the headline and the two actions; right, the 07:00
+      crop at full height with three gold leader lines pinned into the margin.
+      FORM: annotated field-guide plate spread. Candidate 4 of 7 on the grounded list; surface
+      seed key 34f71e5f.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish
+      review, the verdict, and DESIGN.md.
+    -->
+    <a class="skip" href="#main">Skip to the content</a>
+
+    <header class="sheet masthead">
+      <a class="masthead__name" href="/">
+        <Mark size={26} />
+        <span>Some Kaizen</span>
+      </a>
+      <nav class="masthead__nav" aria-label="Sections">
+        <a href="/#what">What it does</a>
+        <a href="/tools/ideas">Tools</a>
+        <a href="https://github.com/yebt/some-kaizen" rel="noopener">Source</a>
+      </nav>
+    </header>
+    <hr class="rule" />
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="sheet footer">
+      <hr class="rule" />
+      <div class="footer__grid">
+        <div>
+          <p class="footer__wordmark"><Mark size={22} /> Some Kaizen</p>
+          <p class="data">habits with a place in the day</p>
+        </div>
+        <nav aria-label="Elsewhere">
+          <a href="https://github.com/yebt/some-kaizen" rel="noopener">Source on GitHub</a>
+          <a href="/tools/ideas">Habit ideas</a>
+        </nav>
+        <nav aria-label="Legal">
+          <a href="/legal/privacy">Privacy</a>
+          <a href="/legal/terms">Terms</a>
+          <a href="/legal/licence">Licence</a>
+        </nav>
+      </div>
+      <p class="data footer__note">
+        © {YEAR} Some Kaizen · Free and open source · This page loads nothing from anywhere
+        else and sets no cookies.
+      </p>
+    </footer>
+
+    <script is:inline>
+      // One authored moment, and the page is complete before it runs: the class below is what
+      // hides the lines, so a browser with scripting off never sees them hidden.
+      document.documentElement.classList.add('js')
+
+      const plates = document.querySelectorAll('[data-plate]')
+
+      for (const plate of plates) {
+        for (const line of plate.querySelectorAll('line')) {
+          const box = plate.getBoundingClientRect()
+          const dx = ((line.x2.baseVal.value - line.x1.baseVal.value) / 100) * box.width
+          const dy = ((line.y2.baseVal.value - line.y1.baseVal.value) / 100) * box.height
+
+          line.style.setProperty('--len', String(Math.hypot(dx, dy) || 200))
+        }
+      }
+
+      const watcher = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue
+
+            entry.target.classList.add('is-drawn')
+            watcher.unobserve(entry.target)
+          }
+        },
+        { rootMargin: '0px 0px -18% 0px' },
+      )
+
+      for (const plate of plates) watcher.observe(plate)
+    </script>
+
+    <style>
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding-block: 1.125rem;
+        flex-wrap: wrap;
+      }
+
+      .masthead__name {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 1.0625rem;
+        letter-spacing: -0.025em;
+        font-variation-settings: 'wdth' 112;
+        text-decoration: none;
+      }
+
+      .masthead__nav {
+        display: flex;
+        gap: 1.5rem;
+        font-size: 0.9375rem;
+      }
+
+      .masthead__nav a {
+        color: var(--ink-muted);
+        text-decoration: none;
+        padding-block: 0.25rem;
+        border-bottom: 1px solid transparent;
+        transition: color 160ms ease-out, border-color 160ms ease-out;
+      }
+
+      .masthead__nav a:hover {
+        color: var(--ink);
+        border-bottom-color: var(--gold);
+      }
+
+      .footer {
+        margin-top: clamp(4rem, 10vw, 7rem);
+        padding-bottom: 3rem;
+      }
+
+      .footer__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+        gap: 2rem;
+        padding-block: 2.25rem 1.5rem;
+      }
+
+      .footer__wordmark {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-display);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        font-variation-settings: 'wdth' 112;
+        margin-bottom: 0.25rem;
+      }
+
+      .footer nav {
+        display: grid;
+        gap: 0.5rem;
+        align-content: start;
+        font-size: 0.9375rem;
+      }
+
+      .footer nav a {
+        color: var(--ink-muted);
+        text-decoration: none;
+        justify-self: start;
+        border-bottom: 1px solid transparent;
+        transition: color 160ms ease-out, border-color 160ms ease-out;
+      }
+
+      .footer nav a:hover {
+        color: var(--ink);
+        border-bottom-color: var(--gold);
+      }
+
+      .footer__note {
+        max-width: 60ch;
+      }
+    </style>
   </body>
 </html>

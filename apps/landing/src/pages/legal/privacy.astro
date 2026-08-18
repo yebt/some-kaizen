@@ -1,0 +1,73 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import Prose from '../../components/Prose.astro'
+---
+
+<Layout
+  title="Privacy — Some Kaizen"
+  description="Some Kaizen collects nothing, because it has nowhere to send it. What that means precisely, and what would change if sync is ever built."
+>
+  <Prose
+    title="Privacy"
+    standfirst="The app collects nothing. Not as a policy anyone has to keep — as a fact about how it is built."
+    updated="18 August 2026"
+  >
+    <h2>The application</h2>
+    <p>
+      Some Kaizen has no account system, no server, and makes no network requests. Every habit,
+      entry, plan, block of time and preference is written to your device's own storage
+      (IndexedDB inside the app's WebView) and read back from there. There is nowhere for it to
+      be sent, which is a stronger guarantee than a promise not to send it.
+    </p>
+    <ul>
+      <li>No analytics, telemetry, crash reporting or attribution.</li>
+      <li>No advertising and no advertising identifiers.</li>
+      <li>No third-party SDKs that phone home.</li>
+      <li>No sign-in, no email address, no profile.</li>
+    </ul>
+    <p>
+      The app asks for exactly one permission, and only at the moment it is needed: permission
+      to post a notification, asked the first time you set a reminder. It never asks for storage
+      access — exporting writes into the app's own directory and hands the file to the system
+      share sheet, and importing uses the system document picker.
+    </p>
+
+    <h2>Your data leaving is something you do</h2>
+    <p>
+      Backups and shared routines are files. You choose to write one and you choose where it
+      goes. A shared routine deliberately carries names, durations and an hour and nothing else
+      — no identifiers, no dates, no history — so a routine handed to somebody cannot address
+      anything already on their device.
+    </p>
+
+    <h2>This website</h2>
+    <p>
+      This site is static files. It sets no cookies, uses no analytics, and loads nothing from
+      any other host: the typeface is served from this domain, and every screenshot is a local
+      image. The tools hold their state in your browser and send nothing anywhere. Your host or
+      CDN may keep ordinary server access logs; nothing on the page adds to them.
+    </p>
+
+    <h2>If sync is ever built</h2>
+    <p>
+      Sync between devices and hosted backup are planned, and they would be paid. A service
+      that stores data does handle data, so that is not a thing to slip in quietly under this
+      page. It would arrive as something you opt into, with its own terms written before it
+      ships, and the offline app would continue to work exactly as it does now for anybody who
+      never touches it. Nothing described above changes until then.
+    </p>
+
+    <h2>Children</h2>
+    <p>
+      The app collects nothing from anyone, of any age. It is not directed at children and has
+      no social features, messaging, or purchases.
+    </p>
+
+    <h2>Checking rather than believing</h2>
+    <p>
+      Everything on this page is checkable. The source is public at
+      <a href="https://github.com/yebt/some-kaizen" rel="noopener">github.com/yebt/some-kaizen</a>,
+      and a privacy claim you can read the code behind is the only kind worth making.
+    </p>
+  </Prose>
+</Layout>

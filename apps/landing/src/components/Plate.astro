@@ -1,0 +1,84 @@
+---
+export interface Callout {
+  /** Where the pin sits on the shot, in percent of its own box. */
+  readonly x: number
+  readonly y: number
+  /** Where the note the line runs to sits, in the same percentages. */
+  readonly toX: number
+  readonly toY: number
+  readonly what: string
+  readonly why: string
+}
+
+interface Props {
+  readonly src: ImageMetadata
+  readonly alt: string
+  readonly callouts?: readonly Callout[]
+  readonly device?: boolean
+  readonly loading?: 'eager' | 'lazy'
+}
+
+import { Image } from 'astro:assets'
+
+const { src, alt, callouts = [], device = false, loading = 'lazy' } = Astro.props
+---
+
+<!--
+  A photograph of the running application, with the parts the sentence is about pointed at.
+
+  The pointing is the argument. A screenshot alone asks a reader to find what matters inside a
+  phone-sized picture of an interface they have never used, and most of them will not.
+-->
+<figure class="plate" data-plate>
+  <Image
+    src={src}
+    alt={alt}
+    class:list={['plate__shot', device && 'plate__shot--device']}
+    loading={loading}
+    widths={[420, 780]}
+    sizes="(min-width: 60rem) 42vw, 92vw"
+  />
+
+  {
+    callouts.length > 0 && (
+      <>
+        <svg class="plate__lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {callouts.map((callout, index) => (
+            <line
+              x1={callout.x}
+              y1={callout.y}
+              x2={callout.toX}
+              y2={callout.toY}
+              style={`--i:${index}`}
+            />
+          ))}
+        </svg>
+
+        {callouts.map((callout, index) => (
+          <span
+            class="pin pin--drawn"
+            style={`left:${callout.toX}%;top:${callout.toY}%;--i:${index}`}
+            aria-hidden="true"
+          >
+            {index + 1}
+          </span>
+        ))}
+      </>
+    )
+  }
+</figure>
+
+{
+  callouts.length > 0 && (
+    <ol class="notes">
+      {callouts.map((callout, index) => (
+        <li>
+          <span class="pin">{index + 1}</span>
+          <p>
+            <strong>{callout.what}</strong> {callout.why}
+          </p>
+        </li>
+      ))}
+    </ol>
+  )
+}

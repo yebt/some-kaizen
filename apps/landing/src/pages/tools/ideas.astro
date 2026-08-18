@@ -1,5 +1,5 @@
 ---
-import { allIdeas } from '@modules/habits/domain/habit-ideas'
+import { allIdeas, type HabitIdea } from '@modules/habits/domain/habit-ideas'
 import { HABIT_IDEAS } from '@modules/habits/domain/idea-library'
 
 import Layout from '../../layouts/Layout.astro'
@@ -9,49 +9,108 @@ import Layout from '../../layouts/Layout.astro'
  *
  * The first thing on this site to read the domain, and the reason it is worth reading rather
  * than copying: this page and the app's own ideas screen cannot disagree. A second list would
- * be two answers to the same question, and the one that got the better wording would be
- * whichever somebody edited last.
+ * be two answers to the same question, and the one with the better wording would be whichever
+ * somebody edited last.
  *
- * Nothing runs in the browser here. The whole page is the list, which is also the honest
- * version of the privacy claim this site makes: there is nothing to send.
+ * Nothing runs in the browser. The whole page is the list, which is also the honest form of
+ * the privacy claim this site makes: there is nothing to send.
  */
 const categories = HABIT_IDEAS
 const total = allIdeas(categories).length
 
-function asks(idea: (typeof categories)[number]['ideas'][number]): string {
+function asks(idea: HabitIdea): string {
   if (idea.kind === 'measured') return `${idea.goal} ${idea.unit} a day`
-  if (idea.kind === 'negative') return 'A day without it'
+  if (idea.kind === 'negative') return 'a day without it'
 
-  return idea.usualDurationMinutes ? `${idea.usualDurationMinutes} min` : 'Once a day'
+  return idea.usualDurationMinutes ? `${idea.usualDurationMinutes} min` : 'once a day'
 }
 ---
 
 <Layout
-  title="Habit ideas"
-  description="Small, ordinary, finishable habits — and why each one is worth doing."
+  title="Habit ideas — Some Kaizen"
+  description="Small, ordinary, finishable habits, and the reason each one is worth doing. The same list the app itself offers."
 >
-  <main>
-    <h1>Habit ideas</h1>
-    <p>
-      {total} habits worth starting, and the reason for each. Small and ordinary on purpose: a
-      list that reads as a description of somebody else is a list you close.
-    </p>
+  <div class="sheet ideas">
+    <header class="ideas__head">
+      <h1>Habit ideas</h1>
+      <p class="lede">
+        {total} habits worth starting, and the reason for each one. Small and ordinary on
+        purpose: a list that reads as a description of somebody else is a list you close.
+      </p>
+      <p class="margin-note">
+        This is the same list the application offers on the screen where you have no habits
+        yet — read out of its own source, so the two cannot drift apart.
+      </p>
+    </header>
+
+    <hr class="rule" />
 
     {
       categories.map((category) => (
-        <section>
+        <section class="ideas__group spread">
           <h2>{category.name}</h2>
-          <ul>
+
+          <ul class="ledger">
             {category.ideas.map((idea) => (
               <li>
-                <h3>{idea.name}</h3>
-                <p>{idea.why}</p>
-                <p>{asks(idea)}</p>
+                <span class="ledger__what">
+                  {idea.name}
+                  <span class="ledger__why quiet">{idea.why}</span>
+                </span>
+                <span class="ledger__value">{asks(idea)}</span>
               </li>
             ))}
           </ul>
         </section>
       ))
     }
-  </main>
+
+    <p class="ideas__after quiet">
+      Every one of these can be added in the app in a tap, with its unit and its usual length
+      already filled in.
+    </p>
+  </div>
 </Layout>
+
+<style>
+  .ideas {
+    padding-block: clamp(3rem, 7vw, 5rem);
+  }
+
+  .ideas h1 {
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
+  }
+
+  .ideas__head {
+    display: grid;
+    gap: 1.125rem;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+
+  .ideas__group {
+    padding-block: clamp(2.25rem, 4vw, 3.25rem);
+  }
+
+  .ideas__group + .ideas__group {
+    border-top: 1px solid var(--rule);
+  }
+
+  .ledger__what {
+    display: grid;
+    gap: 0.25rem;
+    font-weight: 500;
+  }
+
+  .ledger__why {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    font-weight: 400;
+    max-width: 56ch;
+  }
+
+  .ideas__after {
+    padding-top: clamp(1.5rem, 3vw, 2.25rem);
+    border-top: 1px solid var(--rule);
+    font-size: 0.9375rem;
+  }
+</style>

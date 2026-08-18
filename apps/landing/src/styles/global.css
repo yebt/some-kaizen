@@ -1,0 +1,461 @@
+/*
+ * The site's world, inherited from the application rather than invented beside it.
+ *
+ * Ground, ink tiers and radii are the app's own tokens. What this surface adds is the one
+ * thing the app has no use for: an annotation ink. Gold is the mark's colour, and here it
+ * does a job — it draws the lines that point at things. It never sets text, because at this
+ * lightness it cannot clear a contrast floor, and a colour that has to be read is a
+ * different decision from a colour that has to be seen.
+ */
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  font-style: normal;
+}
+
+:root {
+  --paper: #f2f0ec;
+  --paper-raised: #fbfaf8;
+  --paper-sunken: #e9e6e0;
+
+  --ink: #1f1e1c;
+  --ink-muted: #605d57;
+  --ink-faint: #8d8981;
+
+  --rule: #dcd8d0;
+  --rule-strong: #b8b2a8;
+
+  --gold: #c9a227;
+  --gold-deep: #a8861c;
+
+  --done: #4f7a4a;
+  --relapse: #a04437;
+
+  --measure: 62ch;
+  --gutter: clamp(1.25rem, 5vw, 4rem);
+  --step: 0.5rem;
+
+  --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-data: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #191817;
+    --paper-raised: #232220;
+    --paper-sunken: #121110;
+
+    --ink: #f2f0ec;
+    --ink-muted: #b0aba3;
+    --ink-faint: #8a857d;
+
+    --rule: #34312d;
+    --rule-strong: #55514b;
+
+    --gold: #d8b442;
+    --gold-deep: #e6c860;
+
+    --done: #86b47f;
+    --relapse: #d98b7e;
+
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  font-variation-settings: 'wdth' 100;
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--gold);
+  color: #1f1e1c;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* ---- Type ------------------------------------------------------------- */
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  /*
+   * Expanded rather than the default width. Archivo carries a width axis, and a plate
+   * caption set wide reads as a plate caption instead of as a paragraph that happens to be
+   * large. It is the one typographic decision this page makes twice.
+   */
+  font-variation-settings: 'wdth' 116;
+  text-wrap: balance;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.75rem, 8vw, 5.25rem);
+}
+
+h2 {
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+}
+
+h3 {
+  font-size: clamp(1.0625rem, 1.6vw, 1.25rem);
+  letter-spacing: -0.02em;
+  font-variation-settings: 'wdth' 108;
+  line-height: 1.25;
+}
+
+p {
+  margin: 0;
+  max-width: var(--measure);
+}
+
+.lede {
+  font-size: clamp(1.125rem, 1.9vw, 1.375rem);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 46ch;
+}
+
+.data {
+  font-family: var(--font-data);
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.quiet {
+  color: var(--ink-muted);
+}
+
+/* ---- Frame ------------------------------------------------------------ */
+
+.sheet {
+  max-width: 78rem;
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+}
+
+.rule {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 0;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+
+.skip:focus {
+  left: var(--gutter);
+  top: 0.75rem;
+  z-index: 10;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+}
+
+/*
+ * The manual's two columns: a narrow margin where the apparatus lives, and the field.
+ *
+ * Below the fold-width it collapses to one column and the margin becomes a heading, which is
+ * what a printed manual does when it is reissued at pocket size.
+ */
+.spread {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  align-items: start;
+}
+
+@media (min-width: 62rem) {
+  .spread {
+    grid-template-columns: 19rem minmax(0, 1fr);
+    gap: clamp(2rem, 5vw, 4.5rem);
+  }
+}
+
+/*
+ * A heading standing in the margin is a caption, not a banner, and it is set at caption
+ * scale. The page's one enormous line is the opening; repeating that size in a 19rem column
+ * only produces six words a line and a column of broken rhythm.
+ */
+.spread > :first-child h2 {
+  font-size: clamp(1.5rem, 2.3vw, 2rem);
+  line-height: 1.08;
+  margin-bottom: 0.875rem;
+}
+
+.margin-note {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 34ch;
+}
+
+/* ---- The action ------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8125rem 1.375rem;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.act:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgb(31 30 28 / 0.16);
+}
+
+.act:active {
+  transform: translateY(0);
+}
+
+.act--quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+
+.act--quiet:hover {
+  border-color: var(--ink);
+  box-shadow: none;
+}
+
+/* ---- Plates ----------------------------------------------------------- */
+
+/*
+ * A plate is a photograph of the running application with things pointed at.
+ *
+ * The pointing is the argument. A screenshot on its own asks the reader to find what matters
+ * in a phone-sized picture of an interface they have never used; a leader line and a
+ * numbered note says which three pixels the sentence is about.
+ */
+.plate {
+  position: relative;
+  display: block;
+  margin: 0;
+}
+
+.plate__shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 1.125rem;
+  border: 1px solid var(--rule);
+  background: var(--paper-raised);
+}
+
+.plate__shot--device {
+  border-radius: 1.75rem;
+  box-shadow:
+    0 2px 4px rgb(31 30 28 / 0.06),
+    0 20px 50px rgb(31 30 28 / 0.12);
+}
+
+.plate__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.plate__lines path,
+.plate__lines line {
+  stroke: var(--gold);
+  stroke-width: 1.25;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.pin {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  margin: -0.8125rem 0 0 -0.8125rem;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1f1e1c;
+  font-family: var(--font-data);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgb(31 30 28 / 0.28);
+}
+
+.notes {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.notes li {
+  display: grid;
+  grid-template-columns: 1.625rem minmax(0, 1fr);
+  gap: 0.875rem;
+  align-items: start;
+}
+
+.notes .pin {
+  position: static;
+  margin: 0.125rem 0 0;
+}
+
+.notes p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 44ch;
+}
+
+.notes strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---- Ledger ----------------------------------------------------------- */
+
+.ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.ledger li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem 1.5rem;
+  align-items: baseline;
+  padding: 0.875rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ledger dt,
+.ledger .ledger__what {
+  font-weight: 500;
+}
+
+.ledger .ledger__value {
+  font-family: var(--font-data);
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Motion ----------------------------------------------------------- */
+
+/*
+ * One authored moment: the leader lines draw themselves when a plate arrives, the way an
+ * annotation is added to a page in front of you. Everything is in its final state before
+ * any script runs, so a page with JavaScript off is a finished page rather than an empty one.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .js .plate__lines path,
+  .js .plate__lines line {
+    stroke-dasharray: var(--len, 200);
+    stroke-dashoffset: var(--len, 200);
+  }
+
+  .js .plate__lines .pin,
+  .js .pin--drawn {
+    opacity: 0;
+  }
+
+  .js .plate.is-drawn .plate__lines path,
+  .js .plate.is-drawn .plate__lines line {
+    animation: draw 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: calc(var(--i, 0) * 110ms);
+  }
+
+  .js .plate.is-drawn .pin--drawn {
+    animation: settle 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: calc(var(--i, 0) * 110ms + 380ms);
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

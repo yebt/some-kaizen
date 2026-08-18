@@ -1,0 +1,33 @@
+---
+interface Props {
+  readonly size?: number
+  readonly title?: string
+}
+
+const { size = 28, title } = Astro.props
+---
+
+<!--
+  The app's own mark, redrawn at whatever size the page needs.
+
+  A ring not quite closed, with the part you have done in gold over it. It is the product's
+  one idea in one shape: progress accumulates, and it is not finished.
+-->
+<svg
+  viewBox="0 0 64 64"
+  width={size}
+  height={size}
+  role={title ? 'img' : 'presentation'}
+  aria-label={title}
+  aria-hidden={title ? undefined : 'true'}
+>
+  <circle cx="32" cy="32" r="15" fill="none" stroke="var(--rule-strong)" stroke-width="7" />
+  <path
+    d="M32 17a15 15 0 0 1 12.99 22.5"
+    fill="none"
+    stroke="var(--gold)"
+    stroke-width="7"
+    stroke-linecap="round"
+  />
+  <circle cx="32" cy="32" r="4" fill="currentColor" />
+</svg>

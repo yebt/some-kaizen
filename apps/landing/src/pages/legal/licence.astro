@@ -1,0 +1,67 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import Prose from '../../components/Prose.astro'
+---
+
+<Layout
+  title="Licence — Some Kaizen"
+  description="Some Kaizen is licensed under the GNU Affero General Public License v3 or later. What that allows, and why this licence rather than a permissive one."
+>
+  <Prose
+    title="Licence"
+    standfirst="GNU Affero General Public License, version 3 or later. Free to use, free to read, free to change — and a hosted version has to stay that way too."
+    updated="18 August 2026"
+  >
+    <h2>What you may do</h2>
+    <ul>
+      <li>Use it, for anything, including commercially.</li>
+      <li>Read all of it, and change any of it.</li>
+      <li>Share it, and share your changes.</li>
+    </ul>
+    <p>
+      What you must do in return: keep it under the same licence, say what you changed, and
+      pass the source on with the software. And the clause the Affero licence adds — if you run
+      a modified version as a network service, the people using it must be able to get its
+      source.
+    </p>
+
+    <h2>Why this licence and not a permissive one</h2>
+    <p>
+      Sync and hosted backup are planned, and they would be paid. Under the ordinary GPL,
+      running a modified version as a service is not distribution, so a closed hosted fork of
+      this project would be perfectly legal. The Affero clause is the difference, and it is the
+      whole reason for choosing it here.
+    </p>
+    <p>
+      It has a cost, recorded here rather than discovered later: Apple's App Store terms
+      conflict with the (A)GPL, so an AGPL-only iOS build could not be distributed there. There
+      is no iOS build today, and the copyright sits in one place, so that path stays open to be
+      reconsidered.
+    </p>
+
+    <h2>The material this project bundles</h2>
+    <ul>
+      <li>
+        <strong>Archivo</strong>, the typeface this site is set in — SIL Open Font License 1.1.
+        Served from this domain, never from anyone else's.
+      </li>
+      <li><strong>Lucide</strong> icons — ISC.</li>
+      <li>
+        <strong>Vue, Vite, Pinia, Pinia Colada, Astro, Capacitor, Tailwind CSS</strong> — MIT,
+        except where each project states otherwise.
+      </li>
+    </ul>
+    <p>
+      Every screenshot on this site is of this application, captured automatically against its
+      own bundled demo data. No stock imagery is used anywhere.
+    </p>
+
+    <h2>The text itself</h2>
+    <p>
+      The complete licence is in the repository as
+      <a href="https://github.com/yebt/some-kaizen/blob/main/LICENSE" rel="noopener">LICENSE</a>,
+      with the reasoning and the third-party list in
+      <a href="https://github.com/yebt/some-kaizen/blob/main/NOTICE.md" rel="noopener">NOTICE.md</a>.
+    </p>
+  </Prose>
+</Layout>

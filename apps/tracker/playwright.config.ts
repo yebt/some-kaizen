@@ -15,6 +15,16 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
+  /*
+   * The capture run is not a test and does not belong in the suite.
+   *
+   * It drives the app to a photographable state and writes PNGs into the site's assets, which
+   * is a build step wearing a test harness's clothes because this harness is the only thing
+   * that can render the real application. Left in, every ordinary run would rewrite the site's
+   * imagery and report a pass for having done so. `bun run capture` sets CAPTURE and runs it
+   * on its own.
+   */
+  testIgnore: process.env.CAPTURE ? [] : ['capture.spec.ts'],
   // Run files in parallel; each context is isolated, so order cannot matter.
   fullyParallel: true,
   /*
