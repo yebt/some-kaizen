@@ -410,8 +410,16 @@ consumer rather than a reimplementation.
 ### Health data as a value source
 - [ ] A `source` on a measured habit: `manual | health`
 - [ ] HealthKit and Health Connect plugins, permissions, background read
-- [ ] Re-read the landing's privacy claim word by word first. It currently says, in large
-      type, that nothing is ever sent anywhere
+- [x] **Read, and it does not block this.** The claim now exists in this repository, at
+      `apps/landing/src/pages/legal/privacy.astro`, and what it actually says is that the app
+      *makes no network requests* — no analytics, no telemetry, no SDK that phones home.
+      Health Connect and HealthKit are on-device APIs, so reading from them sends nothing
+      anywhere and contradicts none of it. What the page would need is one added sentence
+      naming the permission, in the paragraph that already names the notification one
+- [ ] Which leaves the real question, which was never the privacy claim: a value that arrived
+      from a watch is not a value somebody entered, and a day graded on a number the person
+      never saw is a day they cannot argue with. `source` exists so a screen can say where a
+      figure came from and let it be overridden, not so the app can fill itself in silently
 
 ### Housekeeping
 - [ ] Post the prepared comment to `Gentleman-Programming/gentle-ai#2943` — blocked on `gh`
