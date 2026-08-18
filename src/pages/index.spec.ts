@@ -14,6 +14,11 @@ import { createBlockTime } from '@modules/block-time/domain/block-time'
 import { createCompletedHabit, createNegativeHabit, frequency } from '@modules/habits/domain/habit'
 import { latestEntryFor, recordCompleted } from '@modules/habits/domain/habit-entry'
 import { createRoutine } from '@modules/habits/domain/routine'
+import { abandonChallenge, createChallenge } from '@modules/challenges/domain/challenge'
+import {
+  CHALLENGE_PRESETS,
+  challengeFromPreset,
+} from '@modules/challenges/domain/challenge-presets'
 import { planInstance } from '@modules/planning/domain/planned-instance'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
 import { EMPTY_DATASET } from '@modules/data/domain/dataset'
@@ -1293,5 +1298,177 @@ describe('answering a quitting habit with a line', () => {
     const [stored] = await persistence.entries.all()
 
     expect(stored).toMatchObject({ outcome: 'relapsed', note: 'Gave in after the meeting.' })
+  })
+})
+
+describe('ticking a programme on the day it belongs to', () => {
+  async function settleAll() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  const HARD = CHALLENGE_PRESETS[0]!
+
+  function started(startedOn = todayIn()) {
+    return challengeFromPreset(HARD, {
+      id: newIdentifier(),
+      newTaskId: newIdentifier,
+      startedOn,
+    })
+  }
+
+  function dayOf(challenge: ReturnType<typeof started>, offset: number, done: 'all' | 'none') {
+    return {
+      id: newIdentifier(),
+      challengeId: challenge.id,
+      date: addDays(challenge.startedOn, offset),
+      completed: done === 'all' ? challenge.tasks.map((task) => task.id) : [],
+      recordedAt: offset,
+    }
+  }
+
+  it('lists what today asks for, and which day it is', async () => {
+    const challenge = started(addDays(todayIn(), -1))
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      challenges: [challenge],
+      challengeDays: [dayOf(challenge, 0, 'all')],
+    })
+
+    const text = (await renderToday()).text()
+
+    expect(text).toContain('Day 2 of 75')
+    for (const task of challenge.tasks) expect(text).toContain(task.name)
+  })
+
+  it('ticks one thing without claiming the day', async () => {
+    // Three of four at six in the evening is a real state, and the screen has to show it.
+    const challenge = started()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, challenges: [challenge] })
+
+    const wrapper = await renderToday()
+    const first = challenge.tasks[0]!
+
+    await wrapper.find(`[aria-label="${first.name}, for ${challenge.name}"]`).trigger('click')
+    await settleAll()
+
+    const [stored] = await persistence.challengeDays.all()
+
+    expect(stored?.completed).toEqual([first.id])
+    expect(wrapper.text()).toContain('Day 1 of 75')
+  })
+
+  it('unticks it again, because a checklist is not a verdict', async () => {
+    const challenge = started()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, challenges: [challenge] })
+
+    const wrapper = await renderToday()
+    const first = challenge.tasks[0]!
+    const control = `[aria-label="${first.name}, for ${challenge.name}"]`
+
+    await wrapper.find(control).trigger('click')
+    await settleAll()
+    await wrapper.find(control).trigger('click')
+    await settleAll()
+
+    expect((await persistence.challengeDays.all())[0]?.completed).toEqual([])
+  })
+
+  it('keeps one record for the day rather than one per tick', async () => {
+    // A challenge day is a checklist, not a verdict: ticking the fourth box is not a second
+    // opinion about the first three.
+    const challenge = started()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, challenges: [challenge] })
+
+    const wrapper = await renderToday()
+
+    for (const task of challenge.tasks.slice(0, 3)) {
+      await wrapper.find(`[aria-label="${task.name}, for ${challenge.name}"]`).trigger('click')
+      await settleAll()
+    }
+
+    expect(await persistence.challengeDays.all()).toHaveLength(1)
+  })
+
+  it('says what today costs before the day is lost', async () => {
+    const challenge = started()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, challenges: [challenge] })
+
+    expect((await renderToday()).text()).toContain('back to day one')
+  })
+
+  it('stops saying it once today is safe', async () => {
+    const challenge = started()
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      challenges: [challenge],
+      challengeDays: [dayOf(challenge, 0, 'all')],
+    })
+
+    expect((await renderToday()).text()).not.toContain('back to day one')
+  })
+
+  it('says nothing at all when no programme is running', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    expect((await renderToday()).text()).not.toContain('Programmes')
+  })
+
+  it('takes its space back once one has been finished', async () => {
+    // A programme you completed is not a checklist you are still filling in, and leaving it
+    // there would be a monument rather than a day.
+    const short = createChallenge({
+      id: newIdentifier(),
+      name: 'Two day test',
+      lengthDays: 2,
+      tasks: [{ id: newIdentifier(), name: 'Move' }],
+      startedOn: addDays(todayIn(), -1),
+      onMiss: 'restart',
+    })
+
+    const everyTask = short.tasks.map((task) => task.id)
+
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      challenges: [short],
+      challengeDays: [
+        {
+          id: newIdentifier(),
+          challengeId: short.id,
+          date: addDays(todayIn(), -1),
+          completed: everyTask,
+          recordedAt: 1,
+        },
+        {
+          id: newIdentifier(),
+          challengeId: short.id,
+          date: todayIn(),
+          completed: everyTask,
+          recordedAt: 2,
+        },
+      ],
+    })
+
+    expect((await renderToday()).text()).not.toContain('Programmes')
+  })
+
+  it('takes its space back the moment one is given up on, not the next morning', async () => {
+    // Having just decided to stop, being asked to tick five boxes for the rest of the
+    // afternoon is the app not listening.
+    const challenge = abandonChallenge(started(addDays(todayIn(), -2)), todayIn())
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, challenges: [challenge] })
+
+    expect((await renderToday()).text()).not.toContain('Programmes')
   })
 })

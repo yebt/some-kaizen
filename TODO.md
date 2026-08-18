@@ -293,10 +293,27 @@ For a morning routine it is by far the fastest of the three.
       beside it, sharing one function with the gesture so the two cannot offer different menus
 
 ### Challenges
-- [ ] A programme container: fixed length, fixed daily task set, all-or-nothing days
-- [ ] 75 Hard as the first one, restart-on-miss included
-- [ ] Modelled **outside** the habit model. Its restart rule contradicts everything we
-      believe about days accumulating, and that is fine for something opted into
+- [x] A programme container: fixed length, fixed daily task set, all-or-nothing days. Started
+      and given up on from `/challenges`; ticked on the day it belongs to, because a checklist
+      you have to go and find is one you stop filling in
+- [x] 75 Hard as the first one, restart-on-miss included — and *The 30 day reset* beside it,
+      which forgives a miss. A fixed daily set is a useful shape without the punishment, and
+      shipping only the punishing one would be the app taking a side it need not take
+- [x] Modelled **outside** the habit model, in its own module with its own two stores. Every
+      function that counts a day would otherwise have to ask which of two incompatible
+      philosophies applied to it
+- [x] Two rules do the work. Today is never a miss — it is in progress, exactly as a habit's
+      current period is, and counting it would make the number collapse every morning and
+      climb back by evening. And a missed day past resets the run without deleting the days
+      behind it: they happened, a restart count says how often this has been true, but they no
+      longer carry towards finishing
+- [x] Completeness is derived rather than stored, so adding a task cannot leave old days
+      claiming a completeness they never had — and a screen can show three of four at six in
+      the evening
+- [x] The day you give up on one is left open rather than judged: giving up is a decision, not
+      a failure of that day. It leaves the day's checklist immediately, though — having just
+      decided to stop, being asked to tick five boxes all afternoon is the app not listening
+- [ ] A challenge of your own, rather than only the two bundled ones
 
 ## Later
 
@@ -318,7 +335,7 @@ consumer rather than a reimplementation.
 - [ ] Heatmap generator
 - [ ] Habit ideas
 - [ ] Routine planner (falls out of the builder above)
-- [ ] 75 Hard tracker (needs challenges)
+- [ ] 75 Hard tracker — no longer blocked; challenges exist now
 
 ### Health data as a value source
 - [ ] A `source` on a measured habit: `manual | health`

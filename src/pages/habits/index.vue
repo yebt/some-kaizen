@@ -191,6 +191,13 @@ function isPressed(id: Identifier) {
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Habits</h1>
       <div class="flex items-center gap-3">
         <RouterLink
+          to="/challenges"
+          class="hit-area grid size-9 place-items-center rounded-full border border-line-strong text-ink-muted"
+          aria-label="Challenges"
+        >
+          <AppIcon name="flag" :size="16" />
+        </RouterLink>
+        <RouterLink
           to="/habits/ideas"
           class="hit-area grid size-9 place-items-center rounded-full border border-line-strong text-ink-muted"
           aria-label="Ideas"

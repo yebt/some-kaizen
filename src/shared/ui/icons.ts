@@ -8,6 +8,7 @@ import {
   Footprints,
   GraduationCap,
   House,
+  Flag,
   Lightbulb,
   Utensils,
   Users,
@@ -61,6 +62,8 @@ export const ICONS = {
   bell: Bell,
   /** An idea, on the screen that offers habits worth considering. */
   idea: Lightbulb,
+  /** A programme with an end, on the screen that starts one. */
+  flag: Flag,
 }
 
 /**

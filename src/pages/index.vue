@@ -18,6 +18,7 @@ import AppSpinner from '@shared/ui/AppSpinner.vue'
 import { surfaceStyle } from '@shared/ui/appearance-style'
 import DateStrip from '@shared/ui/DateStrip.vue'
 import ProgressRing from '@shared/ui/ProgressRing.vue'
+import ChallengeToday from '@modules/challenges/ui/ChallengeToday.vue'
 import SegmentedControl, { type Segment } from '@shared/ui/SegmentedControl.vue'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
 import { usePressHold } from '@shared/ui/press/use-press-hold'
@@ -1012,6 +1013,22 @@ const OUTCOME_CLASS = {
     <p v-if="markedDays.length" class="mt-1.5 text-center text-[0.625rem] text-ink-subtle">
       A dot marks a day with something already on its timeline.
     </p>
+
+    <!--
+      Outside the habits gate, deliberately.
+
+      A programme is not a habit and does not depend on there being any — that independence is
+      the whole reason it is modelled apart. Inside the branch, somebody running 75 Hard with
+      no habits tracked would open the app to "No habits yet" and no sign of the thing they
+      committed to.
+
+      Above the day's two views rather than inside either, because it belongs to the day
+      without belonging to the checklist. Only the programmes still running appear, so a
+      finished or abandoned one takes its space back rather than standing there as a monument.
+    -->
+    <div class="mt-4">
+      <ChallengeToday :day="selectedDay" />
+    </div>
 
     <div v-if="isFirstLoad" class="mt-6 flex justify-center py-12 text-ink-subtle">
       <AppSpinner :size="24" label="Loading your day" />
