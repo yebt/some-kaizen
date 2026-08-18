@@ -77,6 +77,9 @@ test('a habit with no reason keeps the hint that teaches the row', async ({ page
   await open(page, '/habits/new')
   await page.locator('#habit-name').fill('Run')
   await page.getByRole('button', { name: 'Create' }).click()
+  // Waited for before navigating on: the helper below leaves with a real page load, and
+  // going on the click alone races the write and lands on an empty list.
+  await expect(page).not.toHaveURL(/\/habits\/new$/)
 
   await open(page, '/habits')
 

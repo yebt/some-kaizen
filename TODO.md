@@ -253,8 +253,18 @@ For a morning routine it is by far the fastest of the three.
 - [x] Written from the amount dialog, which had already interrupted you; never behind the
       swipe, which exists so that marking a day costs nothing
 - [x] Read back on the habit's own page, newest first
-- [ ] A way in for a "did it" habit, which today has no dialog to hang it off
-- [ ] A way in for a negative habit's verdict, same reason
+- [x] A way in for a "did it" habit: one hold — or one tap on the row's own actions button —
+      after the day has an answer. Never behind the swipe, which exists so that marking a day
+      costs nothing. Offered *only* where there is a verdict to hang it off, because writing a
+      note about an unanswered day would have to invent an answer, and this app is careful
+      about the difference between a day answered badly and one never answered
+- [x] A way in for a negative habit's verdict, and the note comes *with* the answer there
+      rather than after it. That is not an inconsistency: the app has already stopped to ask,
+      and the morning you answer is the one morning you know why. Yes and No stay one tap;
+      this is a third door
+- [x] It also closed a hole it was about to widen: the Today row's menu — edit, archive, give
+      it an hour — was reachable only by holding. There is now an ordinary actions button
+      beside it, sharing one function with the gesture so the two cannot offer different menus
 
 ### Challenges
 - [ ] A programme container: fixed length, fixed daily task set, all-or-nothing days

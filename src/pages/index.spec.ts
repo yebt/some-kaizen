@@ -1057,3 +1057,241 @@ describe('a day arranged into routines', () => {
     expect(wrapper.text()).not.toContain('Anything else')
   })
 })
+
+describe('writing a note about a day', () => {
+  async function settleAll() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  function habit() {
+    return createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2020-01-01'),
+    })
+  }
+
+  async function openMenu(wrapper: ReturnType<typeof mount>) {
+    await wrapper.find('[aria-label="Actions for Meditate"]').trigger('click')
+    await flushPromises()
+  }
+
+  /**
+   * Answers the day the way a person does.
+   *
+   * Through the button rather than by seeding an entry, because a row finds its verdict
+   * through the day's occurrence — a hand written entry with no occurrence attached is
+   * invisible to it, and the test would be proving something about a record the screen never
+   * looks at.
+   */
+  async function markDone(wrapper: ReturnType<typeof mount>) {
+    await wrapper.find('[aria-label="Mark Meditate"]').trigger('click')
+    await settleAll()
+  }
+
+  function action(wrapper: ReturnType<typeof mount>, label: string) {
+    return wrapper.findAll('button').find((node) => node.text().startsWith(label))
+  }
+
+  it('is not offered on a day nobody has answered', async () => {
+    // A note has to hang off a verdict. Writing one about an unanswered day would have to
+    // invent an answer, and this app is careful about the difference between a day answered
+    // badly and one never answered at all.
+    showFinishedRows()
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit()] })
+
+    const wrapper = await renderToday()
+
+    await openMenu(wrapper)
+
+    expect(action(wrapper, 'Write a note')).toBeUndefined()
+  })
+
+  it('is offered once the day has a verdict', async () => {
+    showFinishedRows()
+
+    const meditate = habit()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditate] })
+
+    const wrapper = await renderToday()
+
+    await markDone(wrapper)
+    await openMenu(wrapper)
+
+    expect(action(wrapper, 'Write a note')).toBeDefined()
+  })
+
+  it('stores the line against the day', async () => {
+    showFinishedRows()
+
+    const meditate = habit()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditate] })
+
+    const wrapper = await renderToday()
+
+    await markDone(wrapper)
+    await openMenu(wrapper)
+    await action(wrapper, 'Write a note')?.trigger('click')
+    await flushPromises()
+    await wrapper.find('[aria-label="The note"]').setValue('Woke up late, did it anyway.')
+    await wrapper.find('dialog[aria-label="Write a note"] form').trigger('submit')
+    await settleAll()
+
+    const stored = latestEntryFor(await persistence.entries.all(), meditate.id, todayIn())
+
+    expect(stored?.note).toBe('Woke up late, did it anyway.')
+  })
+
+  it('leaves the verdict exactly as it was', async () => {
+    // A note is about a day, not an answer to it. Writing a line about a day you did must
+    // not quietly mark it undone.
+    showFinishedRows()
+
+    const meditate = habit()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditate] })
+
+    const wrapper = await renderToday()
+
+    await markDone(wrapper)
+    await openMenu(wrapper)
+    await action(wrapper, 'Write a note')?.trigger('click')
+    await flushPromises()
+    await wrapper.find('[aria-label="The note"]').setValue('Woke up late.')
+    await wrapper.find('dialog[aria-label="Write a note"] form').trigger('submit')
+    await settleAll()
+
+    expect(latestEntryFor(await persistence.entries.all(), meditate.id, todayIn())?.outcome).toBe(
+      'done',
+    )
+  })
+
+  it('leaves the day still looking answered afterwards', async () => {
+    /*
+     * A row finds the day's verdict through the day's occurrence, so an entry re-recorded
+     * without that link becomes invisible to the screen that wrote it. The first version of
+     * this dropped it, and the day read as unanswered the moment you added a line about it —
+     * which looks exactly like the note having undone the tick.
+     */
+    showFinishedRows()
+
+    const meditate = habit()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditate] })
+
+    const wrapper = await renderToday()
+
+    await markDone(wrapper)
+    await openMenu(wrapper)
+    await action(wrapper, 'Write a note')?.trigger('click')
+    await flushPromises()
+    await wrapper.find('[aria-label="The note"]').setValue('Woke up late.')
+    await wrapper.find('dialog[aria-label="Write a note"] form').trigger('submit')
+    await settleAll()
+
+    expect(wrapper.find('[aria-label="Mark Meditate"]').attributes('aria-pressed')).toBe('true')
+    expect((await persistence.entries.all())[0]).toHaveProperty('instanceId')
+  })
+
+  it('offers to edit one that is already there', async () => {
+    showFinishedRows()
+
+    const meditate = habit()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [meditate] })
+
+    const wrapper = await renderToday()
+
+    await markDone(wrapper)
+    await openMenu(wrapper)
+    await action(wrapper, 'Write a note')?.trigger('click')
+    await flushPromises()
+    await wrapper.find('[aria-label="The note"]').setValue('Already said.')
+    await wrapper.find('dialog[aria-label="Write a note"] form').trigger('submit')
+    await settleAll()
+    await openMenu(wrapper)
+
+    expect(action(wrapper, 'Edit the note')).toBeDefined()
+  })
+})
+
+describe('answering a quitting habit with a line', () => {
+  async function settleAll() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  function smoking() {
+    return createNegativeHabit({
+      id: newIdentifier(),
+      name: 'Smoking',
+      createdOn: addDays(todayIn(), -10),
+    })
+  }
+
+  it('offers a third door beside Yes and No, without adding a step to either', async () => {
+    const habit = smoking()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderToday()
+
+    expect(wrapper.find('[aria-label^="Answer Smoking"]').exists()).toBe(true)
+    expect(wrapper.findAll('button').some((node) => node.text() === 'Yes')).toBe(true)
+  })
+
+  it('records the verdict and the line together', async () => {
+    // The morning you answer is the one morning you know why.
+    const habit = smoking()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label^="Answer Smoking"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[aria-label="The note"]').setValue('Stressful day, still avoided it.')
+    await wrapper
+      .findAll('dialog[aria-label="Answer with a note"] button')
+      .find((node) => node.text() === 'Avoided')
+      ?.trigger('click')
+    await settleAll()
+
+    const [stored] = await persistence.entries.all()
+
+    expect(stored).toMatchObject({ outcome: 'avoided', note: 'Stressful day, still avoided it.' })
+  })
+
+  it('records a relapse with its line just as readily', async () => {
+    const habit = smoking()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderToday()
+
+    await wrapper.find('[aria-label^="Answer Smoking"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[aria-label="The note"]').setValue('Gave in after the meeting.')
+    await wrapper
+      .findAll('dialog[aria-label="Answer with a note"] button')
+      .find((node) => node.text() === 'Relapsed')
+      ?.trigger('click')
+    await settleAll()
+
+    const [stored] = await persistence.entries.all()
+
+    expect(stored).toMatchObject({ outcome: 'relapsed', note: 'Gave in after the meeting.' })
+  })
+})

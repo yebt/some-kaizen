@@ -26,6 +26,7 @@ import {
   type Achievement,
   achievementFor,
   archiveHabit,
+  type CompletedHabit,
   type Habit,
   isMeasured,
   isNegative,
@@ -417,6 +418,92 @@ async function answerNegative(habit: NegativeHabit, day: CalendarDate, avoided: 
 }
 
 /** Sets the verdict for one duty, reusing the entry so a correction replaces the answer. */
+/**
+ * The note being written about a day that already has a verdict.
+ *
+ * Held apart from the amount dialog because the two answer different questions: that one
+ * records what happened, this one records why. A measured habit gets both in one sheet
+ * because it had already stopped to ask; a "did it" habit is a swipe, and interrupting it
+ * would cost the thing the swipe exists for.
+ */
+const noting = ref<{
+  habit: PositiveHabit
+  entryId: Identifier
+  /** Carried through, because it is how the day finds this verdict again. */
+  instanceId: Identifier | undefined
+  done: boolean
+  note: string
+} | null>(null)
+
+async function saveNote() {
+  const pending = noting.value
+
+  if (!pending) return
+
+  noting.value = null
+
+  /*
+   * The verdict is carried through unchanged, and that is the point: a note is about a day,
+   * not an answer to it. Re-recording with the same outcome keeps the entry that currently
+   * stands standing, so writing a line about a day you did cannot quietly mark it undone.
+   */
+  /*
+   * The occurrence identifier travels with it, and leaving it off is not a detail.
+   *
+   * A row finds the day's verdict through the day's occurrence, so an entry re-recorded
+   * without one becomes invisible to the screen that wrote it: the day would read as
+   * unanswered again the moment you added a line about it.
+   */
+  await recordEntry.mutateAsync(
+    recordCompleted(
+      pending.entryId,
+      pending.habit as CompletedHabit,
+      selectedDay.value,
+      pending.done,
+      {
+        note: pending.note,
+        ...(pending.instanceId === undefined ? {} : { instanceId: pending.instanceId }),
+      },
+    ),
+  )
+
+  feedback.notify(pending.note.trim() ? 'Note saved' : 'Note removed')
+}
+
+/**
+ * A verdict on a quitting habit, with the line explaining it.
+ *
+ * The note comes *with* the answer here rather than after it, and the difference is not an
+ * inconsistency. A positive habit is marked by a swipe that has to stay free, so its note is
+ * one hold away afterwards. A negative habit is a question the app has already stopped to ask
+ * — and the morning you are answering it is the one morning you know why.
+ */
+const judging = ref<{ habit: NegativeHabit; day: CalendarDate; note: string } | null>(null)
+
+async function saveVerdict(avoided: boolean) {
+  const pending = judging.value
+
+  if (!pending) return
+
+  judging.value = null
+
+  await recordEntry.mutateAsync(
+    recordNegative(
+      newIdentifier(),
+      pending.habit,
+      pending.day,
+      avoided ? 'avoided' : 'relapsed',
+      today,
+      { note: pending.note },
+    ),
+  )
+
+  feedback.notify(
+    avoided ? `${pending.habit.name}: a clean day` : `${pending.habit.name}: relapse recorded`,
+    avoided ? 'success' : 'danger',
+  )
+}
+
 async function setCompleted(
   habit: PositiveHabit,
   duty: DayDuty,
@@ -550,7 +637,15 @@ async function clearAmount(habit: MeasuredHabit, value: number, entryId: Identif
 const HOLD_MS = 380
 
 type MenuTarget =
-  | { kind: 'duty'; habit: PositiveHabit; duty: DayDuty }
+  | {
+      kind: 'duty'
+      habit: PositiveHabit
+      duty: DayDuty
+      /** Absent while the day is unanswered, which is what decides whether a note is offered. */
+      entryId?: Identifier
+      done?: boolean
+      note?: string
+    }
   | { kind: 'habit'; habit: Habit }
   | { kind: 'block'; blockId: Identifier; name: string }
 
@@ -569,7 +664,7 @@ const hold = usePressHold({
     // The row is being taken over by the menu, so the half finished swipe underneath it has
     // to let go, or the row stays translated with nothing driving it.
     swipe.cancel()
-    menuFor.value = { kind: 'duty', habit: row.habit, duty: row.duty }
+    openDutyMenu(row)
     swallowNextClick.value = true
   },
 })
@@ -613,10 +708,55 @@ const menuActions = computed<SheetAction[]>(() => {
       label: current.duty.instance?.startsAt === undefined ? 'Give it a time' : 'Change its time',
       description: 'Open the day timeline',
     },
+    /*
+     * A note, once the day has an answer to hang it off.
+     *
+     * Never behind the swipe, which exists precisely so that marking a day costs nothing —
+     * and a tracker that wants a sentence every morning is one nobody opens twice. So it
+     * lives here, one hold away, after the fact.
+     *
+     * Offered only where there is a verdict. Writing a note about a day nobody has answered
+     * would have to invent an answer to attach it to, and this app is careful about the
+     * difference between a day you answered badly and one you never answered at all.
+     *
+     * Measured habits are left out: their amount dialog already stopped to ask a question,
+     * and it already carries the note field.
+     */
+    ...(current.entryId !== undefined && !isMeasured(current.habit)
+      ? [
+          {
+            key: 'note',
+            label: current.note ? 'Edit the note' : 'Write a note',
+            description: 'For the day you will not remember',
+          },
+        ]
+      : []),
     EDIT_ACTION,
     ARCHIVE_ACTION,
   ]
 })
+
+/**
+ * Opens the row's menu, from the hold and from the button alike.
+ *
+ * One function rather than two call sites building the target, so the button cannot quietly
+ * offer a different menu from the gesture.
+ */
+function openDutyMenu(row: {
+  habit: PositiveHabit
+  duty: DayDuty
+  entryId: Identifier | undefined
+  outcome: PositiveOutcome | undefined
+}) {
+  menuFor.value = {
+    kind: 'duty',
+    habit: row.habit,
+    duty: row.duty,
+    entryId: row.entryId,
+    done: row.outcome === 'done',
+    note: entries.value.find((entry) => entry.id === row.entryId)?.note,
+  }
+}
 
 async function runMenuAction(key: string) {
   const current = menuFor.value
@@ -633,6 +773,18 @@ async function runMenuAction(key: string) {
 
   if (key === 'time') {
     await router.push(`/day/${selectedDay.value}`)
+
+    return
+  }
+
+  if (key === 'note' && current.kind === 'duty' && current.entryId !== undefined) {
+    noting.value = {
+      habit: current.habit,
+      entryId: current.entryId,
+      instanceId: current.duty.instance?.id,
+      done: current.done ?? false,
+      note: current.note ?? '',
+    }
 
     return
   }
@@ -918,6 +1070,19 @@ const OUTCOME_CLASS = {
               >
                 No
               </button>
+              <!--
+                Answering with a line, for the days where the answer alone tells you nothing
+                in a month's time. Yes and No stay one tap: this is a third door, not a step
+                added to the other two.
+              -->
+              <button
+                type="button"
+                class="hit-area grid size-8 place-items-center rounded-full border border-line-strong text-ink-muted"
+                :aria-label="`Answer ${check.habit.name} for ${check.day} with a note`"
+                @click="judging = { habit: check.habit, day: check.day, note: '' }"
+              >
+                <AppIcon name="more" :size="14" />
+              </button>
             </div>
           </li>
         </ul>
@@ -1081,6 +1246,22 @@ const OUTCOME_CLASS = {
                     "
                   >
                     <AppIcon name="check" :size="18" />
+                  </button>
+                  <!--
+                    The same menu the hold opens, on a control you can reach.
+
+                    Holding is the fast path and it stays. It cannot be the only one: a hold
+                    is unavailable to a keyboard, to a screen reader, and to plenty of hands,
+                    and everything in that menu — editing, archiving, giving the thing an
+                    hour, writing a line about the day — was behind it.
+                  -->
+                  <button
+                    type="button"
+                    class="hit-area grid size-9 shrink-0 place-items-center rounded-full text-ink-subtle"
+                    :aria-label="`Actions for ${entry.duty.habit.name}`"
+                    @click.stop="openDutyMenu(entry.duty)"
+                  >
+                    <AppIcon name="more" :size="16" />
                   </button>
                 </div>
               </div>
@@ -1248,6 +1429,90 @@ const OUTCOME_CLASS = {
         </RouterLink>
       </section>
     </template>
+
+    <!--
+      The same question the row asks, with room for the reason.
+
+      Both answers are on the sheet because you have not answered yet: this is the question,
+      not an annotation of it.
+    -->
+    <AppDialog :open="judging !== null" label="Answer with a note" @dismiss="judging = null">
+      <h2 class="text-base font-semibold text-ink">{{ judging?.habit.name }}</h2>
+      <p class="mt-1 text-xs text-ink-muted">
+        <span class="tabular">{{ judging?.day }}</span> · did you avoid it?
+      </p>
+
+      <textarea
+        v-if="judging"
+        v-model="judging.note"
+        rows="3"
+        autofocus
+        :maxlength="MAX_NOTE_LENGTH"
+        aria-label="The note"
+        placeholder="What happened, for the day you will not remember."
+        class="mt-4 w-full resize-none rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
+      />
+
+      <div class="mt-4 flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-full bg-ink px-4 py-2.5 text-sm font-medium text-ink-inverse active:scale-95"
+          @click="saveVerdict(true)"
+        >
+          Avoided
+        </button>
+        <button
+          type="button"
+          class="flex-1 rounded-full border border-relapse px-4 py-2.5 text-sm font-medium text-relapse"
+          @click="saveVerdict(false)"
+        >
+          Relapsed
+        </button>
+      </div>
+    </AppDialog>
+
+    <!--
+      A note about a day that already has an answer.
+
+      Deliberately not a place to change the answer: the verdict is shown, not offered. Two
+      controls that both look like "the answer" on one sheet is how someone corrects a day
+      they meant to annotate.
+    -->
+    <AppDialog :open="noting !== null" label="Write a note" @dismiss="noting = null">
+      <h2 class="text-base font-semibold text-ink">{{ noting?.habit.name }}</h2>
+      <p class="mt-1 text-xs text-ink-muted">
+        <span class="tabular">{{ selectedDay }}</span> ·
+        {{ noting?.done ? 'recorded as done' : 'recorded as not done' }}
+      </p>
+
+      <form v-if="noting" class="mt-4" @submit.prevent="saveNote">
+        <textarea
+          v-model="noting.note"
+          rows="3"
+          autofocus
+          :maxlength="MAX_NOTE_LENGTH"
+          aria-label="The note"
+          placeholder="For the day you will not remember."
+          class="w-full resize-none rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
+        />
+
+        <div class="mt-4 flex gap-2">
+          <button
+            type="button"
+            class="flex-1 rounded-full border border-line-strong px-4 py-2.5 text-sm font-medium text-ink-muted"
+            @click="noting = null"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="flex-1 rounded-full bg-ink px-4 py-2.5 text-sm font-medium text-ink-inverse active:scale-95"
+          >
+            Save
+          </button>
+        </div>
+      </form>
+    </AppDialog>
 
     <AppDialog :open="logging !== null" label="Record an amount" @dismiss="logging = null">
       <h2 class="text-base font-semibold text-ink">{{ logging?.habit.name }}</h2>
