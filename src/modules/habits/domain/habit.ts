@@ -133,6 +133,18 @@ export interface NegativeHabit extends HabitCore {
 
 export type Habit = PositiveHabit | NegativeHabit
 
+/**
+ * Names compared the way a person compares them: ignoring case and stray spacing.
+ *
+ * Lives here rather than in whichever feature needed it first, because two now do — importing
+ * a routine preset and offering a habit idea both have to answer "is this already tracked",
+ * and two spellings of that question would eventually disagree about "  Meditate" and
+ * "meditate", leaving a duplicate that nothing afterwards can merge.
+ */
+export function normalisedName(name: string): string {
+  return name.trim().toLowerCase()
+}
+
 export const MAX_HABIT_NAME_LENGTH = 80
 
 export class InvalidHabitNameError extends Error {

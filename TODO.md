@@ -195,10 +195,23 @@ For a morning routine it is by far the fastest of the three.
 
 ### Presets and categories
 - [x] Preset routines to start from — built; see the routine preset library under **Routines**
-- [ ] A browsable, categorised habit-ideas list (health, focus, home, mind…)
-- [ ] Reuse the same list in the app's empty state: a first habit is the hardest one
-- [ ] Categories earn their keep **only if statistics group by them**. Otherwise it is a
-      taxonomy to maintain that answers no question
+- [x] A browsable, categorised habit-ideas list — Body, Mind, Focus, Home, Quitting. Every
+      idea says *why* as well as what, because a list of bare nouns is a list of chores and
+      chores are what people stop doing. Chosen to be finishable: the failure mode of a list
+      like this is aspiration, and "meditate 30 minutes, read 50 pages" reads as a description
+      of somebody else
+- [x] Reuse it in the empty state, which is the one place it is genuinely wanted. Still
+      reachable afterwards from the habits header, without shouting about it
+- [x] Categories resolved rather than built: they are a **heading in the bundled data and
+      nothing else**, never a field on a habit. No statistic groups by one, so stored it would
+      be a taxonomy to maintain that answers no question, plus one more thing to get wrong on
+      a form. Here it is a way to find something in a list of eighteen — a job that ends the
+      moment you have chosen
+- [x] What lands is ordinary: a real habit built through the same constructors the form uses,
+      with nothing recording that it arrived this way. An idea already tracked is marked on
+      the row rather than offered twice, matched ignoring case and spacing — and an archived
+      habit does not count, or the list would refuse a fresh start on the grounds that you
+      once gave up
 
 ### Habit title and description
 - [ ] Optional `description` on a habit, shown under the name where there is room

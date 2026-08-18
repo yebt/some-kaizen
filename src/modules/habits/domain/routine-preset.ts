@@ -2,7 +2,7 @@ import type { CalendarDate } from '@shared/domain/calendar-date'
 import type { Identifier } from '@shared/domain/identifier'
 import { assertDuration, type TimeOfDay } from '@shared/domain/time-of-day'
 
-import { createCompletedHabit, type Habit, isPositive } from './habit'
+import { createCompletedHabit, type Habit, isPositive, normalisedName } from './habit'
 import { frequency } from './habit'
 import { createRoutine, type Routine } from './routine'
 
@@ -60,11 +60,6 @@ export interface PresetMint {
   readonly today: CalendarDate
 }
 
-/** Names are matched the way a person would match them: ignoring case and stray spacing. */
-function normalise(name: string): string {
-  return name.trim().toLowerCase()
-}
-
 /**
  * Works out what importing a preset would create, reuse and rearrange.
  *
@@ -86,7 +81,7 @@ export function importPreset(
   const available = new Map(
     existing.habits
       .filter((habit) => isPositive(habit) && habit.archivedOn === undefined)
-      .map((habit) => [normalise(habit.name), habit]),
+      .map((habit) => [normalisedName(habit.name), habit]),
   )
 
   const created: Habit[] = []
@@ -94,7 +89,7 @@ export function importPreset(
   const habitIds: Identifier[] = []
 
   for (const step of preset.steps) {
-    const match = available.get(normalise(step.name))
+    const match = available.get(normalisedName(step.name))
 
     // A repeated step is one step. A routine refuses a habit that appears twice, so pushing
     // the identifier again would build a routine the model rejects — an import failing on
@@ -124,7 +119,7 @@ export function importPreset(
 
     // Added to the map so a preset that lists the same step twice reuses what it just made
     // rather than creating it again and then being refused for the duplicate.
-    available.set(normalise(step.name), built)
+    available.set(normalisedName(step.name), built)
   }
 
   const routine = createRoutine({

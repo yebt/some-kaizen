@@ -1,5 +1,6 @@
 import {
   Ban,
+  Lightbulb,
   MoreHorizontal,
   Bell,
   ChartNoAxesColumn,
@@ -40,6 +41,8 @@ export const ICONS = {
   ban: Ban,
   more: MoreHorizontal,
   bell: Bell,
+  /** An idea, on the screen that offers habits worth considering. */
+  idea: Lightbulb,
 } satisfies Record<string, Component>
 
 export type IconName = keyof typeof ICONS

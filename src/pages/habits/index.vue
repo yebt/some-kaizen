@@ -190,6 +190,13 @@ function isPressed(id: Identifier) {
       <h1 class="text-2xl font-semibold tracking-tight text-ink">Habits</h1>
       <div class="flex items-center gap-3">
         <RouterLink
+          to="/habits/ideas"
+          class="hit-area grid size-9 place-items-center rounded-full border border-line-strong text-ink-muted"
+          aria-label="Ideas"
+        >
+          <AppIcon name="idea" :size="16" />
+        </RouterLink>
+        <RouterLink
           to="/stats"
           class="hit-area grid size-9 place-items-center rounded-full border border-line-strong text-ink-muted"
           aria-label="Statistics"
@@ -241,12 +248,25 @@ function isPressed(id: Identifier) {
       <AppSpinner :size="24" label="Loading habits" />
     </div>
 
-    <p
+    <!--
+      The empty state is the one place an idea is genuinely wanted, so it is offered here
+      rather than hidden behind a menu. "Create your first habit" is a reasonable instruction
+      only for someone who already knows what they want to track; a first habit is the hardest
+      habit precisely because nothing on the screen yet says what this app is for.
+    -->
+    <div
       v-else-if="!rows.length"
       class="rounded-card border border-dashed border-line p-8 text-center text-sm text-ink-muted"
     >
-      Nothing here yet. Create your first habit and it will show up on Today.
-    </p>
+      <p>Nothing here yet. Whatever you add shows up on Today.</p>
+      <RouterLink
+        to="/habits/ideas"
+        class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-line-strong px-4 py-2.5 text-xs font-medium text-ink"
+      >
+        Not sure? Start from an idea
+        <AppIcon name="chevron-right" :size="14" />
+      </RouterLink>
+    </div>
 
     <!--
       Rows fade and slide rather than appearing and vanishing. A list that changes instantly
