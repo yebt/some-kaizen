@@ -183,6 +183,20 @@ introduced by fixing something else in the same sitting.
       the gesture having done nothing. Only a browser could see it; the write was correct and
       the screen was lying
 
+### The plus in the tab bar
+- [x] Reported: standing on the blocks screen, the big plus at the bottom obviously adds a
+      block, and it opened a habit form. A control fixed to every screen cannot quietly mean
+      a different thing on each one — you learn it once and it betrays you the second time
+- [x] So it keeps one meaning and grows a second, deliberate one: tap adds a habit, hold
+      offers everything the app can be given. The common case keeps the shortest route and
+      the rest stop living behind a screen you have to already know about
+- [x] A link no longer, now that it has two meanings. The tap that ends a hold would follow
+      the href as well and open a form behind the sheet; navigating ourselves means never
+      racing the router's own click handler for it
+- [x] A hold is unreachable from a keyboard, so this is a shortcut and never the only route:
+      every destination in the sheet is also a plain link on the habits screen. The context
+      menu is bound too, which is the same gesture for a mouse and the one key that reaches it
+
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is
 `scheduleAt` + `resize` applied down a list, so it is not a new feature — it is a **third way
