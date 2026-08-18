@@ -8,6 +8,7 @@ import {
   HOLD_MS,
   openTray,
   promisedTime,
+  swipeFrom,
   viewportYOfMinute,
 } from './support/gestures'
 
@@ -286,5 +287,47 @@ test.describe('what a finger is allowed to do', () => {
 
     // And it stops refusing once the card is back down, or the day becomes unscrollable.
     expect(await prevented()).toBe(false)
+  })
+})
+
+test.describe('swiping a card off the ruler', () => {
+  test('takes its hour away, leaving the habit still owed today', async ({ page }) => {
+    /*
+     * A shortcut rather than the only route — the sheet on the card and the strip below both
+     * do this already — which is why it can be a gesture without costing anyone anything.
+     *
+     * In a browser rather than jsdom because the two gestures share one press: a swipe is
+     * movement from the start and a drag needs the finger to hold still first, and only real
+     * pointer capture and real hit testing decide which of them a given movement was.
+     */
+    await createHabit(page, 'Meditate', { usualTime: '07:00' })
+    await open(page, `/day/${today()}`)
+
+    await viewportYOfMinute(page, 7 * 60)
+
+    const card = await centreOf(page, '[aria-label="Adjust Meditate"]')
+
+    // No hold: straight sideways, which is what makes this a swipe and not a lift.
+    await swipeFrom(page, card, -140)
+
+    await expect(page.getByRole('button', { name: 'Set the exact time of Meditate' })).toHaveCount(
+      0,
+    )
+    await expect(page.getByText(/needs? an hour/)).toBeVisible()
+  })
+
+  test('a nudge that never commits leaves the card exactly where it was', async ({ page }) => {
+    await createHabit(page, 'Meditate', { usualTime: '07:00' })
+    await open(page, `/day/${today()}`)
+
+    await viewportYOfMinute(page, 7 * 60)
+
+    const card = await centreOf(page, '[aria-label="Adjust Meditate"]')
+
+    await swipeFrom(page, card, -30)
+
+    await expect(
+      page.getByRole('button', { name: 'Set the exact time of Meditate' }),
+    ).toContainText('07:00')
   })
 })

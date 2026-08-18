@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { LONG_PRESS_MS } from '@shared/ui/drag/use-drag-and-drop'
+import { COMMIT_PX } from '@shared/ui/press/use-swipe-action'
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { PLATFORM_KEY, type PlatformServices } from '@core/platform-context'
@@ -2222,5 +2223,146 @@ describe('giving a habit an hour without a gesture', () => {
     await settled()
 
     expect((await persistence.instances.all())[0]?.id).toBe(impliedOccurrenceId(habit.id, DAY, 0))
+  })
+})
+
+describe('swiping a card off the ruler', () => {
+  /** Lets the mutation, its invalidation and the refetch behind it all finish. */
+  async function settled() {
+    for (let round = 0; round < 3; round += 1) {
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await flushPromises()
+  }
+
+  async function renderPlacedCard() {
+    const habit = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Meditate',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+      usualTime: timeOfDay(7 * 60),
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    return { wrapper: await renderDay(), habit }
+  }
+
+  function card(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+    return wrapper.find('[data-drop-zone="timeline"] .grippable')
+  }
+
+  /**
+   * A horizontal drag with no hold first, which is what a swipe is.
+   *
+   * Events are constructed and dispatched rather than triggered through the wrapper, because
+   * `trigger` builds a `MouseEvent` whose `clientX` is read only and cannot be given a
+   * position — and a swipe is nothing but positions.
+   */
+  async function move(element: Element, type: string, x: number, y: number) {
+    element.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, bubbles: true }))
+    await flushPromises()
+  }
+
+  async function swipeBy(wrapper: Awaited<ReturnType<typeof renderDay>>, dx: number) {
+    const target = card(wrapper).element
+
+    await move(target, 'pointerdown', 200, 400)
+    await move(target, 'pointermove', 200 + dx / 2, 400)
+    await move(target, 'pointermove', 200 + dx, 400)
+    await move(target, 'pointerup', 200 + dx, 400)
+    await settled()
+  }
+
+  it('takes its hour away when the swipe goes far enough left', async () => {
+    const { wrapper, habit } = await renderPlacedCard()
+
+    await swipeBy(wrapper, -COMMIT_PX - 20)
+
+    const [stored] = await persistence.instances.all()
+
+    // Still owed today, just not at a fixed hour.
+    expect(stored).toMatchObject({ habitId: habit.id })
+    expect(stored).not.toHaveProperty('startsAt')
+  })
+
+  it('does nothing for a nudge that never commits', async () => {
+    // A swipe that fired on a twitch would unschedule habits every time somebody scrolled
+    // past one.
+    const { wrapper } = await renderPlacedCard()
+
+    await swipeBy(wrapper, -(COMMIT_PX - 20))
+
+    expect(await persistence.instances.all()).toEqual([])
+  })
+
+  it('does nothing rightward, which has no opposite that makes sense', async () => {
+    const { wrapper } = await renderPlacedCard()
+
+    await swipeBy(wrapper, COMMIT_PX + 20)
+
+    expect(await persistence.instances.all()).toEqual([])
+  })
+
+  it('abandons the gesture when the finger moves down the page instead', async () => {
+    // The day is a tall scroller. A vertical decision has to leave the card alone entirely.
+    const { wrapper } = await renderPlacedCard()
+
+    const target = card(wrapper).element
+
+    await move(target, 'pointerdown', 200, 400)
+    await move(target, 'pointermove', 200, 300)
+    await move(target, 'pointermove', 120, 200)
+    await move(target, 'pointerup', 120, 200)
+    await settled()
+
+    expect(await persistence.instances.all()).toEqual([])
+  })
+
+  it('does not let the card follow the finger sideways once it is in the air', async () => {
+    // The visible half of the same rule. A card being carried already has a ghost under the
+    // finger; the card itself sliding sideways as well would be the screen showing two
+    // gestures happening at once.
+    const { wrapper } = await renderPlacedCard()
+    const target = card(wrapper).element
+
+    await move(target, 'pointerdown', 200, 400)
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    await flushPromises()
+    await move(target, 'pointermove', 60, 400)
+
+    const style = card(wrapper).find('[role="button"]').attributes('style') ?? ''
+
+    expect(style).not.toContain('translateX')
+
+    await move(target, 'pointerup', 60, 400)
+    await settled()
+  })
+
+  it('leaves the drag alone: a held card that then moves is moved, not unscheduled', async () => {
+    /*
+     * The one order that needed saying out loud. A swipe is movement from the start, so by
+     * the time its axis locks the hold has already been cancelled — but hold first and then
+     * move sideways and the card is genuinely in the air, where dropping it somewhere and
+     * taking its hour away would be two answers to one movement.
+     */
+    const { wrapper } = await renderPlacedCard()
+
+    const target = card(wrapper).element
+
+    await move(target, 'pointerdown', 200, 400)
+    await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40))
+    await flushPromises()
+    await move(target, 'pointermove', 60, 400)
+    await move(target, 'pointerup', 60, 400)
+    await settled()
+
+    const [stored] = await persistence.instances.all()
+
+    // Whatever the drop decided, it kept an hour. It was not loosened.
+    expect(stored?.startsAt).toBeDefined()
   })
 })

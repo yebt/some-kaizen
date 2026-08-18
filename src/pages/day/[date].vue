@@ -32,6 +32,7 @@ import DraggableItem from '@shared/ui/drag/DraggableItem.vue'
 import { type DropPoint, type PointerLike, useDragAndDrop } from '@shared/ui/drag/use-drag-and-drop'
 import { tick } from '@core/haptics'
 import { useFeedback } from '@shared/ui/feedback/feedback-store'
+import { useSwipeAction } from '@shared/ui/press/use-swipe-action'
 import { useSwipePage } from '@shared/ui/press/use-swipe-page'
 import { isPositive, type PositiveHabit } from '@modules/habits/domain/habit'
 import { useHabits, useRoutines } from '@modules/habits/application/habit-queries'
@@ -393,6 +394,87 @@ interface Liftable {
 }
 
 /** Picks a card up off the ruler, keeping the finger's place on it and its measured box. */
+/**
+ * Swiping a card off the ruler, right to left, to take its hour away.
+ *
+ * A shortcut rather than the only route — the sheet on the card and the strip below both do
+ * this already — which is exactly why it can be a gesture without costing anyone anything.
+ *
+ * It composes with the drag rather than competing with it. A drag needs the finger to hold
+ * still first, and any movement past a few pixels cancels the hold; a swipe is movement from
+ * the start, so by the time the axis locks the drag has already stood down. The one case that
+ * needs saying out loud is the other order — hold, then move sideways — where the card is
+ * genuinely in the air and the swipe must not also fire.
+ */
+const swipe = useSwipeAction({
+  onSwipe: (key, direction) => {
+    // Rightward does nothing on purpose. There is no opposite of "take its hour away" that
+    // makes sense here, and a gesture that fires in both directions is one you make by
+    // accident half the time.
+    if (direction === 'left') void loosenCard(key)
+  },
+})
+
+async function loosenCard(key: string) {
+  const entry = onThisDay.value.find((candidate) => candidate.key === key)
+
+  if (!entry) return
+
+  const span = spanFor(entry.duty)
+
+  // A duty with no time at all is already "sometime today"; there is nothing to loosen.
+  if (!span) return
+
+  await saveInstance.mutateAsync(unschedule(occurrenceOf(entry.duty)))
+  feedback.notify(`${entry.habit.name} has no fixed time now`)
+}
+
+/** Both gestures are armed on the same press; whichever the finger commits to wins. */
+function pressCard(entry: Liftable, event: PointerEvent) {
+  liftCard(entry, event)
+  swipe.press(entry.key, event)
+}
+
+function moveCard(event: PointerEvent) {
+  trackHover(event)
+
+  // Once the card is genuinely in the air the swipe has lost: dropping it somewhere and
+  // taking its hour away in one gesture is two answers to one movement.
+  if (drag.isDragging.value) swipe.cancel()
+  else swipe.move(event)
+}
+
+async function releaseCardOrSwipe(event: PointerEvent) {
+  await drag.release(event)
+
+  /*
+   * No second guard here against a card that was being dragged.
+   *
+   * The one above already stood the swipe down the moment the card left the ground, so this
+   * finds nothing to release. A check in both places is two answers to a settled question,
+   * and the kind that drifts apart the first time one of them is edited.
+   */
+  swipe.release(event)
+
+  /*
+   * And the day is let go of, whatever the gesture turned out to be.
+   *
+   * Pressing a card freezes the agenda so a refetch cannot pull the element out from under
+   * the finger, and only a drop used to thaw it again. A swipe never reaches the drop, so the
+   * screen kept showing the snapshot taken at the press: the card was genuinely unscheduled
+   * on disk and still drawn on the ruler, which reads as the gesture having done nothing.
+   */
+  forgetLift()
+}
+
+/** How far the card has followed the finger, so the gesture shows what it will do. */
+function swipeStyle(key: string) {
+  if (swipe.activeKey.value !== key || swipe.offset.value === 0) return {}
+
+  // Leftward only: letting it follow rightward would promise something that does not happen.
+  return { transform: `translateX(${Math.min(swipe.offset.value, 0)}px)` }
+}
+
 function liftCard(entry: Liftable, event: PointerEvent) {
   holdAgendaStill()
   drag.press(
@@ -1593,14 +1675,15 @@ function trackHover(event: PointerEvent) {
               data-occupied
               class="absolute inset-x-1"
               :style="{ top: `${cardTop(entry)}px`, height: `${cardHeight(entry)}px` }"
-              @press="liftCard(entry, $event)"
-              @move="trackHover($event)"
-              @release="drag.release($event)"
+              @press="pressCard(entry, $event)"
+              @move="moveCard($event)"
+              @release="releaseCardOrSwipe($event)"
               @cancel="abandonLift"
             >
               <div
-                class="relative h-full overflow-hidden rounded-md border border-line bg-surface px-2.5 py-1.5 shadow-card active:scale-[0.98]"
-                :style="surfaceStyle(entry.habit)"
+                class="relative h-full overflow-hidden rounded-md border border-line bg-surface px-2.5 py-1.5 shadow-card transition-transform active:scale-[0.98]"
+                :class="swipe.activeKey.value === entry.key ? 'duration-0' : 'duration-200'"
+                :style="[surfaceStyle(entry.habit), swipeStyle(entry.key)]"
                 role="button"
                 :aria-label="`Adjust ${entry.habit.name}`"
                 @click="openOccurrence(entry.key, $event)"

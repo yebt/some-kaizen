@@ -167,9 +167,21 @@ recognising again.
 Raised in one session and deliberately not attempted in it, because several of them were
 introduced by fixing something else in the same sitting.
 
-**Swiping a card off the ruler, right to left, should unschedule it.** Now reachable two
-other ways — the sheet on the card, and the drop strip that turns red — so this is a shortcut
-rather than the only route, and it can wait until the drag work has settled.
+- [x] **Swiping a card off the ruler, right to left, takes its hour away.** A shortcut rather
+      than the only route — the sheet on the card and the strip below both do it already —
+      which is exactly why it can be a gesture without costing anyone anything. Rightward does
+      nothing on purpose: there is no opposite of "take its hour away", and a gesture that
+      fires both ways is one you make by accident half the time
+- [x] It composes with the drag rather than competing. A drag needs the finger still first and
+      any movement cancels the hold, so a swipe has already won by the time its axis locks.
+      The order that needed saying out loud is the other one — hold, then move sideways —
+      where the card is genuinely in the air and the swipe stands down, card included: it does
+      not follow the finger sideways while a ghost is already doing that
+- [x] Fixed on the way: pressing a card freezes the day so a refetch cannot pull the element
+      out from under the finger, and only a *drop* thawed it again. A swipe never reaches the
+      drop, so the card was unscheduled on disk and still drawn on the ruler — which reads as
+      the gesture having done nothing. Only a browser could see it; the write was correct and
+      the screen was lying
 
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is

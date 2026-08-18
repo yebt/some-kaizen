@@ -86,3 +86,19 @@ export async function promisedTime(page: Page): Promise<string | null> {
 
   return (await marker.count()) === 0 ? null : (await marker.innerText()).trim()
 }
+
+/**
+ * Swipes horizontally from a point, without ever letting the press become a hold.
+ *
+ * The first move goes out immediately and deliberately. A drag begins with the finger held
+ * still, so the gesture that decides between the two is really "did anything move before the
+ * hold completed" — and a scripted `down` followed by a pause under load can lose that race
+ * in a way a hand never does. One small move first kills the hold, and the rest is the swipe.
+ */
+export async function swipeFrom(page: Page, from: Grip, dx: number): Promise<void> {
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + Math.sign(dx) * 12, from.y)
+  await page.mouse.move(from.x + dx, from.y, { steps: 10 })
+  await page.mouse.up()
+}
