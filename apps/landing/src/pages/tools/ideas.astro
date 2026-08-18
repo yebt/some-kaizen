@@ -1,0 +1,57 @@
+---
+import { allIdeas } from '@modules/habits/domain/habit-ideas'
+import { HABIT_IDEAS } from '@modules/habits/domain/idea-library'
+
+import Layout from '../../layouts/Layout.astro'
+
+/**
+ * The habit ideas, rendered at build time from the tracker's own list.
+ *
+ * The first thing on this site to read the domain, and the reason it is worth reading rather
+ * than copying: this page and the app's own ideas screen cannot disagree. A second list would
+ * be two answers to the same question, and the one that got the better wording would be
+ * whichever somebody edited last.
+ *
+ * Nothing runs in the browser here. The whole page is the list, which is also the honest
+ * version of the privacy claim this site makes: there is nothing to send.
+ */
+const categories = HABIT_IDEAS
+const total = allIdeas(categories).length
+
+function asks(idea: (typeof categories)[number]['ideas'][number]): string {
+  if (idea.kind === 'measured') return `${idea.goal} ${idea.unit} a day`
+  if (idea.kind === 'negative') return 'A day without it'
+
+  return idea.usualDurationMinutes ? `${idea.usualDurationMinutes} min` : 'Once a day'
+}
+---
+
+<Layout
+  title="Habit ideas"
+  description="Small, ordinary, finishable habits — and why each one is worth doing."
+>
+  <main>
+    <h1>Habit ideas</h1>
+    <p>
+      {total} habits worth starting, and the reason for each. Small and ordinary on purpose: a
+      list that reads as a description of somebody else is a list you close.
+    </p>
+
+    {
+      categories.map((category) => (
+        <section>
+          <h2>{category.name}</h2>
+          <ul>
+            {category.ideas.map((idea) => (
+              <li>
+                <h3>{idea.name}</h3>
+                <p>{idea.why}</p>
+                <p>{asks(idea)}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    }
+  </main>
+</Layout>

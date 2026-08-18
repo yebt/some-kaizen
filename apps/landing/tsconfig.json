@@ -1,5 +1,40 @@
 {
   "extends": "astro/tsconfigs/strict",
-  "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"]
+  "include": [
+    ".astro/types.d.ts",
+    "**/*",
+    "../tracker/src/shared/domain/**/*",
+    "../tracker/src/modules/*/domain/**/*"
+  ],
+  "exclude": [
+    "dist"
+  ],
+  "compilerOptions": {
+    "paths": {
+      "@shared/domain/*": [
+        "../tracker/src/shared/domain/*"
+      ],
+      "@modules/block-time/domain/*": [
+        "../tracker/src/modules/block-time/domain/*"
+      ],
+      "@modules/challenges/domain/*": [
+        "../tracker/src/modules/challenges/domain/*"
+      ],
+      "@modules/data/domain/*": [
+        "../tracker/src/modules/data/domain/*"
+      ],
+      "@modules/habits/domain/*": [
+        "../tracker/src/modules/habits/domain/*"
+      ],
+      "@modules/planning/domain/*": [
+        "../tracker/src/modules/planning/domain/*"
+      ],
+      "@modules/reminders/domain/*": [
+        "../tracker/src/modules/reminders/domain/*"
+      ],
+      "@modules/stats/domain/*": [
+        "../tracker/src/modules/stats/domain/*"
+      ]
+    }
+  }
 }

@@ -378,8 +378,17 @@ Single-purpose, no account, local storage, export as PNG / JSON / CSV. They can 
 domain directly — it is plain TypeScript with no framework in it — so they are a second
 consumer rather than a reimplementation.
 
+- [x] **Somewhere to put them.** One workspace: `apps/tracker` and `apps/landing`. Two repos
+      would have meant copying working code and watching the copies drift, which is a worse
+      outcome than not shipping the tools at all
+- [x] The site reads the domain across, through aliases that reach `*/domain/**` and nothing
+      else. An import of a Vue component does not resolve — a boundary rather than a note
+      asking people to be careful. `bun run build` at the root builds both, so a reorder that
+      breaks the site turns red in the same run that made it
 - [ ] Heatmap generator
-- [ ] Habit ideas
+- [x] Habit ideas — the whole list rendered at build time from the tracker's own, so the page
+      and the app's ideas screen cannot disagree. No JavaScript reaches the browser at all,
+      which is the honest version of this site's privacy claim: there is nothing to send
 - [ ] Routine planner (falls out of the builder above)
 - [ ] 75 Hard tracker — no longer blocked; challenges exist now
 

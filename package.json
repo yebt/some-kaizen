@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "bun run --cwd apps/tracker dev",
-    "build": "bun run --cwd apps/tracker build",
+    "build": "bun run --cwd apps/tracker build && bun run --cwd apps/landing build",
     "test:unit": "bun run --cwd apps/tracker test:unit",
     "test:e2e": "bun run --cwd apps/tracker test:e2e",
     "lint": "bun run --cwd apps/tracker lint",

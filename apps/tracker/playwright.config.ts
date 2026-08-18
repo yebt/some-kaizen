@@ -38,7 +38,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: 'http://localhost:4183',
     trace: 'on-first-retry',
     // A phone sized viewport, because every layout decision in this app was made for one.
     viewport: { width: 390, height: 844 },
@@ -67,9 +67,17 @@ export default defineConfig({
    * It also removes the cold start: nothing is compiled on demand, so the first screen opens
    * as fast as the hundredth.
    */
+  /*
+   * A port of our own rather than Vite's default.
+   *
+   * 4173 is what every Vite project on a machine previews on, so a neighbour left running in
+   * another checkout takes it and this suite fails with "already used" — a failure that reads
+   * like a defect here and is nothing of the kind. `strictPort` is still right: silently
+   * moving to another port would mean the suite testing whatever answered instead.
+   */
   webServer: {
-    command: 'bun run build-only && bunx vite preview --port 4173 --strictPort',
-    url: 'http://localhost:4173',
+    command: 'bun run build-only && bunx vite preview --port 4183 --strictPort',
+    url: 'http://localhost:4183',
     /*
      * Never reused, and this is not caution — it is a bug already caught.
      *

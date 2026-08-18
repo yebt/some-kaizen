@@ -106,6 +106,20 @@ apps/tracker/          the habit tracker: Vue, Capacitor, IndexedDB
 apps/landing/          the site: Astro, static, no server
 ```
 
+**The domain has two consumers.** The site's tools run on the tracker's own rules — the same
+statistics windows, the same weekday breakdown, the same challenge progress — read straight
+out of `apps/tracker/src` through aliases in the site's config. There is one copy, because two
+would be two truths that drift apart in silence and the one with the bug fixed would be
+whichever somebody happened to remember.
+
+The reach is deliberately narrow: only `*/domain/**` is aliased, never `application` or `ui`,
+so the site cannot import a Vue component and find out at build time. It does not resolve at
+all, which is the difference between a boundary and a note asking people to be careful.
+
+The cost of reading across is that moving a domain file could break the site quietly, so
+`bun run build` at the root builds **both**. A reorder that breaks the site turns the build
+red in the same run that made it.
+
 Inside the tracker, hexagonal, with each feature owning its own slice.
 
 ```
