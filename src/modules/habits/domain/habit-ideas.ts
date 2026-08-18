@@ -88,7 +88,20 @@ export interface IdeaMint {
  * halfway into storage.
  */
 export function habitFromIdea(idea: HabitIdea, mint: IdeaMint): Habit {
-  const core = { id: mint.id, name: idea.name, createdOn: mint.today }
+  /*
+   * The reason travels with the idea.
+   *
+   * This is the whole point of the list saying *why* rather than only what. Taking "Read —
+   * ten pages a day is fifteen books a year" and keeping only the noun throws away the half
+   * that survives the third week, and leaves the app unable to answer the question it had
+   * just answered for you.
+   */
+  const core = {
+    id: mint.id,
+    name: idea.name,
+    description: idea.why,
+    createdOn: mint.today,
+  }
 
   if (idea.kind === 'negative') return createNegativeHabit(core)
 

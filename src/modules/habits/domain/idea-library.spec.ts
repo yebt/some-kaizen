@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { calendarDate } from '@shared/domain/calendar-date'
 import { newIdentifier } from '@shared/domain/identifier'
-import { MAX_HABIT_NAME_LENGTH, normalisedName } from './habit'
+import { MAX_HABIT_DESCRIPTION_LENGTH, MAX_HABIT_NAME_LENGTH, normalisedName } from './habit'
 import { allIdeas, habitFromIdea } from './habit-ideas'
 import { HABIT_IDEAS } from './idea-library'
 
@@ -32,6 +32,10 @@ describe('every bundled idea', () => {
 
   it.each(EVERY)('%s keeps its reason to one line', (_name, idea) => {
     expect(idea.why).not.toContain('\n')
+    // The reason becomes the habit's description, so the model's limit is the real ceiling
+    // and a longer one would be refused at the moment somebody chose it. Ninety is the
+    // stricter house rule: this is a line under a name, and it has to read as one.
+    expect(idea.why.length).toBeLessThanOrEqual(MAX_HABIT_DESCRIPTION_LENGTH)
     expect(idea.why.length).toBeLessThanOrEqual(90)
   })
 })

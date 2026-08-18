@@ -448,3 +448,98 @@ describe('the actions menu', () => {
     expect(wrapper.find('a[href="/block-time"]').exists()).toBe(true)
   })
 })
+
+describe('the reason a habit was written down for', () => {
+  it('is stored from the form when one is written', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Read')
+    await wrapper.find('#habit-description').setValue('Ten pages a day is fifteen books a year.')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).toMatchObject({
+      description: 'Ten pages a day is fifteen books a year.',
+    })
+  })
+
+  it('stores none at all when the field is left alone', async () => {
+    // A habit nobody has explained has no description, which is a different thing from one
+    // explained with a blank line.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Read')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).not.toHaveProperty('description')
+  })
+
+  it('belongs to a habit you are quitting as much as to one you are building', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('input[type="radio"][value="negative"]').setValue()
+    await wrapper.find('#habit-name').setValue('Smoking')
+    await wrapper.find('#habit-description').setValue('It costs the next morning as well.')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((await persistence.habits.all())[0]).toMatchObject({
+      description: 'It costs the next morning as well.',
+    })
+  })
+
+  it('reports the domain’s complaint rather than truncating the sentence', async () => {
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    const wrapper = await render(NewHabitPage)
+
+    await wrapper.find('#habit-name').setValue('Read')
+    // The field caps typing, so this is the paste-and-submit route the cap does not cover.
+    await wrapper.find('#habit-description').setValue('x'.repeat(200))
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toContain('at most')
+    expect(await persistence.habits.all()).toEqual([])
+  })
+
+  it('takes the hint’s place on the row rather than adding a fourth line', async () => {
+    const read = createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Read',
+      frequency: frequency('daily', 1),
+      createdOn: CREATED_ON,
+      description: 'Ten pages a day.',
+    })
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [read] })
+
+    const text = (await render(HabitsPage)).text()
+
+    expect(text).toContain('Ten pages a day.')
+    expect(text).not.toContain('hold for actions')
+  })
+
+  it('leaves the hint where a habit has no reason', async () => {
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Read',
+          frequency: frequency('daily', 1),
+          createdOn: CREATED_ON,
+        }),
+      ],
+    })
+
+    expect((await render(HabitsPage)).text()).toContain('hold for actions')
+  })
+})

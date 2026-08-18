@@ -157,3 +157,19 @@ describe('flattening the library', () => {
     expect(allIdeas(categories)).toEqual([READ, WATER, SMOKING])
   })
 })
+
+describe('the reason an idea gives', () => {
+  it('travels onto the habit, rather than being thrown away on the way in', () => {
+    // The whole point of the list saying why rather than only what. Keeping the noun and
+    // dropping the reason leaves the app unable to answer what it had just answered for you.
+    expect(habitFromIdea(READ, mint()).description).toBe(READ.why)
+  })
+
+  it('travels for a habit you are quitting too', () => {
+    expect(habitFromIdea(SMOKING, mint()).description).toBe(SMOKING.why)
+  })
+
+  it('travels for a measured one', () => {
+    expect(habitFromIdea(WATER, mint()).description).toBe(WATER.why)
+  })
+})

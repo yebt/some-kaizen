@@ -214,8 +214,17 @@ For a morning routine it is by far the fastest of the three.
       once gave up
 
 ### Habit title and description
-- [ ] Optional `description` on a habit, shown under the name where there is room
-- [ ] Their `// comment` voice is worth borrowing — ours already reads that way in code
+- [x] Optional `description` on a habit — the line that says *why*, on every kind including
+      the ones you are quitting. Trimmed, capped at 140, absent rather than empty, and
+      refused rather than truncated when it is too long: cutting somebody's sentence in half
+      is worse than telling them it is too long
+- [x] On the list it takes the "hold for actions" hint's place rather than adding a fourth
+      line. Of the two, the hint teaches the app once and then stops earning its line, while
+      the sentence that got you to write the habit down is the one you need on the morning you
+      would rather not
+- [x] It closes the loop on the ideas list: an idea's reason now travels onto the habit
+      instead of being thrown away on the way in, which had left the app unable to answer a
+      question it had just answered for you
 
 ### Icons
 - [ ] An icon per habit, alongside the colour and pattern it already has

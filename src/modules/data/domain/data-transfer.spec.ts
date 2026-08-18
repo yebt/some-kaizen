@@ -39,6 +39,7 @@ function fullDataset(): Dataset {
     createdOn: CREATED_ON,
     usualTime: timeOfDay(8 * 60),
     usualDurationMinutes: 15,
+    description: 'The one that makes every other one easier.',
   })
   const run = createCompletedHabit({
     id: newIdentifier(),
@@ -165,6 +166,14 @@ describe('a full round trip', () => {
     expect(restored.habits).toEqual(dataset.habits)
   })
 
+  it('returns the reason a habit was written down for', () => {
+    // Asserted by name as well as through the deep comparison, because a dropped optional
+    // field is exactly what comparing two objects built by the same code can miss.
+    const [restored] = roundTrip(fullDataset()).habits
+
+    expect(restored).toMatchObject({ description: 'The one that makes every other one easier.' })
+  })
+
   it('returns how long a habit usually takes', () => {
     const dataset = fullDataset()
     const [restored] = roundTrip(dataset).habits
@@ -260,6 +269,17 @@ describe('refusing a corrupted file', () => {
     })
 
     expect(() => parseBackup(file)).toThrow(InvalidTimeIntervalError)
+  })
+
+  it('rejects a description that is not text', () => {
+    const file = corrupted((dataset) => {
+      const habits = dataset.habits as Array<Record<string, unknown>>
+      const first = habits[0]
+
+      if (first) first.description = 42
+    })
+
+    expect(() => parseBackup(file)).toThrow(InvalidBackupError)
   })
 
   it('rejects an impossible date', () => {

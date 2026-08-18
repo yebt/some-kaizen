@@ -66,6 +66,22 @@ export type NegativeOutcome = 'avoided' | 'relapsed'
 interface HabitCore extends Appearance {
   readonly id: Identifier
   readonly name: string
+  /**
+   * A line about why this one is worth doing, when there is one.
+   *
+   * The name is what a habit is; this is what it is *for*, and the two decay at different
+   * rates. "Read" still means what it meant in January; "ten pages a day is fifteen books a
+   * year" is the sentence that gets you off the sofa in week three, and it is exactly the
+   * sentence nothing in the app could keep — the ideas list said it, you took the idea, and
+   * the reason was thrown away on the way in.
+   *
+   * On every kind, quitting included: "the one that costs you the next morning as well" is
+   * a reason in precisely the same way.
+   *
+   * Absent rather than empty. A habit nobody has explained has no description, which is a
+   * different thing from one explained with a blank line.
+   */
+  readonly description?: string
   readonly createdOn: CalendarDate
   /** The day the habit was retired. History before it is kept, so statistics stay honest. */
   readonly archivedOn?: CalendarDate
@@ -146,6 +162,22 @@ export function normalisedName(name: string): string {
 }
 
 export const MAX_HABIT_NAME_LENGTH = 80
+
+/**
+ * Long enough for a reason, short enough that it stays one.
+ *
+ * A description that can hold a paragraph becomes a place to keep notes, and notes belong to
+ * a day rather than to the habit. This is the sentence under the name, and it has to fit
+ * under the name.
+ */
+export const MAX_HABIT_DESCRIPTION_LENGTH = 140
+
+export class HabitDescriptionTooLongError extends Error {
+  constructor(readonly value: string) {
+    super(`A habit description can be at most ${MAX_HABIT_DESCRIPTION_LENGTH} characters.`)
+    this.name = 'HabitDescriptionTooLongError'
+  }
+}
 
 export class InvalidHabitNameError extends Error {
   constructor(readonly value: string) {
@@ -284,6 +316,7 @@ export function achievementFor(value: Measure, recorded: number): Achievement {
 export interface CompletedHabitDraft extends Appearance {
   readonly id: Identifier
   readonly name: string
+  readonly description?: string
   readonly frequency: Frequency
   readonly createdOn: CalendarDate
   /** Kept when editing, so re-saving a retired habit does not quietly revive it. */
@@ -299,6 +332,7 @@ export interface MeasuredHabitDraft extends CompletedHabitDraft {
 export interface NegativeHabitDraft extends Appearance {
   readonly id: Identifier
   readonly name: string
+  readonly description?: string
   readonly createdOn: CalendarDate
   readonly archivedOn?: CalendarDate
 }
@@ -308,6 +342,7 @@ export function createCompletedHabit(draft: CompletedHabitDraft): CompletedHabit
     ...appearanceOf(draft),
     id: draft.id,
     name: habitName(draft.name),
+    ...describedAs(draft),
     createdOn: draft.createdOn,
     ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
     polarity: 'positive',
@@ -323,6 +358,7 @@ export function createMeasuredHabit(draft: MeasuredHabitDraft): MeasuredHabit {
     ...appearanceOf(draft),
     id: draft.id,
     name: habitName(draft.name),
+    ...describedAs(draft),
     createdOn: draft.createdOn,
     ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
     polarity: 'positive',
@@ -339,6 +375,7 @@ export function createNegativeHabit(draft: NegativeHabitDraft): NegativeHabit {
     ...appearanceOf(draft),
     id: draft.id,
     name: habitName(draft.name),
+    ...describedAs(draft),
     createdOn: draft.createdOn,
     ...(draft.archivedOn ? { archivedOn: draft.archivedOn } : {}),
     polarity: 'negative',
@@ -377,6 +414,25 @@ export function isNegative(habit: Habit): habit is NegativeHabit {
 
 export function isMeasured(habit: Habit): habit is MeasuredHabit {
   return habit.polarity === 'positive' && habit.tracking === 'measured'
+}
+
+/**
+ * A trimmed description, or nothing at all.
+ *
+ * Whitespace alone is not a description, and storing it as one would put an empty line under
+ * a name on every screen that shows it. Refused rather than truncated when it is too long:
+ * silently cutting somebody's sentence in half is worse than telling them it is too long.
+ */
+function describedAs(draft: { readonly description?: string }): { description?: string } {
+  const trimmed = draft.description?.trim()
+
+  if (!trimmed) return {}
+
+  if (trimmed.length > MAX_HABIT_DESCRIPTION_LENGTH) {
+    throw new HabitDescriptionTooLongError(trimmed)
+  }
+
+  return { description: trimmed }
 }
 
 /** Absent rather than present-and-undefined, so an unstated hour stores nothing at all. */

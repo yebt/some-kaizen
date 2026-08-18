@@ -10,10 +10,12 @@ import {
   createMeasuredHabit,
   createNegativeHabit,
   frequency,
+  HabitDescriptionTooLongError,
   InvalidFrequencyError,
   InvalidHabitNameError,
   InvalidMeasureError,
   isActiveOn,
+  MAX_HABIT_DESCRIPTION_LENGTH,
   isMeasured,
   isNegative,
   isPositive,
@@ -426,5 +428,75 @@ describe('the hour a habit usually happens at', () => {
     })
 
     expect(archiveHabit(habit, calendarDate('2026-03-09')).usualTime).toBe(timeOfDay(7 * 60))
+  })
+})
+
+describe('a habit’s description', () => {
+  function drafted(description?: string) {
+    return createCompletedHabit({
+      id: newIdentifier(),
+      name: 'Read',
+      frequency: frequency('daily', 1),
+      createdOn: calendarDate('2026-01-01'),
+      ...(description === undefined ? {} : { description }),
+    })
+  }
+
+  it('keeps the reason it was given', () => {
+    expect(drafted('Ten pages a day is fifteen books a year.')).toMatchObject({
+      description: 'Ten pages a day is fifteen books a year.',
+    })
+  })
+
+  it('stores none at all when none is given', () => {
+    // A habit nobody has explained has no description, which is a different thing from one
+    // explained with a blank line.
+    expect(drafted()).not.toHaveProperty('description')
+  })
+
+  it('treats whitespace alone as none', () => {
+    expect(drafted('   ')).not.toHaveProperty('description')
+  })
+
+  it('trims what surrounds it, so a stray space is not a different sentence', () => {
+    expect(drafted('  Ten pages.  ')).toMatchObject({ description: 'Ten pages.' })
+  })
+
+  it('refuses one too long rather than cutting the sentence in half', () => {
+    // Silently truncating somebody's reason is worse than telling them it is too long.
+    expect(() => drafted('x'.repeat(MAX_HABIT_DESCRIPTION_LENGTH + 1))).toThrow(
+      HabitDescriptionTooLongError,
+    )
+  })
+
+  it('accepts one exactly at the limit', () => {
+    const exact = 'x'.repeat(MAX_HABIT_DESCRIPTION_LENGTH)
+
+    expect(drafted(exact)).toMatchObject({ description: exact })
+  })
+
+  it('belongs to a habit you are quitting as much as to one you are building', () => {
+    // "The one that costs you the next morning as well" is a reason in the same way.
+    const smoking = createNegativeHabit({
+      id: newIdentifier(),
+      name: 'Smoking',
+      createdOn: calendarDate('2026-01-01'),
+      description: 'Judged the morning after, when the answer is known.',
+    })
+
+    expect(smoking.description).toBe('Judged the morning after, when the answer is known.')
+  })
+
+  it('survives an edit through the same constructor', () => {
+    const measured = createMeasuredHabit({
+      id: newIdentifier(),
+      name: 'Drink water',
+      frequency: frequency('daily', 1),
+      measure: measure('litres', 1, 2),
+      createdOn: calendarDate('2026-01-01'),
+      description: 'Makes every other one easier.',
+    })
+
+    expect(measured.description).toBe('Makes every other one easier.')
   })
 })

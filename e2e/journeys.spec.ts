@@ -137,6 +137,9 @@ test('a built day overrides the habit’s usual hour for that day only', async (
   await page.getByLabel('The time of day this habit usually happens').fill('20:00')
   await page.getByLabel('How long this habit usually takes, in minutes').fill('10')
   await page.getByRole('button', { name: 'Create' }).click()
+  // Waited for before navigating on. The step below leaves with a real page load, and going
+  // on the click alone races the write — which reads as the routine picker being broken.
+  await expect(page).not.toHaveURL(/\/habits\/new$/)
 
   await createRoutine(page, { name: 'Morning', habits: ['Stretch'], anchorTime: '06:00' })
   await buildInto(page, 'Morning', TOMORROW, '06:00')

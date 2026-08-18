@@ -71,6 +71,7 @@ const rows = computed(() =>
   habits.value.map((habit) => ({
     habit,
     description: describe(habit),
+    reason: habit.description,
     summary: summarise(habit),
     isArchived: habit.archivedOn !== undefined,
   })),
@@ -309,7 +310,17 @@ function isPressed(id: Identifier) {
               </span>
             </p>
             <p class="mt-0.5 text-xs text-ink-muted">{{ row.description }}</p>
-            <p class="mt-1 text-[0.625rem] text-ink-subtle">
+            <!--
+              The reason takes the hint's place rather than sitting beside it.
+              A row is three lines on a phone and this keeps it three. Of the two, the reason
+              is worth more: "hold for actions" teaches the app once and then stops earning
+              its line, while the sentence that got you to write the habit down is the one
+              you need on the morning you would rather not.
+            -->
+            <p v-if="row.reason" class="mt-1 truncate text-[0.625rem] text-ink-subtle">
+              {{ row.reason }}
+            </p>
+            <p v-else class="mt-1 text-[0.625rem] text-ink-subtle">
               Tap for statistics · hold for actions
             </p>
           </RouterLink>

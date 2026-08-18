@@ -18,6 +18,7 @@ import {
   type Habit,
   isMeasured,
   isNegative,
+  MAX_HABIT_DESCRIPTION_LENGTH,
   MAX_HABIT_NAME_LENGTH,
   measure,
   namesItsDays,
@@ -156,6 +157,8 @@ const usualDuration = ref(
     : '',
 )
 
+const description = ref(props.initial?.description ?? '')
+
 const unit = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.unit : '')
 const minimum = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.minimum : 1)
 const goal = ref(props.initial && isMeasured(props.initial) ? props.initial.measure.goal : 2)
@@ -185,6 +188,7 @@ function build(): Habit {
   const core = {
     id: props.initial?.id ?? newIdentifier(),
     name: name.value,
+    description: description.value,
     createdOn: calendarDate(startedOn.value),
     archivedOn: props.initial?.archivedOn,
     colour: colour.value,
@@ -263,6 +267,29 @@ function submit() {
         :placeholder="namePlaceholder"
         class="w-full rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
       />
+    </div>
+
+    <!--
+      Under the name, because it is a sentence about the name. Optional, and empty by
+      default: a habit nobody has explained has no description, and prompting for one on
+      every creation would turn the fastest screen in the app into a form.
+    -->
+    <div>
+      <label for="habit-description" class="mb-1.5 block text-xs font-medium text-ink-muted">
+        Why
+        <span class="font-normal text-ink-subtle">· optional</span>
+      </label>
+      <textarea
+        id="habit-description"
+        v-model="description"
+        rows="2"
+        :maxlength="MAX_HABIT_DESCRIPTION_LENGTH"
+        placeholder="Ten pages a day is fifteen books a year."
+        class="w-full resize-none rounded-cell border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-subtle"
+      />
+      <span class="mt-1 block text-[0.625rem] text-ink-subtle">
+        The line that gets you off the sofa in week three. The name says what; this says why.
+      </span>
     </div>
 
     <label class="block text-xs font-medium text-ink-muted">

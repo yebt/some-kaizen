@@ -123,6 +123,9 @@ function readHabit(raw: unknown): Habit {
     id,
     name,
     createdOn,
+    ...(value.description === undefined
+      ? {}
+      : { description: asString(value.description, 'A habit description must be text.') }),
     ...readAppearance(value),
     ...readOptionalTime(value.usualTime, 'usualTime'),
     ...(value.usualDurationMinutes === undefined
@@ -168,6 +171,7 @@ function buildHabit(
     id: Identifier
     name: string
     createdOn: CalendarDate
+    description?: string
     usualTime?: TimeOfDay
     usualDurationMinutes?: number
   } & Appearance,

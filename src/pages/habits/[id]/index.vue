@@ -216,6 +216,8 @@ function weekdayName(weekday: number): string {
         <div class="min-w-0 flex-1">
           <h1 class="truncate text-2xl font-semibold tracking-tight text-ink">{{ habit.name }}</h1>
           <p class="text-sm text-ink-muted">{{ description }}</p>
+          <!-- Under the schedule, because it is why the schedule is worth keeping. -->
+          <p v-if="habit.description" class="mt-1 text-sm text-ink">{{ habit.description }}</p>
         </div>
         <RouterLink
           :to="`/habits/${habit.id}/edit`"
