@@ -42,10 +42,14 @@ a list. Fully offline, stored on the device, packaged for Android with Capacitor
 ## Running it
 
 ```sh
-bun install
-bun run dev          # http://localhost:5173
-bun run dev:phone    # also on the local network, for testing on a real handset
+bun install          # once, at the root: one lockfile for the whole workspace
+bun run dev          # the tracker, http://localhost:5173
+bun run landing:dev  # the site, http://localhost:4321
 ```
+
+Every script at the root delegates into the app it belongs to, so `bun run test:unit` here and
+`bun run test:unit` inside `apps/tracker` are the same run. Anything the tracker alone has —
+`dev:phone`, the Android tasks — is run from `apps/tracker`.
 
 Opening the app over a plain LAN address is not a secure context, so anything relying on one
 will not work there. That is a real constraint rather than a quirk: it is why identifiers are
@@ -75,7 +79,7 @@ bun run android:install   # adb install the result
 
 The launcher icon and the splash screens are native resources, not the favicon: `cap sync`
 copies the web build and never touches them, which is why a fresh Capacitor project ships
-its own icon until someone replaces it. The sources live in `assets/`, and the whole set of
+its own icon until someone replaces it. The sources live in `apps/tracker/assets/`, and the whole set of
 densities is regenerated from them with
 
 ```sh
@@ -94,6 +98,15 @@ which already opens the system document picker inside the WebView.
 ## How it is put together
 
 Hexagonal, with each feature owning its own slice.
+
+A workspace with one app per thing that ships.
+
+```
+apps/tracker/          the habit tracker: Vue, Capacitor, IndexedDB
+apps/landing/          the site: Astro, static, no server
+```
+
+Inside the tracker, hexagonal, with each feature owning its own slice.
 
 ```
 src/

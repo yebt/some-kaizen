@@ -41,7 +41,16 @@ __screenshots__/
 dist
 
 # Playwright
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Workspaces
+apps/*/dist
+apps/*/node_modules
+packages/*/dist
+packages/*/node_modules
+
+# Astro
+apps/*/.astro/
