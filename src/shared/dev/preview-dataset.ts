@@ -17,6 +17,11 @@ import {
 } from '@modules/habits/domain/habit-entry'
 import { type BlockTime, createBlockTime } from '@modules/block-time/domain/block-time'
 import { createRoutine, type Routine } from '@modules/habits/domain/routine'
+import type { Challenge, ChallengeDay } from '@modules/challenges/domain/challenge'
+import {
+  challengeFromPreset,
+  CHALLENGE_PRESETS,
+} from '@modules/challenges/domain/challenge-presets'
 import {
   planInstance,
   type PlannedInstance,
@@ -36,6 +41,8 @@ export interface PreviewDataset {
   readonly instances: PlannedInstance[]
   readonly blocks: BlockTime[]
   readonly routines: Routine[]
+  readonly challenges: Challenge[]
+  readonly challengeDays: ChallengeDay[]
 }
 
 const EVERY_DAY: Weekday[] = [1, 2, 3, 4, 5, 6, 7]
@@ -136,5 +143,37 @@ export function buildPreviewDataset(now: Date = new Date()): PreviewDataset {
     }),
   ]
 
-  return { today, habits, entries, instances, blocks, routines }
+  /*
+   * One programme, started a few days ago and not yet perfect.
+   *
+   * The demo is what a new person is shown, and a challenge sitting at day one with nothing
+   * ticked would say nothing about what the shape is for. Started five days back with one day
+   * missed shows the rule that makes it different from a habit: the run behind the miss is
+   * gone, and the count says how many times that has happened.
+   */
+  const programme = challengeFromPreset(CHALLENGE_PRESETS[0]!, {
+    id: newIdentifier(),
+    newTaskId: newIdentifier,
+    startedOn: addDays(today, -5),
+  })
+
+  const everyTask = programme.tasks.map((task) => task.id)
+
+  const challengeDays: ChallengeDay[] = [
+    { offset: -5, completed: everyTask },
+    { offset: -4, completed: everyTask },
+    { offset: -3, completed: everyTask.slice(0, 2) },
+    { offset: -2, completed: everyTask },
+    { offset: -1, completed: everyTask },
+  ].map((day, index) => ({
+    id: newIdentifier(),
+    challengeId: programme.id,
+    date: addDays(today, day.offset),
+    completed: day.completed,
+    recordedAt: index,
+  }))
+
+  const challenges: Challenge[] = [programme]
+
+  return { today, habits, entries, instances, blocks, routines, challenges, challengeDays }
 }

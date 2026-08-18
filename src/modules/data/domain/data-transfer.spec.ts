@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { InvalidSymbolError } from '@shared/domain/appearance'
+import { InvalidChallengeError } from '@modules/challenges/domain/challenge'
+import {
+  CHALLENGE_PRESETS,
+  challengeFromPreset,
+} from '@modules/challenges/domain/challenge-presets'
 import { calendarDate, InvalidCalendarDateError } from '@shared/domain/calendar-date'
 import { InvalidIdentifierError, newIdentifier } from '@shared/domain/identifier'
 import {
@@ -55,7 +60,23 @@ function fullDataset(): Dataset {
     createdOn: CREATED_ON,
   })
 
+  const programme = challengeFromPreset(CHALLENGE_PRESETS[0]!, {
+    id: newIdentifier(),
+    newTaskId: newIdentifier,
+    startedOn: CREATED_ON,
+  })
+
   return {
+    challenges: [programme],
+    challengeDays: [
+      {
+        id: newIdentifier(),
+        challengeId: programme.id,
+        date: calendarDate('2026-03-04'),
+        completed: programme.tasks.map((task) => task.id),
+        recordedAt: 30,
+      },
+    ],
     routines: [
       createRoutine({
         id: newIdentifier(),
@@ -156,7 +177,15 @@ describe('a full round trip', () => {
   })
 
   it('survives an empty dataset', () => {
-    const empty: Dataset = { habits: [], entries: [], instances: [], blocks: [], routines: [] }
+    const empty: Dataset = {
+      habits: [],
+      entries: [],
+      instances: [],
+      blocks: [],
+      routines: [],
+      challenges: [],
+      challengeDays: [],
+    }
 
     expect(roundTrip(empty)).toEqual(empty)
   })
@@ -190,6 +219,29 @@ describe('a full round trip', () => {
     // dropped optional field is exactly what a deep comparison of two objects built by the
     // same code can miss when both sides lose it.
     expect(restored).toMatchObject({ usualDurationMinutes: 15 })
+  })
+
+  it('returns a challenge unchanged, tasks and rule included', () => {
+    const dataset = fullDataset()
+
+    expect(roundTrip(dataset).challenges).toEqual(dataset.challenges)
+  })
+
+  it('returns the days ticked against it', () => {
+    // The list a programme is actually made of. Dropping it turns a finished attempt into a
+    // fresh one on the next restore.
+    const dataset = fullDataset()
+
+    expect(roundTrip(dataset).challengeDays).toEqual(dataset.challengeDays)
+  })
+
+  it('restores a file written before challenges existed as having none', () => {
+    const backup = JSON.parse(serializeDataset(fullDataset(), EXPORTED_AT))
+
+    delete backup.dataset.challenges
+    delete backup.dataset.challengeDays
+
+    expect(parseBackup(JSON.stringify(backup)).challenges).toEqual([])
   })
 
   it('returns the hour a routine usually starts at', () => {
@@ -300,6 +352,38 @@ describe('refusing a corrupted file', () => {
     })
 
     expect(() => parseBackup(file)).toThrow(InvalidSymbolError)
+  })
+
+  it('rejects a challenge of no days, which the model refuses too', () => {
+    const file = corrupted((dataset) => {
+      const challenges = dataset.challenges as Array<Record<string, unknown>>
+
+      if (challenges[0]) challenges[0].lengthDays = 0
+    })
+
+    expect(() => parseBackup(file)).toThrow(InvalidChallengeError)
+  })
+
+  it('rejects a challenge whose rule for a missed day is unknown', () => {
+    // The rule is the whole difference between a programme and a list, so a file that has
+    // lost it must not be guessed at.
+    const file = corrupted((dataset) => {
+      const challenges = dataset.challenges as Array<Record<string, unknown>>
+
+      if (challenges[0]) challenges[0].onMiss = 'sideways'
+    })
+
+    expect(() => parseBackup(file)).toThrow(/unknown rule/)
+  })
+
+  it('rejects a challenge day whose ticks are not a list', () => {
+    const file = corrupted((dataset) => {
+      const days = dataset.challengeDays as Array<Record<string, unknown>>
+
+      if (days[0]) days[0].completed = 'all of them'
+    })
+
+    expect(() => parseBackup(file)).toThrow(InvalidBackupError)
   })
 
   it('rejects an impossible date', () => {

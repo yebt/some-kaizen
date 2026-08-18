@@ -10,6 +10,11 @@ import type {
   RoutineRepository,
 } from '@modules/habits/domain/habit-repository'
 import type { Routine } from '@modules/habits/domain/routine'
+import type { Challenge, ChallengeDay } from '@modules/challenges/domain/challenge'
+import type {
+  ChallengeDayRepository,
+  ChallengeRepository,
+} from '@modules/challenges/domain/challenge-repository'
 import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 import type { PlannedInstanceRepository } from '@modules/planning/domain/planned-instance-repository'
 import type { BlockTime } from '@modules/block-time/domain/block-time'
@@ -28,6 +33,8 @@ export interface Persistence {
   readonly instances: PlannedInstanceRepository
   readonly blocks: BlockTimeRepository
   readonly routines: RoutineRepository
+  readonly challenges: ChallengeRepository
+  readonly challengeDays: ChallengeDayRepository
 }
 
 export async function createPersistence(databaseName?: string): Promise<Persistence> {
@@ -46,6 +53,8 @@ export async function createPersistence(databaseName?: string): Promise<Persiste
     STORE.instances,
     STORE.blocks,
     STORE.routines,
+    STORE.challenges,
+    STORE.challengeDays,
   ] as const
   const clock = monotonicClock(Date.now, await latestTimestamp(database, stores))
 
@@ -57,5 +66,9 @@ export async function createPersistence(databaseName?: string): Promise<Persiste
     ),
     blocks: createIdbRepository(createCollection<BlockTime>(database, STORE.blocks, clock)),
     routines: createIdbRepository(createCollection<Routine>(database, STORE.routines, clock)),
+    challenges: createIdbRepository(createCollection<Challenge>(database, STORE.challenges, clock)),
+    challengeDays: createIdbRepository(
+      createCollection<ChallengeDay>(database, STORE.challengeDays, clock),
+    ),
   }
 }

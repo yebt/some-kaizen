@@ -7,7 +7,14 @@ import type { Dataset } from './dataset'
 
 /** Something the merge could not decide on its own, reported rather than resolved silently. */
 export interface MergeCollision {
-  readonly kind: 'habit' | 'occurrence' | 'block' | 'overlap' | 'routine'
+  readonly kind:
+    | 'habit'
+    | 'occurrence'
+    | 'block'
+    | 'routine'
+    | 'challenge'
+    | 'challenge day'
+    | 'overlap'
   readonly id: Identifier
   readonly label: string
   readonly detail: string
@@ -21,6 +28,8 @@ export interface MergeReport {
     instances: number
     blocks: number
     routines: number
+    challenges: number
+    challengeDays: number
   }
   /** Entries the incoming file answered more recently than this device had. */
   readonly superseded: number
@@ -159,6 +168,27 @@ export function mergeDataset(mine: Dataset, theirs: Dataset): MergeReport {
     detail: 'The file arranges this part of the day differently. Yours was kept.',
   }))
 
+  const challenges = mergeEntities(mine.challenges, theirs.challenges, (challenge) => ({
+    kind: 'challenge',
+    id: challenge.id,
+    label: challenge.name,
+    detail: 'The file has a different version of this programme. Yours was kept.',
+  }))
+
+  /*
+   * A challenge day is merged as an entity rather than as an entry.
+   *
+   * Entries have a "which of these two answers stands" rule because the same day can be
+   * answered twice; a challenge day is a set of ticks the device holds one of, so the mine-
+   * wins rule the other entities use is the right one and the honest one.
+   */
+  const challengeDays = mergeEntities(mine.challengeDays, theirs.challengeDays, (day) => ({
+    kind: 'challenge day',
+    id: day.id,
+    label: day.date,
+    detail: 'The file ticked this day differently. Yours was kept.',
+  }))
+
   const entries = mergeEntries(mine.entries, theirs.entries)
 
   return {
@@ -168,6 +198,8 @@ export function mergeDataset(mine: Dataset, theirs: Dataset): MergeReport {
       instances: instances.merged,
       blocks: blocks.merged,
       routines: routines.merged,
+      challenges: challenges.merged,
+      challengeDays: challengeDays.merged,
     },
     added: {
       habits: habits.added.length,
@@ -175,6 +207,8 @@ export function mergeDataset(mine: Dataset, theirs: Dataset): MergeReport {
       instances: instances.added.length,
       blocks: blocks.added.length,
       routines: routines.added.length,
+      challenges: challenges.added.length,
+      challengeDays: challengeDays.added.length,
     },
     superseded: entries.superseded,
     collisions: [

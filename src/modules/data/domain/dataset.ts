@@ -3,6 +3,7 @@ import type { HabitEntry } from '@modules/habits/domain/habit-entry'
 import type { Routine } from '@modules/habits/domain/routine'
 import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 import type { BlockTime } from '@modules/block-time/domain/block-time'
+import type { Challenge, ChallengeDay } from '@modules/challenges/domain/challenge'
 
 /**
  * Everything the app stores, as one value.
@@ -17,6 +18,8 @@ export interface Dataset {
   readonly instances: readonly PlannedInstance[]
   readonly blocks: readonly BlockTime[]
   readonly routines: readonly Routine[]
+  readonly challenges: readonly Challenge[]
+  readonly challengeDays: readonly ChallengeDay[]
 }
 
 export const EMPTY_DATASET: Dataset = {
@@ -25,4 +28,6 @@ export const EMPTY_DATASET: Dataset = {
   instances: [],
   blocks: [],
   routines: [],
+  challenges: [],
+  challengeDays: [],
 }

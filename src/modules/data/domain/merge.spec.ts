@@ -21,7 +21,15 @@ import { mergeDataset } from './merge'
 const CREATED_ON = calendarDate('2020-01-01')
 const DAY = calendarDate('2026-03-11')
 
-const EMPTY: Dataset = { habits: [], entries: [], instances: [], blocks: [], routines: [] }
+const EMPTY: Dataset = {
+  habits: [],
+  entries: [],
+  instances: [],
+  blocks: [],
+  routines: [],
+  challenges: [],
+  challengeDays: [],
+}
 
 function habitNamed(name: string, id: Identifier = newIdentifier()) {
   return createCompletedHabit({
@@ -76,7 +84,15 @@ describe('bringing in what is missing', () => {
 
     const report = mergeDataset(EMPTY, theirs)
 
-    expect(report.added).toEqual({ habits: 1, entries: 1, instances: 1, blocks: 1, routines: 0 })
+    expect(report.added).toEqual({
+      habits: 1,
+      entries: 1,
+      instances: 1,
+      blocks: 1,
+      routines: 0,
+      challenges: 0,
+      challengeDays: 0,
+    })
   })
 
   it('leaves an identical record alone rather than reporting it', () => {

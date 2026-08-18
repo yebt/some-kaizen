@@ -18,6 +18,12 @@ import {
 } from '@modules/habits/domain/habit'
 import { type HabitEntry, readNote } from '@modules/habits/domain/habit-entry'
 import { createRoutine, type Routine } from '@modules/habits/domain/routine'
+import {
+  type Challenge,
+  type ChallengeDay,
+  createChallenge,
+  type MissRule,
+} from '@modules/challenges/domain/challenge'
 import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 
 import type { Dataset } from './dataset'
@@ -88,6 +94,67 @@ export function parseBackup(text: string): Dataset {
     // is a real thing to restore, and a missing group is no groups rather than a broken file.
     routines:
       dataset.routines === undefined ? [] : asArray(dataset.routines, 'routines').map(readRoutine),
+    // Absent rather than refused for a file written before challenges existed, the same way
+    // routines are: an older backup is a real thing to restore.
+    challenges:
+      dataset.challenges === undefined
+        ? []
+        : asArray(dataset.challenges, 'challenges').map(readChallenge),
+    challengeDays:
+      dataset.challengeDays === undefined
+        ? []
+        : asArray(dataset.challengeDays, 'challenge days').map(readChallengeDay),
+  }
+}
+
+function readChallenge(raw: unknown): Challenge {
+  const value = asRecord(raw, 'A challenge is not an object.')
+
+  if (!Array.isArray(value.tasks)) {
+    throw new InvalidBackupError('A challenge needs a list of things to do each day.')
+  }
+
+  // Rebuilt through the domain's own constructor, so a hand edited file cannot import a
+  // programme of zero days or one asking for the same task twice.
+  return createChallenge({
+    id: readId(value.id, 'challenge'),
+    name: asString(value.name, 'A challenge needs a name.'),
+    lengthDays: asNumber(value.lengthDays, 'challenge length'),
+    tasks: value.tasks.map((task) => {
+      const one = asRecord(task, 'A challenge task is not an object.')
+
+      return { id: readId(one.id, 'task'), name: asString(one.name, 'A task needs a name.') }
+    }),
+    startedOn: readDate(value.startedOn, 'challenge'),
+    onMiss: readMissRule(value.onMiss),
+    abandonedOn:
+      value.abandonedOn === undefined ? undefined : readDate(value.abandonedOn, 'challenge'),
+  })
+}
+
+function readMissRule(raw: unknown): MissRule {
+  if (raw !== 'restart' && raw !== 'continue') {
+    throw new InvalidBackupError(
+      `A challenge has an unknown rule for a missed day: ${String(raw)}.`,
+    )
+  }
+
+  return raw
+}
+
+function readChallengeDay(raw: unknown): ChallengeDay {
+  const value = asRecord(raw, 'A challenge day is not an object.')
+
+  if (!Array.isArray(value.completed)) {
+    throw new InvalidBackupError('A challenge day needs a list of what was ticked.')
+  }
+
+  return {
+    id: readId(value.id, 'challenge day'),
+    challengeId: readId(value.challengeId, 'challenge day'),
+    date: readDate(value.date, 'challenge day'),
+    completed: value.completed.map((taskId) => readId(taskId, 'challenge day')),
+    recordedAt: asNumber(value.recordedAt, 'recordedAt'),
   }
 }
 
