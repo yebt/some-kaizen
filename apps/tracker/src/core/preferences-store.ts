@@ -23,6 +23,8 @@ import { formatTime } from '@shared/domain/time-of-day'
  * display settings rather than user data, so the trade the rest of the app refuses — a
  * synchronous store with a tiny quota — is exactly right here.
  */
+// Spelled with an s deliberately: it is a stored key, and renaming it would silently reset
+// everybody's theme, clock format and zoom to the defaults. See `DATABASE_NAME`.
 const STORAGE_KEY = 'some-kaisen.preferences'
 
 export function loadPreferences(): Preferences {

@@ -5,6 +5,10 @@ import { MAX_ROUTINE_NAME_LENGTH, type Routine } from './routine'
 import type { PresetStep, RoutinePreset } from './routine-preset'
 
 /** Identifies the document as a routine of ours, so a backup file is refused rather than half read. */
+/**
+ * Spelled with an s for the same reason the backup format is: it is written into files.
+ * A routine somebody was handed last week has to stay openable this week.
+ */
 export const SHARED_ROUTINE_FORMAT = 'some-kaisen.routine'
 export const SHARED_ROUTINE_VERSION = 1
 
@@ -226,7 +230,7 @@ function readAnchor(raw: unknown): TimeOfDay | undefined {
 }
 
 /**
- * `some-kaisen-routine-morning.json`, so a folder of them can be told apart.
+ * `some-kaizen-routine-morning.json`, so a folder of them can be told apart.
  *
  * A name with nothing a filename can use falls back rather than failing. The routine is fine;
  * only its filename is stuck, and refusing to share one over the characters in its name would
@@ -238,5 +242,5 @@ export function sharedRoutineFileName(routine: Routine): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 
-  return slug ? `some-kaisen-routine-${slug}.json` : 'some-kaisen-routine.json'
+  return slug ? `some-kaizen-routine-${slug}.json` : 'some-kaizen-routine.json'
 }

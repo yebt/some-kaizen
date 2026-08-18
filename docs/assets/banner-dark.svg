@@ -9,7 +9,7 @@
   </g>
 
   <!-- Wordmark & Subtitle -->
-  <text x="210" y="145" font-family="ui-sans-serif, -apple-system, &quot;Segoe UI&quot;, Roboto, Helvetica, Arial, sans-serif" font-size="56" font-weight="600" letter-spacing="-0.02em" fill="#f2f0ec">Some Kaisen</text>
+  <text x="210" y="145" font-family="ui-sans-serif, -apple-system, &quot;Segoe UI&quot;, Roboto, Helvetica, Arial, sans-serif" font-size="56" font-weight="600" letter-spacing="-0.02em" fill="#f2f0ec">Some Kaizen</text>
   <text x="210" y="185" font-family="ui-sans-serif, -apple-system, &quot;Segoe UI&quot;, Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="400" fill="#a5a099">Habits with a place in the day</text>
 
   <!-- Timeline Schedule (Vertical axis & single column day timeline, centered on y=150) -->

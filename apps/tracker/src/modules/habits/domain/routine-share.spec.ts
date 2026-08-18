@@ -218,7 +218,7 @@ describe('reading one somebody else wrote', () => {
 describe('the file it is written to', () => {
   it('is named after the routine, so a folder of them can be told apart', () => {
     expect(sharedRoutineFileName(morning([habitNamed('Stretch', 10)]))).toBe(
-      'some-kaisen-routine-morning.json',
+      'some-kaizen-routine-morning.json',
     )
   })
 
@@ -227,7 +227,7 @@ describe('the file it is written to', () => {
 
     // Not an error: the routine is fine and only the filename is stuck. Refusing to share a
     // routine over the characters in its name would be the app being precious.
-    expect(sharedRoutineFileName(routine)).toBe('some-kaisen-routine.json')
+    expect(sharedRoutineFileName(routine)).toBe('some-kaizen-routine.json')
   })
 })
 

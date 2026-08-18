@@ -1,9 +1,9 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg" />
-  <img src="docs/assets/banner-light.svg" alt="Some Kaisen — habits with a place in the day" />
+  <img src="docs/assets/banner-light.svg" alt="Some Kaizen — habits with a place in the day" />
 </picture>
 
-# Some Kaisen
+# Some Kaizen
 
 A mobile-first habit tracker that gives habits a place in the day rather than a checkbox in
 a list. Fully offline, stored on the device, packaged for Android with Capacitor.

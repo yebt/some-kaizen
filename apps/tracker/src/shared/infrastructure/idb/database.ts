@@ -6,6 +6,14 @@
  * synchronous 5 MB string that would block the main thread on every write and eventually
  * throw with no warning.
  */
+/*
+ * Spelled with an s while the app is spelled with a z, and it stays that way.
+ *
+ * This is the name IndexedDB stores the data under. Correcting it would not rename the
+ * database; it would open a second, empty one and leave every habit anybody has recorded
+ * sitting in a database nothing opens any more. A misspelling nobody sees is cheaper than
+ * losing the data.
+ */
 export const DATABASE_NAME = 'some-kaisen'
 /**
  * Raised for the challenges stores.

@@ -12,11 +12,11 @@ export interface FileExchange {
   pick(): Promise<string | null>
 }
 
-/** `some-kaisen-2026-03-11.json`, so several backups sort and read sensibly in a folder. */
+/** `some-kaizen-2026-03-11.json`, so several backups sort and read sensibly in a folder. */
 export function backupFileName(exportedAt: Date): string {
   const year = exportedAt.getFullYear()
   const month = String(exportedAt.getMonth() + 1).padStart(2, '0')
   const day = String(exportedAt.getDate()).padStart(2, '0')
 
-  return `some-kaisen-${year}-${month}-${day}.json`
+  return `some-kaizen-${year}-${month}-${day}.json`
 }

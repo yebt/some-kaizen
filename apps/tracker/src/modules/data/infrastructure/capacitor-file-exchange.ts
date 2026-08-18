@@ -31,7 +31,7 @@ export function createCapacitorFileExchange(): FileExchange {
       })
 
       await Share.share({
-        title: 'Some Kaisen backup',
+        title: 'Some Kaizen backup',
         // Some targets read the file and some read the text, so both are offered.
         url: written.uri,
         dialogTitle: 'Save your backup',

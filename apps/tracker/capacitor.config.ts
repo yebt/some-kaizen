@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'dev.procyonlotor.somekaisen',
-  appName: 'Some Kaisen',
+  appName: 'Some Kaizen',
   webDir: 'dist',
   android: {
     // The web layer is the app, so a failed asset is a bug rather than something to hide.

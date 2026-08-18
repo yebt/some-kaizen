@@ -4,7 +4,7 @@ Write two self-contained SVG files in the current directory: `banner-light.svg` 
 
 ## The product
 
-"Some Kaisen" — a mobile-first habit tracker that gives habits a place in the day rather
+"Some Kaizen" — a mobile-first habit tracker that gives habits a place in the day rather
 than a checkbox in a list. Fully offline, stored on the device. Its ideas: a day has a
 shape; habits are placed on it by dragging; progress accumulates rather than being perfect.
 
@@ -41,7 +41,7 @@ Scale and translate it; do not redraw it by hand and do not change its proportio
 ## Composition
 
 - The mark on the left, vertically centred, roughly 120 units across.
-- To its right: the wordmark "Some Kaisen" and, under it, the line
+- To its right: the wordmark "Some Kaizen" and, under it, the line
   "Habits with a place in the day".
 - Right of centre, a quiet abstraction of the day timeline: a vertical stack or horizontal
   run of rounded bars in the hairline colour at varying lengths, with one or two in the

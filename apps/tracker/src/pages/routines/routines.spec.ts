@@ -426,7 +426,7 @@ describe('handing one to somebody else', () => {
 
     const [written] = platform.saved
 
-    expect(written?.name).toBe('some-kaisen-routine-morning.json')
+    expect(written?.name).toBe('some-kaizen-routine-morning.json')
 
     // The trust model is what is *absent*. A shared routine carries no identifiers and no
     // dates, so there is nothing in it that could name, replace or revive anything on the

@@ -28,7 +28,7 @@ test('a routine written out is a routine that can be opened again', async ({ pag
 
   const download = await downloading
 
-  expect(download.suggestedFilename()).toBe('some-kaisen-routine-morning.json')
+  expect(download.suggestedFilename()).toBe('some-kaizen-routine-morning.json')
 
   const path = await download.path()
 

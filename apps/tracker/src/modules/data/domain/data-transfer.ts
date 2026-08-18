@@ -29,6 +29,13 @@ import type { PlannedInstance } from '@modules/planning/domain/planned-instance'
 import type { Dataset } from './dataset'
 
 /** Identifies the file as ours, so a wrong file is refused rather than half read. */
+/**
+ * Spelled with an s, permanently, while the app is spelled with a z.
+ *
+ * Every backup file already written carries this exact string and is refused without it. A
+ * spelling correction here would make every existing backup unreadable by the app that
+ * wrote it, which is the one thing a backup may never be.
+ */
 export const BACKUP_FORMAT = 'some-kaisen.backup'
 export const BACKUP_VERSION = 1
 
