@@ -15,8 +15,23 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
-  // Run files in parallel; the dev server handles it and each context is isolated anyway.
+  // Run files in parallel; each context is isolated, so order cannot matter.
   fullyParallel: true,
+  /*
+   * Capped rather than left to the default half-the-cores.
+   *
+   * At four workers this suite failed intermittently, and the shape of the failure said what
+   * it was: every failure was Firefox, they were contiguous from one test to the last, and
+   * each was the app simply never mounting — `#app` empty for thirty seconds with no error
+   * on the page, which is not a defect the app can produce, since a storage failure writes a
+   * message there. A worker was wedging under memory pressure and never recovering. Two
+   * workers ran the whole suite green repeatedly.
+   *
+   * Fixed here rather than papered over with retries: a test that only passes on the second
+   * attempt has told you nothing, and a suite that fails a third of the time is a suite
+   * people stop reading.
+   */
+  workers: 2,
   // A test that only passes on the third attempt is a test that has told you nothing, so
   // retries are off locally. CI keeps one, to separate a real failure from a cold start.
   retries: process.env.CI ? 1 : 0,
