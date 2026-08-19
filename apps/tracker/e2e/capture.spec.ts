@@ -78,15 +78,39 @@ test('capture', async ({ page }) => {
   await open(page, '/stats')
   await page.addStyleTag({ content: hideBar })
   await page.waitForTimeout(500)
-  await page.getByLabel('Rate by day of the week').screenshot({
-    path: `${PLATES}/detail-weekdays.png`,
-  })
+  /*
+   * The whole card, not the bars alone.
+   *
+   * The sentence underneath — "best Monday, worst Saturday" — is the argument; the bars are
+   * what lets somebody disagree with it. Cropping to the bars threw away the half that says
+   * what they mean, and the app deliberately withholds that sentence when there is too little
+   * answered, which is a thing worth showing rather than describing.
+   */
+  await page
+    .locator('div.rounded-card', { hasText: 'Best day' })
+    .first()
+    .screenshot({ path: `${PLATES}/detail-weekdays.png` })
 
   await open(page, '/habits')
   await page.addStyleTag({ content: hideBar })
   await page.getByText('Drink water').first().click()
   await expect(page.getByLabel('Daily history').first()).toBeVisible()
   await page.waitForTimeout(300)
+  /*
+   * The strip scrolls sideways, and an element screenshot of something inside a scroller is
+   * cropped to what the scroller is showing — which sliced the last week in half, mid column.
+   * Unclamping the parent for the photograph lets the element report its real width.
+   */
+  await page.addStyleTag({
+    content: `.overflow-x-auto { overflow: visible !important; }
+      [aria-label='Daily history'] {
+        width: max-content !important;
+        /* The strip runs past its card, so without this the picture is half white card and
+           half page behind it — a seam that reads as a rendering fault rather than a heatmap. */
+        background: var(--color-surface) !important;
+      }`,
+  })
+  await page.waitForTimeout(200)
   await page.getByLabel('Daily history').first().screenshot({
     path: `${PLATES}/detail-heatmap.png`,
   })

@@ -168,6 +168,17 @@ p {
   color: var(--ink-muted);
 }
 
+/*
+ * Small print that is still prose. The mono `.data` voice is reserved for measurement —
+ * clock times, percentages, statuses — and a caption or a colophon line is a sentence, not
+ * a reading off a dial.
+ */
+.footnote {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
 /* ---- Frame ------------------------------------------------------------ */
 
 .sheet {
@@ -425,7 +436,6 @@ p {
     stroke-dashoffset: var(--len, 200);
   }
 
-  .js .plate__lines .pin,
   .js .pin--drawn {
     opacity: 0;
   }

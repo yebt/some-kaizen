@@ -130,7 +130,7 @@ import today from '../assets/plates/today.png'
         </p>
       </div>
 
-      <div class="plate-col">
+      <div class="plate-row">
         <Plate
           src={plan}
           alt="The weekly board: a chip reading Run waiting for a day, and Tuesday holding Meditate at seven, Stretch at half past seven, Run at half past six and Read at half past nine."
@@ -171,21 +171,55 @@ import today from '../assets/plates/today.png'
       </div>
 
       <div class="stats">
-        <figure class="stats__item">
-          <img src={heatmap.src} alt="Six months of days as small squares, filled where the habit was done." />
-          <figcaption class="quiet">
-            Six months at a glance. A gap is a gap; nothing here is smoothed out.
-          </figcaption>
-        </figure>
+        <div class="stats__heat">
+          <Plate
+            src={heatmap}
+            alt="Six months of days as small squares: green where the habit was done, amber where it was partly done, pale where nothing was answered."
+            callouts={[
+              {
+                x: 64.8,
+                y: 7,
+                toX: 105,
+                toY: 12,
+                what: 'A day never answered stays pale.',
+                why: 'Not red, and not counted as zero — silence. A week you did not open the app has to read as a week of silence, or the calendar turns into a wall of defeat you stop opening.',
+              },
+              {
+                x: 57.4,
+                y: 35.5,
+                toX: 105,
+                toY: 62,
+                what: 'Amber is a partial day.',
+                why: 'The minimum reached, the goal missed. Most of your water is not the same as none of it, and the record keeps the difference instead of rounding it away.',
+              },
+            ]}
+          />
+        </div>
 
-        <figure class="stats__item">
-          <img src={weekdays.src} alt="Seven bars, one per weekday, showing the rate for each." />
-          <figcaption class="quiet">
-            Rate by day of the week — measured over the days you actually answered. A weekday
-            you never answered reports nothing rather than zero, and no best day is named until
-            there is enough to name one.
-          </figcaption>
-        </figure>
+        <div class="plate-row plate-row--flat">
+          <Plate
+            src={weekdays}
+            alt="Seven bars, one per weekday, from Thursday at 100 percent down to Saturday at 50, and the sentence beneath them naming the best day and the worst."
+            callouts={[
+              {
+                x: 79,
+                y: 58,
+                toX: 106,
+                toY: 32,
+                what: 'Saturday is half of Thursday.',
+                why: 'Fifty points apart, and that is the most actionable number a tracker can produce: a streak says how long you kept something up, this says what to change.',
+              },
+              {
+                x: 57,
+                y: 88,
+                toX: 106,
+                toY: 74,
+                what: 'It only says it once it knows.',
+                why: 'Named over the days that carry an answer, never over every day in the window — and withheld entirely until enough of them do, because one good Tuesday is not a pattern.',
+              },
+            ]}
+          />
+        </div>
       </div>
     </div>
   </section>
@@ -203,7 +237,7 @@ import today from '../assets/plates/today.png'
         </p>
       </div>
 
-      <div class="plate-col plate-col--narrow">
+      <div class="plate-row plate-row--narrow">
         <Plate
           src={challenge}
           alt="A card reading 75 Hard, day 3 of 75, above five unticked tasks."
@@ -341,21 +375,11 @@ import today from '../assets/plates/today.png'
           Written down rather than implied, because a page that leaves this out is hoping you
           will assume something better.
         </p>
-
-        <figure class="closing__plate">
-          <Plate
-            src={today}
-            alt="The Today screen: a week strip, a 75 Hard programme part way through its tasks, and a row still to answer."
-            device
-          />
-          <figcaption class="data">
-            Today, in the app. Every picture on this page is a photograph of it running.
-          </figcaption>
-        </figure>
       </div>
 
-      <div class="closing__body">
-        <ul class="ledger">
+      <div class="closing__field">
+        <div class="closing__body">
+          <ul class="ledger">
           <li>
             <span class="ledger__what">Android, wrapped with Capacitor</span>
             <span class="ledger__value">working</span>
@@ -386,19 +410,31 @@ import today from '../assets/plates/today.png'
             </span>
             <span class="ledger__value">planned, paid</span>
           </li>
-        </ul>
+          </ul>
 
-        <div class="closing__act">
-          <p>
-            Until there is something to install, the honest thing to offer is the code. All of
-            it, including the parts that explain why each decision went the way it did.
-          </p>
-          <div class="actions">
-            <a class="act" href="https://github.com/yebt/some-kaizen" rel="noopener">
-              Read the source
-            </a>
+          <div class="closing__act">
+            <p>
+              Until there is something to install, the honest thing to offer is the code. All
+              of it, including the parts that explain why each decision went the way it did.
+            </p>
+            <div class="actions">
+              <a class="act" href="https://github.com/yebt/some-kaizen" rel="noopener">
+                Read the source
+              </a>
+            </div>
           </div>
         </div>
+
+        <figure class="closing__plate">
+          <Plate
+            src={today}
+            alt="The Today screen: a week strip, a 75 Hard programme part way through its tasks, and a row still to answer."
+            device
+          />
+          <figcaption class="footnote">
+            Today, in the app. Every picture on this page is a photograph of it running.
+          </figcaption>
+        </figure>
       </div>
     </div>
 
@@ -417,6 +453,7 @@ import today from '../assets/plates/today.png'
     .opening {
       grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
       gap: clamp(3rem, 8vw, 7rem);
+      align-items: stretch;
     }
   }
 
@@ -424,6 +461,7 @@ import today from '../assets/plates/today.png'
     display: grid;
     gap: 1.75rem;
     justify-items: start;
+    align-content: center;
   }
 
   .opening__status {
@@ -431,6 +469,25 @@ import today from '../assets/plates/today.png'
     font-size: 0.875rem;
     letter-spacing: 0.01em;
     color: var(--ink-muted);
+  }
+
+  /*
+   * On the wide spread the left column runs the full height of the plate and its notes, so
+   * the quiet facts line anchors the lower-left corner instead of leaving it empty — the two
+   * columns finish on the same baseline.
+   */
+  @media (min-width: 62rem) {
+    .opening__say {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding-top: clamp(1rem, 4vh, 3.5rem);
+    }
+
+    .opening__status {
+      margin-top: auto;
+      padding-top: 1.75rem;
+    }
   }
 
   /* The first plate is a crop, so it wants a frame rather than a device edge. */
@@ -489,46 +546,68 @@ import today from '../assets/plates/today.png'
    * The pins stand outside the photograph rather than on top of it. A number sitting on the
    * interface it is pointing at hides the pixel the sentence is about, which is the one thing
    * this whole arrangement exists to avoid.
+   *
+   * On the wide spread the notes stand beside the shot rather than under it, so the leader
+   * lines run out of the photograph, through the gutter where the pins wait, toward the notes
+   * they belong to — and the field has no empty right half.
    */
-  .plate-col {
-    max-width: 30rem;
-    padding-right: clamp(2.5rem, 7vw, 5rem);
+  .plate-row {
+    --plate-w: 24rem;
+    display: grid;
+    gap: 1.75rem;
   }
 
-  .plate-col--narrow {
-    max-width: 26rem;
+  .plate-row > :global(.plate) {
+    max-width: var(--plate-w);
+    margin-right: clamp(2.5rem, 7vw, 5rem);
+  }
+
+  .plate-row--narrow {
+    --plate-w: 22rem;
+  }
+
+  @media (min-width: 62rem) {
+    .plate-row {
+      grid-template-columns: minmax(0, var(--plate-w)) minmax(0, 1fr);
+      column-gap: clamp(4rem, 6vw, 5.5rem);
+      align-items: start;
+    }
+
+    .plate-row > :global(.plate) {
+      margin-right: 0;
+    }
+
+    .plate-row > :global(.notes) {
+      margin-top: 0.25rem;
+    }
   }
 
   .stats {
     display: grid;
-    gap: 2.5rem;
+    gap: clamp(2.5rem, 5vw, 3.5rem);
   }
 
-  @media (min-width: 46rem) {
-    .stats {
+  /* The heatmap is wide and shallow, so it takes the whole field and its notes run under it. */
+  .stats__heat > :global(.plate) {
+    margin-right: clamp(2.5rem, 7vw, 5rem);
+  }
+
+  @media (min-width: 52rem) {
+    .stats__heat > :global(.notes) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 2.5rem;
     }
   }
 
-  .stats__item {
-    margin: 0;
-    display: grid;
-    gap: 1rem;
-    align-content: start;
+  /* The weekday bars keep the row form: shot on the left, its note across the gutter. */
+  .plate-row--flat {
+    --plate-w: 26rem;
   }
 
-  .stats__item img {
-    width: 100%;
-    height: auto;
-    padding: 1.25rem;
-    border: 1px solid var(--rule);
-    border-radius: 1rem;
-    background: var(--paper-raised);
-  }
-
-  .stats__item figcaption {
-    font-size: 0.9375rem;
-    line-height: 1.55;
+  @media (min-width: 62rem) {
+    .plate-row--flat {
+      align-items: center;
+    }
   }
 
   .ledger__what {
@@ -562,25 +641,30 @@ import today from '../assets/plates/today.png'
     text-decoration: none;
   }
 
-  .tools li > a {
-    padding: 0;
-  }
-
   .tools li:has(> a) {
     padding: 0;
-  }
-
-  .tools li > a {
-    padding: 1.5rem 0;
-  }
-
-  .tools li > a:hover h3 {
-    color: var(--gold-deep);
   }
 
   .tools p {
     font-size: 0.9375rem;
     line-height: 1.55;
+  }
+
+  /*
+   * The phone stands in the field beside the ledger, ending the page on the artifact itself
+   * rather than on a column of empty paper. Below the fold-width it follows the ledger.
+   */
+  .closing__field {
+    display: grid;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  @media (min-width: 62rem) {
+    .closing__field {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 16rem);
+      column-gap: clamp(3rem, 5vw, 4.5rem);
+    }
   }
 
   .closing__body {
@@ -594,15 +678,23 @@ import today from '../assets/plates/today.png'
   }
 
   .closing__plate {
-    margin: 2.5rem 0 0;
+    margin: 0;
     display: grid;
     gap: 0.875rem;
-    max-width: 15rem;
+    max-width: 16rem;
+  }
+
+  .closing__plate figcaption {
+    max-width: 30ch;
   }
 
   .tools :global(a) {
     color: inherit;
     text-decoration-color: var(--gold);
     text-underline-offset: 3px;
+  }
+
+  .tools :global(a:hover) {
+    text-decoration-thickness: 2px;
   }
 </style>

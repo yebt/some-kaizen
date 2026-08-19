@@ -155,68 +155,96 @@ export function buildWorkedExample(now: Date = new Date()): WorkedExample {
    * Weekends are worse than weekdays here, and the last fortnight is better than the first
    * month. Both are ordinary and both are what makes the statistics screens say anything: a
    * flat record produces a breakdown that is correct and completely uninformative.
+   *
+   * The important part is the third outcome. A day the person *answered and said no* is not
+   * the same as a day they never opened the app, and only the first one lowers a rate — the
+   * breakdown measures over days that carry a verdict. An earlier version of this fixture only
+   * ever wrote `done`, so every weekday came out between 82% and 100% and the screen that
+   * exists to tell somebody their Saturdays are bad had nothing to say.
    */
   for (let offset = 152; offset >= 1; offset -= 1) {
     const date = shift(today, -offset)
     const day = weekday(date)
     const recent = offset < 45 ? 0.12 : 0
-    const weekend = day >= 6 ? -0.28 : 0
+    const weekend = day >= 6 ? -0.42 : 0
 
-    const chance = (base: number) => random() < base + recent + weekend
+    /**
+     * Done, answered-and-missed, or never opened. In that order of likelihood.
+     *
+     * The gap between the second and the third is what the weekday breakdown is measuring, so
+     * a fixture that never produced the second one could not exercise it.
+     */
+    const verdict = (base: number): 'done' | 'missed' | undefined => {
+      const roll = random()
+      const chance = base + recent + weekend
 
-    if (chance(0.72)) {
+      if (roll < chance) return 'done'
+      // Two thirds of the remainder were answered honestly; the rest is silence.
+      return roll < chance + (1 - chance) * 0.66 ? 'missed' : undefined
+    }
+
+    const meditated = verdict(0.72)
+
+    if (meditated) {
       entries.push({
         id: nextId(),
         habitId: meditate.id,
         kind: 'positive',
-        outcome: 'done',
+        outcome: meditated,
         date: iso(date),
         recordedAt: date.getTime() + 8 * 3_600 * UNITS,
       })
     }
 
-    const litres = random()
+    // Measured, so it has a third state of its own: most of your water is not none of it.
+    const drank = verdict(0.6)
 
-    if (litres > 0.2) {
+    if (drank) {
       entries.push({
         id: nextId(),
         habitId: water.id,
         kind: 'positive',
-        outcome: litres > 0.45 ? 'done' : 'partial',
-        value: litres > 0.45 ? 2 + Math.round(random()) * 0.5 : 1.2,
+        outcome: drank === 'done' ? 'done' : 'partial',
+        value: drank === 'done' ? 2 + Math.round(random()) * 0.5 : 1.2,
         date: iso(date),
         recordedAt: date.getTime() + 21 * 3_600 * UNITS,
       })
     }
 
-    if (chance(0.6)) {
+    const readToday = verdict(0.6)
+
+    if (readToday) {
       entries.push({
         id: nextId(),
         habitId: read.id,
         kind: 'positive',
-        outcome: 'done',
+        outcome: readToday,
         date: iso(date),
         recordedAt: date.getTime() + 22 * 3_600 * UNITS,
       })
     }
 
-    if ([2, 4, 6].includes(day) && chance(0.66)) {
+    const ran = [2, 4, 6].includes(day) ? verdict(0.66) : undefined
+
+    if (ran) {
       entries.push({
         id: nextId(),
         habitId: run.id,
         kind: 'positive',
-        outcome: 'done',
+        outcome: ran,
         date: iso(date),
         recordedAt: date.getTime() + 19 * 3_600 * UNITS,
       })
     }
 
-    if ([1, 3, 5].includes(day) && chance(0.7)) {
+    const stretched = [1, 3, 5].includes(day) ? verdict(0.7) : undefined
+
+    if (stretched) {
       entries.push({
         id: nextId(),
         habitId: stretch.id,
         kind: 'positive',
-        outcome: 'done',
+        outcome: stretched,
         date: iso(date),
         recordedAt: date.getTime() + 7 * 3_600 * UNITS,
       })
