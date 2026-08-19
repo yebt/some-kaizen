@@ -41,8 +41,21 @@ function nextId(): string {
   return uuid(minted)
 }
 
+/**
+ * The local date, not the UTC one.
+ *
+ * `toISOString().slice(0, 10)` is the tempting one-liner and it is wrong for anybody west of
+ * Greenwich in the evening: at half past ten at night here it is already tomorrow in UTC, so
+ * every generated day landed one ahead and the row this fixture exists to produce — a quitting
+ * habit still waiting to be judged — was answered before it was captured. The app reckons a
+ * day the way the person living it does, and so must anything pretending to be its data.
+ */
 function iso(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
 }
 
 function shift(from: Date, days: number): Date {
