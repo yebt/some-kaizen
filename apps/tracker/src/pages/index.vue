@@ -330,6 +330,28 @@ const isEmpty = computed(
   () => !habitsLoading.value && habits.value.length === 0 && schedule.value.length === 0,
 )
 
+/**
+ * A device that has never been used goes to the first run instead of to an empty screen.
+ *
+ * Both halves are needed. The stored flag alone would walk somebody through a welcome after
+ * they restored a backup onto a new phone; an empty database alone would send somebody back
+ * through it every time they deleted their last habit, which is the app refusing to hear no.
+ *
+ * It waits for the read to land. `habitsData` is undefined until storage answers, and
+ * deciding on that first frame would send every existing user through a first run once.
+ */
+watch(
+  [() => preferences.started, habitsData, () => blocksData.value],
+  async ([started, loadedHabits, loadedBlocks]) => {
+    if (started || loadedHabits === undefined || loadedBlocks === undefined) return
+    if (loadedHabits.length > 0 || loadedBlocks.length > 0) return
+
+    // Replaced rather than pushed: the empty screen behind it is not somewhere to go back to.
+    await router.replace('/start')
+  },
+  { immediate: true },
+)
+
 const quitting = computed(() =>
   habits.value.filter(isNegative).map((habit) => {
     const stats = negativeStatistics(habit, entries.value, today)

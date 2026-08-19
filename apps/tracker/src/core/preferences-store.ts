@@ -101,6 +101,13 @@ export const usePreferences = defineStore('preferences', () => {
     preferences.value = { ...preferences.value, allowRedo }
   }
 
+  /** Whether this device has been through the first run, and the one way to say it has. */
+  const started = computed(() => preferences.value.started)
+
+  function markStarted() {
+    preferences.value = { ...preferences.value, started: true }
+  }
+
   function zoomTimeline(steps: number) {
     setTimeline(zoomedTimeline(preferences.value, steps))
   }
@@ -115,6 +122,8 @@ export const usePreferences = defineStore('preferences', () => {
     setTimeline,
     setDone,
     setAllowRedo,
+    started,
+    markStarted,
     zoomTimeline,
   }
 })

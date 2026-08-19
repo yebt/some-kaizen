@@ -21,7 +21,12 @@ const route = useRoute()
  * instead, which is a way out you can see rather than one you have to know about.
  */
 const isImmersive = computed(
-  () => /\/(new|edit)$/.test(route.path) || route.path.startsWith('/day/'),
+  () =>
+    /\/(new|edit)$/.test(route.path) ||
+    route.path.startsWith('/day/') ||
+    // The first run has its own Skip and its own Next. A tab bar underneath it would offer a
+    // fourth way out of a screen somebody has not finished reading yet.
+    route.path === '/start',
 )
 </script>
 

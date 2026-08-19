@@ -4,6 +4,7 @@ import { PiniaColada } from '@pinia/colada'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
@@ -67,10 +68,33 @@ async function settle() {
   await flushPromises()
 }
 
+const NOWHERE = { template: '<p>Nowhere</p>' }
+
+/**
+ * A real router rather than none.
+ *
+ * The screen navigates — to a block, to the timeline, to a habit's form — and since it now
+ * also sends a device that has never been used to the first run, a spec without a router
+ * would be testing a version of this page that cannot leave itself.
+ */
+let router: ReturnType<typeof createRouter>
+
 async function renderToday() {
+  router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', component: TodayPage },
+      { path: '/start', component: NOWHERE },
+      { path: '/:rest(.*)', component: NOWHERE },
+    ],
+  })
+
+  await router.push('/')
+  await router.isReady()
+
   const wrapper = mount(TodayPage, {
     global: {
-      plugins: [createPinia(), PiniaColada],
+      plugins: [createPinia(), PiniaColada, router],
       provide: { [PERSISTENCE_KEY as symbol]: persistence },
     },
   })
@@ -1470,5 +1494,122 @@ describe('ticking a programme on the day it belongs to', () => {
     await replaceDataset(persistence, { ...EMPTY_DATASET, challenges: [challenge] })
 
     expect((await renderToday()).text()).not.toContain('Programmes')
+  })
+})
+
+describe('the very first launch', () => {
+  it('sends a device that has never been used to the first run', async () => {
+    // The empty state it would otherwise land on says "name a habit", which is a reasonable
+    // instruction only for somebody who already knows what this app is for.
+    await replaceDataset(persistence, EMPTY_DATASET)
+
+    await renderToday()
+    await settle()
+
+    expect(router.currentRoute.value.path).toBe('/start')
+  })
+
+  it('leaves alone a device that already has habits', async () => {
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Meditate',
+          frequency: frequency('daily', 1),
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+
+    await renderToday()
+    await settle()
+
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('leaves alone a device that has already answered, even with nothing on it', async () => {
+    // Somebody who skipped the first run, or who deleted every habit they had. Sending them
+    // back through it would be the app refusing to hear no.
+    await replaceDataset(persistence, EMPTY_DATASET)
+    globalThis.localStorage?.setItem(
+      'some-kaisen.preferences',
+      JSON.stringify({ clock: '24h', theme: 'system', started: true }),
+    )
+
+    await renderToday()
+    await settle()
+
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('leaves alone a device with blocks but no habits yet', async () => {
+    /*
+     * Somebody who entered their sleep and their working day and stopped there. Sending them
+     * back through the first run would offer to set up the very thing they just set up, and
+     * this screen already knows the difference: its empty state counts blocks too.
+     */
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      blocks: [
+        createBlockTime({
+          id: newIdentifier(),
+          name: 'Sleep',
+          span: interval(timeOfDay(23 * 60), 8 * 60),
+          weekdays: [1, 2, 3, 4, 5, 6, 7],
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+
+    await renderToday()
+    await settle()
+
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('waits for storage before deciding, so a slow read is not read as a new device', async () => {
+    /*
+     * The load is asynchronous and the habits are undefined until it lands. Deciding on that
+     * first frame would send everybody through the first run once, over the top of whatever
+     * they already had.
+     */
+    await replaceDataset(persistence, {
+      ...EMPTY_DATASET,
+      habits: [
+        createCompletedHabit({
+          id: newIdentifier(),
+          name: 'Meditate',
+          frequency: frequency('daily', 1),
+          createdOn: calendarDate('2020-01-01'),
+        }),
+      ],
+    })
+
+    /*
+     * Asserted before anything is awaited. `renderToday` drains the read for us, and checking
+     * afterwards would pass whether or not the guard exists — which it did, until a mutation
+     * removed the guard and every test still went green.
+     */
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: TodayPage },
+        { path: '/start', component: NOWHERE },
+        { path: '/:rest(.*)', component: NOWHERE },
+      ],
+    })
+
+    await router.push('/')
+    await router.isReady()
+
+    mount(TodayPage, {
+      global: {
+        plugins: [createPinia(), PiniaColada, router],
+        provide: { [PERSISTENCE_KEY as symbol]: persistence },
+      },
+    })
+
+    expect(router.currentRoute.value.path).toBe('/')
   })
 })

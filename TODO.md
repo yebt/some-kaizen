@@ -200,6 +200,29 @@ introduced by fixing something else in the same sitting.
       the gesture having done nothing. Only a browser could see it; the write was correct and
       the screen was lying
 
+### The first run
+- [x] **A device that has never been used goes somewhere, rather than to an empty screen.**
+      The state it used to land on said "name a habit", which is a reasonable instruction only
+      for somebody who already knows what this app is for — and it was the first thing the app
+      ever said to them
+- [x] Not a carousel. Three slides explaining what a habit tracker is would be tapped through
+      by everybody and remembered by nobody. Two questions instead, both producing real
+      records through the same constructors a form uses, and then it gets out of the way
+- [x] The first question is the one that stops people: pick from the ideas that already exist,
+      with the reason each is worth doing. The second is the one that makes this app different
+      from the ones they already gave up on — sleep and work, so the day has a shape before
+      anything is placed on it
+- [x] Nothing is written until the last press, so backing out at any point leaves exactly the
+      empty app that existed before. Skipping counts as an answer: asking again tomorrow would
+      be the app refusing to hear no
+- [x] Two conditions, not one. The stored flag alone would walk somebody through a welcome
+      after restoring a backup onto a new phone; an empty database alone would send them back
+      through it every time they deleted their last habit. And it waits for storage to answer,
+      because deciding on the first frame sends every existing user through it once
+- [ ] The payoff is still missing: it ends on Today rather than on the day it just gave a
+      shape to. Showing that drawn — sleep, work, and the habits waiting for an hour — is the
+      one thing that would teach the mechanism instead of describing it
+
 ### The plus in the tab bar
 - [x] Reported: standing on the blocks screen, the big plus at the bottom obviously adds a
       block, and it opened a habit form. A control fixed to every screen cannot quietly mean

@@ -16,6 +16,8 @@ describe('readPreferences', () => {
       clock: '12h',
       theme: 'dark',
       timeline: 'fine',
+      // Something was stored, so somebody has used this app. See the `started` group below.
+      started: true,
     })
   })
 
@@ -37,6 +39,7 @@ describe('readPreferences', () => {
       ...DEFAULT_PREFERENCES,
       theme: 'dark',
       timeline: 'fine',
+      started: true,
     })
   })
 
@@ -45,6 +48,7 @@ describe('readPreferences', () => {
       ...DEFAULT_PREFERENCES,
       clock: '12h',
       theme: 'light',
+      started: true,
     })
   })
 
@@ -114,5 +118,42 @@ describe('usesHour12', () => {
   it('is true only for the twelve hour clock', () => {
     expect(usesHour12({ ...DEFAULT_PREFERENCES, clock: '12h' })).toBe(true)
     expect(usesHour12({ ...DEFAULT_PREFERENCES, clock: '24h' })).toBe(false)
+  })
+})
+
+describe('whether the app has been started before', () => {
+  it('assumes it has not, on a device that has never stored anything', () => {
+    expect(readPreferences(null).started).toBe(false)
+  })
+
+  it('remembers that it has', () => {
+    expect(readPreferences({ started: true }).started).toBe(true)
+  })
+
+  it('takes anything already stored as proof, for a build that predates the flag', () => {
+    // Somebody who has been using this app since before a first run existed has preferences
+    // stored and no `started` in them. Reading that as "never started" would walk them
+    // through a welcome on top of a year of their own data.
+    expect(readPreferences({ clock: '24h', theme: 'dark' }).started).toBe(true)
+  })
+
+  it('is not the whole condition on its own', () => {
+    // Restoring a backup onto a fresh device leaves this false and the habits full, so the
+    // screen asks for both. This is the half that only knows about the device.
+    expect(readPreferences(null).started).toBe(false)
+  })
+
+  /**
+   * A stored value of the wrong type reads as *started*, which is the opposite of how every
+   * other preference falls back.
+   *
+   * Deliberate. Getting this wrong in one direction shows a first run to somebody who has
+   * been using the app for a year, over the top of their own data; getting it wrong in the
+   * other direction skips a welcome for somebody who has never seen one, and they land on
+   * the empty state that existed before any of this and is perfectly serviceable. Only one of
+   * those two mistakes is worth protecting against.
+   */
+  it('treats a value it cannot read as started rather than showing a first run again', () => {
+    expect(readPreferences({ started: 'yes' }).started).toBe(true)
   })
 })

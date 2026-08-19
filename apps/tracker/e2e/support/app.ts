@@ -20,8 +20,34 @@ import { expect, type Page } from '@playwright/test'
  */
 const MOUNT_TIMEOUT_MS = 30_000
 
+/**
+ * Pages that have already been told this is not somebody's first launch.
+ *
+ * Every suite but one is about an app somebody is already using, and a browser context is
+ * genuinely new every time — so without this, each of them would open onto the first run
+ * instead of onto the screen it came to test. The exception marks itself with `firstRun`.
+ */
+const settled = new WeakSet<Page>()
+
+export interface OpenOptions {
+  /** Leave the device untouched, so the first run is offered exactly as it would be. */
+  readonly firstRun?: boolean
+}
+
 /** Waits for the app to have mounted and finished its first read of the database. */
-export async function open(page: Page, path = '/'): Promise<void> {
+export async function open(page: Page, path = '/', options: OpenOptions = {}): Promise<void> {
+  if (!options.firstRun && !settled.has(page)) {
+    settled.add(page)
+    // Written before any of the app's own scripts run, which is the only moment early enough:
+    // the screen decides where to send you on its first read.
+    await page.addInitScript(() => {
+      globalThis.localStorage?.setItem(
+        'some-kaisen.preferences',
+        JSON.stringify({ clock: '24h', theme: 'system', started: true }),
+      )
+    })
+  }
+
   await page.goto(path)
   await expect(page.locator('#app')).not.toBeEmpty({ timeout: MOUNT_TIMEOUT_MS })
 }

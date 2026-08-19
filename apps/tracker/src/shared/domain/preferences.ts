@@ -63,6 +63,18 @@ export interface Preferences {
    * which is a different gesture entirely.
    */
   readonly allowRedo: boolean
+  /**
+   * Whether this device has been through the first run.
+   *
+   * Kept beside the display settings rather than in the database, for the same reason the
+   * theme is: it has to be known before anything asynchronous has finished, and the question
+   * "has this person seen the app before" is asked on the very first paint.
+   *
+   * It is not the whole condition. A first run is offered only when this is false *and* there
+   * are no habits, so restoring a backup onto a fresh device does not walk somebody through a
+   * welcome for data they already have.
+   */
+  readonly started: boolean
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -71,6 +83,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   timeline: 'normal',
   done: 'compact',
   allowRedo: false,
+  started: false,
 }
 
 const DONE_DISPLAYS: readonly DoneDisplay[] = ['show', 'compact', 'hide']
@@ -87,7 +100,9 @@ const THEMES: readonly ThemeChoice[] = ['system', 'light', 'dark']
  * a theme choice costs nothing while losing a year of habits costs everything.
  */
 export function readPreferences(raw: unknown): Preferences {
-  if (typeof raw !== 'object' || raw === null) return DEFAULT_PREFERENCES
+  // An array is nonsense here rather than a half-written record, and it matters now that one
+  // field reads a *present* object as evidence that somebody has used the app before.
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return DEFAULT_PREFERENCES
 
   const value = raw as Record<string, unknown>
 
@@ -106,6 +121,16 @@ export function readPreferences(raw: unknown): Preferences {
       : DEFAULT_PREFERENCES.done,
     allowRedo:
       typeof value.allowRedo === 'boolean' ? value.allowRedo : DEFAULT_PREFERENCES.allowRedo,
+    /*
+     * Falls back to *started*, which is the opposite direction to everything else here.
+     *
+     * Wrong in one direction, somebody who has used the app for a year is walked through a
+     * welcome over the top of their own data. Wrong in the other, somebody new misses a
+     * welcome and lands on the empty state that existed before it and works perfectly well.
+     * Only one of those is worth protecting against, so an unreadable value reads as true —
+     * and an absent object reads as a genuinely new device through the branch above.
+     */
+    started: typeof value.started === 'boolean' ? value.started : true,
   }
 }
 
