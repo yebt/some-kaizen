@@ -52,7 +52,7 @@ test('it never opens twice, even for somebody who skipped it', async ({ page }) 
   // Skipping is an answer. Asking again on the next launch would be the app not listening.
   await open(page, '/')
   await expect(page).not.toHaveURL(/\/start$/)
-  await expect(page.getByText('No habits yet')).toBeVisible()
+  await expect(page.getByText('Nothing on today yet')).toBeVisible()
 })
 
 test('the tab bar stays out of it', async ({ page }) => {

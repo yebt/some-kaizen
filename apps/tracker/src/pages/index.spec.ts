@@ -328,7 +328,7 @@ describe('with nothing stored', () => {
   it('invites the user to add a habit rather than showing an empty schedule', async () => {
     const text = (await renderToday()).text()
 
-    expect(text).toContain('No habits yet')
+    expect(text).toContain('Nothing on today yet')
     expect(text).not.toContain('Swipe a row right')
   })
 })
@@ -460,14 +460,14 @@ describe('a day with block time but no habits yet', () => {
 
     const text = (await renderToday()).text()
 
-    expect(text).not.toContain('No habits yet')
+    expect(text).not.toContain('Nothing on today yet')
     expect(text).toContain('Schedule')
   })
 
   it('still invites a first habit when there is genuinely nothing at all', async () => {
     await replaceDataset(persistence, EMPTY_DATASET)
 
-    expect((await renderToday()).text()).toContain('No habits yet')
+    expect((await renderToday()).text()).toContain('Nothing on today yet')
   })
 })
 
@@ -1494,6 +1494,31 @@ describe('ticking a programme on the day it belongs to', () => {
     await replaceDataset(persistence, { ...EMPTY_DATASET, challenges: [challenge] })
 
     expect((await renderToday()).text()).not.toContain('Programmes')
+  })
+})
+
+describe('an empty day', () => {
+  it('carries the invitation itself, now that no button in the bar does', async () => {
+    /*
+     * It used to say "add one with the button below", pointing at a plus in the tab bar that
+     * added a habit from every screen in the app. That control is gone, and an empty state
+     * telling somebody to press a thing that is not there is worse than one saying nothing.
+     */
+    await replaceDataset(persistence, EMPTY_DATASET)
+    globalThis.localStorage?.setItem(
+      'some-kaisen.preferences',
+      JSON.stringify({ clock: '24h', theme: 'system', started: true }),
+    )
+
+    const wrapper = await renderToday()
+
+    await settle()
+
+    const invitation = wrapper.findAll('a').find((link) => link.attributes('href') === '/habits/new')
+
+    expect(invitation).toBeDefined()
+    expect(invitation!.text()).toMatch(/habit/i)
+    expect(wrapper.text()).not.toContain('button below')
   })
 })
 

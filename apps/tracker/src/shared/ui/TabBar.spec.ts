@@ -1,29 +1,24 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-
-import { LONG_PRESS_MS } from './drag/use-drag-and-drop'
 
 import TabBar from './TabBar.vue'
 
 const NOWHERE = { template: '<p>Nowhere</p>' }
 
-async function renderBar() {
+const DESTINATIONS = ['/', '/habits', '/plan', '/settings']
+
+async function renderBar(at = '/') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', component: NOWHERE },
-      { path: '/habits', component: NOWHERE },
-      { path: '/plan', component: NOWHERE },
-      { path: '/settings', component: NOWHERE },
+      ...DESTINATIONS.map((path) => ({ path, component: NOWHERE })),
       { path: '/habits/new', component: NOWHERE },
-      { path: '/routines/new', component: NOWHERE },
-      { path: '/block-time/new', component: NOWHERE },
-      { path: '/challenges', component: NOWHERE },
+      { path: '/block-time', component: NOWHERE },
     ],
   })
 
-  await router.push('/')
+  await router.push(at)
   await router.isReady()
 
   const wrapper = mount(TabBar, { global: { plugins: [router] } })
@@ -33,100 +28,50 @@ async function renderBar() {
   return { wrapper, router }
 }
 
-function plus(wrapper: Awaited<ReturnType<typeof renderBar>>['wrapper']) {
-  return wrapper.get('[aria-label="Add habit"]')
-}
-
-/**
- * Dispatched rather than triggered, because `clientX` on a `MouseEvent` has only a getter and
- * the test utility assigns to it. The gesture reads coordinates, so an event without them
- * would prove nothing about a finger that wanders.
- */
-function pointerAt(type: string, x: number, y: number) {
-  return new MouseEvent(type, { clientX: x, clientY: y, bubbles: true })
-}
-
-beforeEach(() => {
-  vi.useFakeTimers()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
-
-async function hold(wrapper: Awaited<ReturnType<typeof renderBar>>['wrapper']) {
-  plus(wrapper).element.dispatchEvent(pointerAt('pointerdown', 0, 0))
-  vi.advanceTimersByTime(LONG_PRESS_MS)
-  await flushPromises()
-}
-
-describe('the button in the middle', () => {
-  it('adds a habit on a plain tap, which is what it says it does', async () => {
-    const { wrapper, router } = await renderBar()
-
-    await plus(wrapper).trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.path).toBe('/habits/new')
-  })
-
-  /**
-   * Held, it offers everything the app can be given.
-   *
-   * A habit is not the only thing you can add, and standing on the blocks screen pressing a
-   * plus that adds a habit is the control lying about what it is for. It stays a habit on a
-   * tap because that is the common one, and the rest live one press deeper rather than
-   * behind a screen you have to already know about.
-   */
-  it('offers every kind of thing when it is held', async () => {
+describe('the bar along the bottom', () => {
+  it('is four places to go, and nothing else', async () => {
+    /*
+     * There used to be a fifth control in the middle that added a habit, from every screen.
+     * It was the loudest thing in the app and it was wrong on most of them: standing on the
+     * blocks screen, the obvious reading of a plus at the bottom is "add a block".
+     *
+     * A control fixed to every screen cannot quietly mean a different thing on each one, and
+     * a menu hidden behind a long press only helps somebody who already knows it is there.
+     * So it is gone, and creating something lives on the screen that holds that kind of
+     * thing, where the button can say which kind it makes.
+     */
     const { wrapper } = await renderBar()
 
-    // A native dialog is in the document whether or not it is showing, so the open attribute
-    // is the assertion. Read as mere existence, every one of these would pass shut.
-    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    const links = wrapper.findAll('a')
 
-    await hold(wrapper)
-
-    const sheet = wrapper.get('dialog[open]')
-
-    expect(sheet.text()).toContain('Habit')
-    expect(sheet.text()).toContain('Routine')
-    expect(sheet.text()).toContain('Block')
-    expect(sheet.text()).toContain('Challenge')
+    expect(links).toHaveLength(4)
+    expect(links.map((link) => link.attributes('href'))).toEqual(DESTINATIONS)
   })
 
-  it('does not also add a habit on the way, which would open a form behind the sheet', async () => {
-    const { wrapper, router } = await renderBar()
+  it('offers no way to create anything', async () => {
+    const { wrapper } = await renderBar('/block-time')
 
-    await hold(wrapper)
-    plus(wrapper).element.dispatchEvent(pointerAt('pointerup', 0, 0))
-    await plus(wrapper).trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.path).toBe('/')
+    expect(wrapper.findAll('button')).toEqual([])
+    expect(wrapper.text()).not.toMatch(/add/i)
   })
 
-  it('goes where the choice says', async () => {
-    const { wrapper, router } = await renderBar()
-
-    await hold(wrapper)
-    await wrapper
-      .findAll('dialog[open] button')
-      .find((node) => node.text().includes('Block'))
-      ?.trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.path).toBe('/block-time/new')
-  })
-
-  it('a finger that wanders is scrolling, and opens nothing', async () => {
+  it('names every destination, since each is drawn as an icon alone', async () => {
     const { wrapper } = await renderBar()
 
-    plus(wrapper).element.dispatchEvent(pointerAt('pointerdown', 0, 0))
-    plus(wrapper).element.dispatchEvent(pointerAt('pointermove', 0, 40))
-    vi.advanceTimersByTime(LONG_PRESS_MS)
-    await flushPromises()
+    expect(wrapper.findAll('a').map((link) => link.attributes('aria-label'))).toEqual([
+      'Today',
+      'Habits',
+      'Plan',
+      'Settings',
+    ])
+  })
 
-    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+  it('marks the one you are on', async () => {
+    const { wrapper } = await renderBar('/plan')
+
+    const current = wrapper.findAll('a').filter((link) => link.classes().includes('bg-accent'))
+
+    expect(current).toHaveLength(1)
+    expect(current[0]!.attributes('aria-label')).toBe('Plan')
   })
 })

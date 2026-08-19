@@ -1041,7 +1041,7 @@ const OUTCOME_CLASS = {
 
       A programme is not a habit and does not depend on there being any — that independence is
       the whole reason it is modelled apart. Inside the branch, somebody running 75 Hard with
-      no habits tracked would open the app to "No habits yet" and no sign of the thing they
+      no habits tracked would open the app to an empty state and no sign of the thing they
       committed to.
 
       Above the day's two views rather than inside either, because it belongs to the day
@@ -1056,13 +1056,30 @@ const OUTCOME_CLASS = {
       <AppSpinner :size="24" label="Loading your day" />
     </div>
 
-    <p
+    <!--
+      The empty state carries its own way out.
+
+      It used to point at a plus in the tab bar. That control is gone — it added a habit from
+      every screen in the app, including the ones where a plus obviously means something else
+      — and an empty state telling somebody to press a thing that is not there is worse than
+      one that says nothing at all.
+    -->
+    <div
       v-else-if="isEmpty"
       class="mt-6 rounded-card border border-dashed border-line p-8 text-center text-sm text-ink-muted"
     >
-      No habits yet. Add one with the button below, or load the demo data from Settings to see how a
-      full day looks.
-    </p>
+      <p>Nothing on today yet. Whatever you add turns up here, on the hour you give it.</p>
+      <RouterLink
+        to="/habits/new"
+        class="mt-4 inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2.5 text-xs font-medium text-ink-inverse"
+      >
+        <AppIcon name="plus" :size="14" />
+        Add a habit
+      </RouterLink>
+      <p class="mt-3 text-xs text-ink-subtle">
+        Or load the demo data from Settings to see how a full day looks.
+      </p>
+    </div>
 
     <template v-else>
       <section v-if="pendingChecks.length" class="mt-4" aria-labelledby="pending-heading">

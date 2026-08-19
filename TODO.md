@@ -236,10 +236,25 @@ introduced by fixing something else in the same sitting.
 - [x] A hold is unreachable from a keyboard, so this is a shortcut and never the only route:
       every destination in the sheet is also a plain link on the habits screen. The context
       menu is bound too, which is the same gesture for a mouse and the one key that reaches it
-- [ ] **Left open on purpose.** A control with a common meaning and a hidden second one is
-      still diffuse, and the hold is not the last word on it. Going to a UX review before
-      anything else is tried; the shape of the whole shell — whether the bar belongs on
-      screens you drilled into at all — hangs off the same answer, so neither moves alone
+- [x] **Reviewed, and removed.** The test that settled it: replay the original complaint
+      against the fix. Standing on the blocks screen, tapping the plus *still* opened a habit
+      form — the hold only ever helped somebody who already knew it was there, and a dark
+      44px circle does not announce a 260ms secret. It fixed the problem for the person who
+      no longer had it
+- [x] Worse than that, 260ms is *under* Android's own long-press threshold, so a heavy thumb
+      in the morning sometimes opened the sheet instead of the form. One control, two
+      outcomes, probabilistically. That is what "diffuse" feels like from the inside
+- [x] The sheet's own fourth item gave it away: *Challenge* went to a list rather than a
+      form, so one of four "add" actions was not an add. When a menu cannot keep its own
+      promise, the menu is the wrong frame
+- [x] So the bar is four places to go and nothing to press, and creating lives on the screen
+      that holds that kind of thing, where the button can say which kind it makes. Today's
+      empty state carries its own invitation now, because it used to point at a control that
+      no longer exists
+- [ ] Which leaves the centre of the bar empty, and that is the right state for now. If
+      anything ever earns it, the honest candidate is today's timeline — the product's whole
+      thesis, and the twice-daily destination, currently buried behind an immersive route.
+      That deserves its own evidence rather than being shipped as a consolation prize
 
 ### Routine builder
 A start time plus a list of steps with durations, cascading the clock forward. This is

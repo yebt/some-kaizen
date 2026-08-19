@@ -53,10 +53,10 @@ test('starting one puts it on the day, with everything it asks for', async ({ pa
 
 test('a programme shows on the day even with no habits at all', async ({ page }) => {
   // The independence is the whole reason it is modelled apart. Somebody running 75 Hard with
-  // nothing else tracked must not open the app to "No habits yet" and no sign of it.
+  // nothing else tracked must not open the app to an empty state and no sign of it.
   await startHard(page)
 
-  await expect(page.getByText('No habits yet')).toBeVisible()
+  await expect(page.getByText('Nothing on today yet')).toBeVisible()
   await expect(page.getByText('Day 1 of 75')).toBeVisible()
 })
 

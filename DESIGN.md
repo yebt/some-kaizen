@@ -96,6 +96,10 @@ shadows anywhere in this world.
 
 ## What this world refuses
 
+- A create action in the tab bar. It sat in the most valuable place in the app and meant one
+  thing from every screen, including the ones where its own glyph obviously meant another.
+  Creating lives on the screen that holds that kind of thing, where the button says which kind
+  it makes.
 - Gradients as decoration, gradient text, and glass used for its own sake.
 - Cards of icon-plus-heading-plus-text as a page's structure.
 - Eyebrows and kickers above headings.
