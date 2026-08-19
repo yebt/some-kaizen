@@ -69,14 +69,42 @@ pointed at.
 - A **ledger** — a ruled list with a right-aligned monospace status column — carries anything
   that is a set of facts with a state: what the app refuses to do, what exists and what does
   not, which tools are built.
-- Sections are a **19rem margin** holding a caption-scale heading and a note, beside the field.
-  The one enormous line on the site is the opening; repeating that scale in the margin only
-  produces four words to a line.
+- Sections come in **two forms**. The common one is a **19rem margin** holding a caption-scale
+  heading and a note, beside the field; repeating the display scale in a 19rem column only
+  produces four words to a line. The other is a **`.headline`**: full width, display scale,
+  used where a section is an arrival rather than an entry. It appears twice, and twice is the
+  point — a third would make it the ordinary form again.
+
+### The scroll has a pulse
+
+Eight sections of identical ground, density and heading scale is a page with one gear, and one
+gear reads as flat however good each section is alone. A field guide is not uniform either: a
+plate spread and a page of notes are different kinds of page, and you can feel which one you
+are on before reading a word.
+
+- Most of the page sits on `--paper`.
+- The **statistics** band sits on `--paper-sunken` — the densest passage, marked as a different
+  kind of page.
+- The **refusals** band is **inverted**, and is the page's one peak. It carries the most
+  opinionated content the site has, so it is the section that earns the only inversion. The
+  values are the world's own dark set, assigned rather than referenced: `background: var(--ink)`
+  on an element that also declares `--ink` resolves against its own new value, which once
+  painted a whole section paper-on-paper and made it invisible.
+- At night the inverted band goes **deeper** rather than flipping to light — a headlight is not
+  a peak — and gains a hairline at each edge, because a ground step of about 1.1:1 that nobody
+  can see is not a pulse.
+- The inverted band carries the gold rule the column headings already use, so it belongs to the
+  annotation system rather than sitting beside it as a dark stripe.
 
 Imagery is produced, never drawn: `apps/tracker/e2e/capture.spec.ts` drives the real
 application through its own import, against five months of generated history in
 `e2e/support/worked-example.ts`, and writes the PNGs into `apps/landing/src/assets/plates/`.
 No stock photography and no illustrations of interfaces exist anywhere on the site.
+
+That history is **authored, and the page says so**. Five months of days and a sentence reading
+"Best day Thu (100%)" look exactly like somebody's own record, and a page that shows one
+without naming it is inviting a reading it has not earned. The closing caption marks it once,
+for all of them.
 
 ## Motion
 

@@ -157,9 +157,8 @@ import today from '../assets/plates/today.png'
     </div>
   </section>
 
-  <hr class="rule" />
-
-  <section class="sheet band">
+  <section class="ground ground--sunken">
+    <div class="sheet band">
     <div class="spread">
       <div>
         <h2>Statistics that will not flatter you.</h2>
@@ -222,9 +221,8 @@ import today from '../assets/plates/today.png'
         </div>
       </div>
     </div>
+    </div>
   </section>
-
-  <hr class="rule" />
 
   <section class="sheet band">
     <div class="spread">
@@ -264,14 +262,21 @@ import today from '../assets/plates/today.png'
     </div>
   </section>
 
-  <hr class="rule" />
+  <!--
+    The page's second peak, and the only inverted band on it.
 
-  <section class="sheet band">
-    <div class="spread">
-      <div>
-        <h2>What it does not do.</h2>
-        <p class="margin-note">
-          Not an oversight list. Each of these was considered and refused, and the reason
+    This is the most opinionated content the site has — four things the product refuses and
+    the reason for each — and it was set in exactly the same grey as everything around it.
+    Inverted, it reads the way it means: a page you turn to and know you have arrived at
+    something. The tokens are the app's own, swapped, the way its primary button has always
+    used them.
+  -->
+  <section class="ground ground--ink">
+    <div class="sheet band">
+      <div class="headline headline--ruled">
+        <h2>Four things it refuses to do.</h2>
+        <p>
+          Not an oversight list. Each of these was considered and turned down, and the reason
           matters more than the absence.
         </p>
       </div>
@@ -320,8 +325,6 @@ import today from '../assets/plates/today.png'
     </div>
   </section>
 
-  <hr class="rule" />
-
   <section class="sheet band">
     <div class="spread">
       <div>
@@ -368,16 +371,15 @@ import today from '../assets/plates/today.png'
   <hr class="rule" />
 
   <section class="sheet band closing">
-    <div class="spread">
-      <div>
-        <h2>Where it is, honestly.</h2>
-        <p class="margin-note">
-          Written down rather than implied, because a page that leaves this out is hoping you
-          will assume something better.
-        </p>
-      </div>
+    <div class="headline">
+      <h2>Where it is, honestly.</h2>
+      <p>
+        Written down rather than implied, because a page that leaves this out is hoping you will
+        assume something better.
+      </p>
+    </div>
 
-      <div class="closing__field">
+    <div class="closing__grid">
         <div class="closing__body">
           <ul class="ledger">
           <li>
@@ -432,12 +434,11 @@ import today from '../assets/plates/today.png'
             device
           />
           <figcaption class="footnote">
-            Today, in the app. Every picture on this page is a photograph of it running.
+            Today, in the app. Every picture on this page is a photograph of it running — on a
+            worked example built for the purpose, never on anybody's own record.
           </figcaption>
         </figure>
-      </div>
     </div>
-
   </section>
 </Layout>
 
@@ -451,9 +452,12 @@ import today from '../assets/plates/today.png'
 
   @media (min-width: 62rem) {
     .opening {
-      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-      gap: clamp(3rem, 8vw, 7rem);
+      /* The thesis plate takes the larger half. The whole argument of a field guide is its
+         photographs, and this one had never once been allowed to be the big thing. */
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr);
+      gap: clamp(2.5rem, 6vw, 5rem);
       align-items: stretch;
+      min-height: min(80vh, 44rem);
     }
   }
 
@@ -462,6 +466,15 @@ import today from '../assets/plates/today.png'
     gap: 1.75rem;
     justify-items: start;
     align-content: center;
+  }
+
+  /*
+   * Capped a little below the page's own maximum, now that the plate takes the larger half.
+   * At full size the line breaks four ways and leaves "habit an" hanging, which is a phrase
+   * nobody says; three lines break where the sentence does.
+   */
+  .opening h1 {
+    font-size: clamp(2.75rem, 6.4vw, 4.5rem);
   }
 
   .opening__status {
@@ -622,51 +635,6 @@ import today from '../assets/plates/today.png'
     font-weight: 400;
   }
 
-  .tools {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 1px;
-    background: var(--rule);
-    border-block: 1px solid var(--rule);
-  }
-
-  .tools li,
-  .tools li > a {
-    display: grid;
-    gap: 0.5rem;
-    background: var(--paper);
-    padding: 1.5rem 0;
-    text-decoration: none;
-  }
-
-  .tools li:has(> a) {
-    padding: 0;
-  }
-
-  .tools p {
-    font-size: 0.9375rem;
-    line-height: 1.55;
-  }
-
-  /*
-   * The phone stands in the field beside the ledger, ending the page on the artifact itself
-   * rather than on a column of empty paper. Below the fold-width it follows the ledger.
-   */
-  .closing__field {
-    display: grid;
-    gap: 2.5rem;
-    align-items: start;
-  }
-
-  @media (min-width: 62rem) {
-    .closing__field {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 16rem);
-      column-gap: clamp(3rem, 5vw, 4.5rem);
-    }
-  }
-
   .closing__body {
     display: grid;
     gap: 2.5rem;
@@ -675,6 +643,18 @@ import today from '../assets/plates/today.png'
   .closing__act p {
     font-size: 1.0625rem;
     margin-bottom: 1.25rem;
+  }
+
+  .closing__grid {
+    display: grid;
+    gap: clamp(2rem, 5vw, 3.5rem);
+    align-items: start;
+  }
+
+  @media (min-width: 62rem) {
+    .closing__grid {
+      grid-template-columns: minmax(0, 1fr) 16rem;
+    }
   }
 
   .closing__plate {

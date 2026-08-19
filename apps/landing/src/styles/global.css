@@ -187,6 +187,71 @@ p {
   padding-inline: var(--gutter);
 }
 
+/*
+ * The scroll has a pulse.
+ *
+ * Eight sections of identical ground, identical density and identical heading scale is a
+ * page with one gear, and one gear reads as flat however good each section is on its own.
+ * A field guide is not uniform either: a plate spread and a page of notes are different
+ * kinds of page, and you can feel which one you are on before you read a word.
+ *
+ * Nothing new is invented for this. The three surfaces already exist in the world — the app
+ * has been built on them since the beginning — and the inverted band is the same ink and the
+ * same paper the primary button has always used, swapped.
+ */
+.ground {
+  background: var(--paper);
+}
+
+.ground--sunken {
+  background: var(--paper-sunken);
+}
+
+/*
+ * The inverted band redefines the world's tokens under itself and then uses them normally,
+ * so everything inside keeps its own rules and nothing needs a special case.
+ *
+ * The values are the world's own dark set, the ones the app has always switched to at night.
+ * They are assigned rather than referenced: `background: var(--ink)` on an element that also
+ * declares `--ink` resolves against its *own* new value, which is how the first attempt
+ * painted the band paper-on-paper and made a whole section invisible.
+ */
+.ground--ink {
+  --paper: #191817;
+  --paper-raised: #232220;
+  --paper-sunken: #121110;
+  --ink: #f2f0ec;
+  --ink-muted: #b0aba3;
+  --ink-faint: #8a857d;
+  --rule: #34312d;
+  --rule-strong: #55514b;
+  --gold: #d8b442;
+  --gold-deep: #e6c860;
+
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/*
+ * At night the page is already dark, so inverting to light would be a headlight rather than a
+ * peak. It goes deeper instead — the same arrival, made the way the room allows.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ground--ink {
+    --paper: #0d0c0b;
+    --paper-raised: #1a1917;
+    --paper-sunken: #070706;
+    --rule: #2a2724;
+
+    /*
+     * A hairline at each edge, because at night the step from the page to this band is about
+     * 1.1:1 and a ground change nobody can see is not a peak. In daylight the step does the
+     * work on its own and no rule is drawn.
+     */
+    border-block: 1px solid #33302b;
+  }
+}
+
 .rule {
   border: 0;
   border-top: 1px solid var(--rule);
@@ -244,6 +309,42 @@ p {
   line-height: 1.5;
   color: var(--ink-muted);
   max-width: 34ch;
+}
+
+/*
+ * A heading that runs the full width instead of standing in the margin.
+ *
+ * The margin form is right for a section whose note earns 19rem beside it. Used eight times
+ * running it becomes the only thing the page knows how to do, and the display face never
+ * appears again after the opening. This is the other form the same system has.
+ */
+.headline {
+  display: grid;
+  gap: 1.25rem;
+  padding-bottom: clamp(2rem, 4vw, 3rem);
+}
+
+.headline h2 {
+  font-size: clamp(2.25rem, 5.5vw, 4rem);
+  max-width: 18ch;
+}
+
+/*
+ * The gold rule the column headings already carry, under the display heading too.
+ *
+ * Without it the inverted band was the only section on the page using none of the field
+ * guide's apparatus — no photograph, no leader, no pin, not one gold line — which made it a
+ * dark stripe rather than this world's dark page.
+ */
+.headline--ruled h2 {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--gold);
+}
+
+.headline p {
+  font-size: clamp(1.0625rem, 1.5vw, 1.25rem);
+  color: var(--ink-muted);
+  max-width: 52ch;
 }
 
 /* ---- The action ------------------------------------------------------- */
