@@ -594,8 +594,13 @@ function startPageSwipe(event: PointerEvent) {
  *
  * Shut by default. The list of things without an hour is a tool for the moment you decide to
  * place one, not a permanent feature of looking at a day.
+ *
+ * `?tray=1` opens it on arrival, and exists for the end of the first run. That sends somebody
+ * here to see the day they have just given a shape to — and a habit with no hour draws nothing
+ * on the ruler, so without this they would arrive to their sleep and their work and no sign at
+ * all of what they had just chosen.
  */
-const trayOpen = ref(false)
+const trayOpen = ref(route.query.tray === '1')
 
 /**
  * Where the card being carried would start, if it were let go now.

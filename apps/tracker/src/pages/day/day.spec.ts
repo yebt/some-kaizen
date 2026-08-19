@@ -71,7 +71,7 @@ function stubPlatform(): PlatformServices & { asked: { permission: number } } {
 let platform: ReturnType<typeof stubPlatform>
 let router: ReturnType<typeof createRouter>
 
-async function renderDay(date: string = DAY) {
+async function renderDay(date: string = DAY, query = '') {
   platform = stubPlatform()
 
   router = createRouter({
@@ -89,7 +89,7 @@ async function renderDay(date: string = DAY) {
   // history behind it and could not tell a push from a replace.
   await router.push('/')
   await router.isReady()
-  await router.push(`/day/${date}`)
+  await router.push(`/day/${date}${query}`)
 
   const wrapper = mount(DayPage, {
     global: {
@@ -2402,5 +2402,46 @@ describe('swiping a card off the ruler', () => {
 
     // Whatever the drop decided, it kept an hour. It was not loosened.
     expect(stored?.startsAt).toBeDefined()
+  })
+})
+
+/** The control that opens the drawer, which is only present while it is shut. */
+function openTrayButton(wrapper: Awaited<ReturnType<typeof renderDay>>) {
+  return wrapper
+    .findAll('button')
+    .filter((node) => node.isVisible())
+    .find((node) => node.text().includes('needs an hour') || node.text().includes('need an hour'))
+}
+
+describe('arriving with the drawer asked for', () => {
+  /**
+   * `?tray=1` opens the drawer of habits that have no hour yet.
+   *
+   * It exists for the end of the first run, which sends somebody here to see the day it just
+   * gave a shape to. Habits with no hour draw nothing on the ruler, so without this they
+   * would arrive to their sleep and their work and no sign of what they had just chosen.
+   */
+  it('opens the drawer when the link asks for it', async () => {
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay(DAY, '?tray=1')
+
+    // The drawer is drawn either way and hidden with `v-show`, so the honest signal is the
+    // button that opens it: while it is open, the button that opens it is gone.
+    expect(wrapper.find('[data-drop-zone="tray"]').isVisible()).toBe(true)
+    expect(openTrayButton(wrapper)).toBeUndefined()
+  })
+
+  it('leaves it shut otherwise, because it is a tool rather than a view', async () => {
+    const habit = meditate()
+
+    await replaceDataset(persistence, { ...EMPTY_DATASET, habits: [habit] })
+
+    const wrapper = await renderDay()
+
+    expect(wrapper.find('[data-drop-zone="tray"]').isVisible()).toBe(false)
+    expect(openTrayButton(wrapper)).toBeDefined()
   })
 })

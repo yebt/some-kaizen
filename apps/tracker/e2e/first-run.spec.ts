@@ -29,17 +29,26 @@ test('a device that has never been used is offered a day rather than a blank for
   await expect(page.getByRole('heading', { name: /already spoken for/ })).toBeVisible()
   await page.getByRole('button', { name: 'Finish' }).click()
 
-  // Landed on a day with something on it, rather than on "no habits yet".
-  await expect(page).toHaveURL(/\/(index\.html)?(\?.*)?$/)
-  await expect(page.getByText('Drink water')).toBeVisible()
-  await expect(page.getByText('Walk')).toBeVisible()
-
-  // And the day has its shape. Asserted on the blocks screen rather than on the timeline,
-  // because a band that begins at 23:00 is a thousand pixels below the fold and proving it is
-  // there would be a test about scrolling.
-  await open(page, '/block-time')
-  await expect(page.getByText('Sleep', { exact: true })).toBeVisible()
+  /*
+   * It ends on the day it just gave a shape to, with the drawer open.
+   *
+   * Both halves have to be on screen for the point to be obvious: the hours that are already
+   * taken, drawn as bands, and the habits that are not on them yet, waiting in the drawer.
+   * The gesture between the two is the whole product.
+   */
+  await expect(page).toHaveURL(/\/day\/\d{4}-\d{2}-\d{2}\?tray=1$/)
   await expect(page.getByText('Work', { exact: true })).toBeVisible()
+
+  const drawer = page.locator('[data-drop-zone="tray"]')
+
+  await expect(drawer).toBeVisible()
+  await expect(drawer.getByText('Drink water')).toBeVisible()
+  await expect(drawer.getByText('Walk')).toBeVisible()
+
+  // And it is a real day, so the way out of it is the ordinary one.
+  await page.getByRole('button', { name: 'close', exact: true }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()
 })
 
 test('it never opens twice, even for somebody who skipped it', async ({ page }) => {

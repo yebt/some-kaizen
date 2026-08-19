@@ -89,9 +89,9 @@ function blocksToWrite() {
  *
  * Skipping is an answer. Asking again tomorrow would be the app refusing to hear no.
  */
-async function leave() {
+async function leave(to = '/') {
   preferences.markStarted()
-  await router.replace('/')
+  await router.replace(to)
 }
 
 async function skip() {
@@ -108,13 +108,30 @@ async function finish() {
       .filter((idea) => isChosen(idea.name))
       .map((idea) => habitFromIdea(idea, { id: newIdentifier(), today }))
 
+    const blocks = blocksToWrite()
+
     if (habits.length) await saveHabits.mutateAsync(habits)
 
     // One at a time, because the port refuses a block that overlaps one already stored and
     // that check is the whole reason blocks are worth having.
-    for (const block of blocksToWrite()) await saveBlock.mutateAsync(block)
+    for (const block of blocks) await saveBlock.mutateAsync(block)
 
-    await leave()
+    /*
+     * It ends on the day it just gave a shape to, rather than on a summary of it.
+     *
+     * The two questions above are "what would you like to do" and "when is your day already
+     * taken", and the answer to both is a timeline: shaded bands where the sleep and the work
+     * are, and the chosen habits waiting for an hour. Ending anywhere else means somebody has
+     * described a day and never seen one.
+     *
+     * The drawer is opened with it, because a habit without an hour draws nothing on the
+     * ruler — arriving to sleep and work and no sign of what was just chosen is half a
+     * payoff, and the gesture between the two halves is the whole product.
+     *
+     * Unless nothing was made. An empty timeline is a worse ending than the ordinary home
+     * screen, and somebody who chose nothing has nothing to be shown.
+     */
+    await leave(habits.length || blocks.length ? `/day/${today}?tray=1` : '/')
   } finally {
     busy.value = false
   }

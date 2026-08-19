@@ -9,6 +9,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPersistence, type Persistence } from '@core/persistence'
 import { PERSISTENCE_KEY } from '@core/persistence-context'
 import { usePreferences } from '@core/preferences-store'
+import { todayIn } from '@shared/domain/calendar-date'
 import { isPositive } from '@modules/habits/domain/habit'
 import { HABIT_IDEAS } from '@modules/habits/domain/idea-library'
 import { replaceDataset } from '@modules/data/application/dataset-queries'
@@ -40,6 +41,7 @@ async function render() {
     routes: [
       { path: '/', component: NOWHERE },
       { path: '/start', component: StartPage },
+      { path: '/day/:date', component: NOWHERE },
       { path: '/habits/new', component: NOWHERE },
     ],
   })
@@ -134,10 +136,45 @@ describe('the first run', () => {
     expect((await persistence.blocks.all()).map((block) => block.name)).toEqual(['Sleep'])
   })
 
-  it('lands on the day it just set up', async () => {
+  /**
+   * It ends on the day it just gave a shape to, not on a summary of it.
+   *
+   * The two questions this screen asks are "what would you like to do" and "when is your day
+   * already taken". The answer to both is a timeline with shaded bands where the sleep and
+   * the work are, and the chosen habits waiting in the drawer for an hour. Landing anywhere
+   * else means the person has described a day and never seen one.
+   */
+  it('ends on the day it just gave a shape to', async () => {
+    const page = await render()
+
+    await choose(page, FIRST.name)
+    await press(page, 'Next')
+    await press(page, 'Finish')
+
+    expect(page.router.currentRoute.value.path).toBe(`/day/${todayIn()}`)
+  })
+
+  it('opens the drawer, so the habits are on screen beside the hours', async () => {
+    // Habits with no hour yet draw nothing on the ruler. Arriving to sleep and work and no
+    // sign of what was just chosen is half a payoff — the gesture between the two is the
+    // product, and both halves have to be visible for it to be obvious.
+    const page = await render()
+
+    await choose(page, FIRST.name)
+    await press(page, 'Next')
+    await press(page, 'Finish')
+
+    expect(page.router.currentRoute.value.query.tray).toBe('1')
+  })
+
+  it('goes to Today instead when there is nothing to show', async () => {
+    // Somebody who took the defaults off and chose nothing has made no day to look at, and
+    // an empty timeline is a worse ending than the ordinary home screen.
     const page = await render()
 
     await press(page, 'Next')
+    await page.wrapper.get('[aria-label="Do not add Work"]').trigger('click')
+    await page.wrapper.get('[aria-label="Do not add Sleep"]').trigger('click')
     await press(page, 'Finish')
 
     expect(page.router.currentRoute.value.path).toBe('/')

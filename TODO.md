@@ -219,9 +219,16 @@ introduced by fixing something else in the same sitting.
       after restoring a backup onto a new phone; an empty database alone would send them back
       through it every time they deleted their last habit. And it waits for storage to answer,
       because deciding on the first frame sends every existing user through it once
-- [ ] The payoff is still missing: it ends on Today rather than on the day it just gave a
-      shape to. Showing that drawn — sleep, work, and the habits waiting for an hour — is the
-      one thing that would teach the mechanism instead of describing it
+- [x] **The payoff.** It ends on the day it just gave a shape to, not on a summary of it.
+      The two questions it asks are "what would you like to do" and "when is your day already
+      taken", and the answer to both is a timeline: shaded bands where the sleep and the work
+      are, and the chosen habits waiting for an hour
+- [x] The drawer opens with it, through `?tray=1`. A habit with no hour draws nothing on the
+      ruler, so arriving to sleep and work and no sign of what was just chosen is half a
+      payoff — the gesture between the two halves is the whole product, and both halves have
+      to be on screen for that to be obvious
+- [x] Unless nothing was made. Somebody who chose nothing and took the blocks off has no day
+      to be shown, and an empty timeline is a worse ending than the ordinary home screen
 
 ### The plus in the tab bar
 - [x] Reported: standing on the blocks screen, the big plus at the bottom obviously adds a
